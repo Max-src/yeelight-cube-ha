@@ -76,16 +76,15 @@ def group_pixels(pixels: list) -> list:
     """Group non-black pixels by color, one entry per distinct color.
 
     Accepts the flat form (``position`` scalar or list) and the legacy
-    ``positions`` key. The first color given for a position wins; positions
-    are sorted within each group.
+    ``positions`` key. The last color given for a position wins, as the
+    lamp shows it (light_render: a later black clears it); positions are
+    sorted within each group.
     """
-    seen_positions: dict = {}  # position -> color (first definition wins)
+    seen_positions: dict = {}  # position -> color (last definition wins)
     for px in pixels:
         if not isinstance(px, dict):
             continue
         color = list(px.get("color", []))
-        if color == [0, 0, 0]:
-            continue  # black = background; omit to save space
         if "position" in px:
             raw_pos = px.get("position")
             pos_list = raw_pos if isinstance(raw_pos, list) else [raw_pos]
@@ -94,10 +93,13 @@ def group_pixels(pixels: list) -> list:
         else:
             continue
         for pos in pos_list:
-            if pos is not None and pos not in seen_positions:
+            if pos is not None:
+                seen_positions.pop(pos, None)  # its groups in the order defined
                 seen_positions[pos] = color
     color_groups: dict = {}
     for pos, color in seen_positions.items():
+        if color == [0, 0, 0]:
+            continue  # black = background; omit to save space
         color_groups.setdefault(tuple(color), []).append(pos)
     return [
         {"color": list(color), "position": sorted(positions)}

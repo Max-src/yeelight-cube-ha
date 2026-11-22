@@ -403,7 +403,36 @@ class YeelightCubeLight(
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> bool:
-    # Create and register the light entity FIRST (this happens for EVERY device)
+    """The lamp's light, which the other platforms use (runtime_data). Its
+    error is kept for __init__.async_setup_entry (Home Assistant only logs
+    a platform's error), which retries the entry or fails it."""
+    runtime = entry.runtime_data
+    try:
+        light_entity = await _async_create_light(hass, entry)
+    except Exception as err:
+        runtime.light_error = err
+        raise
+    if runtime.light_abandoned:
+        # Done after Home Assistant stopped waiting (60 s): the entry already
+        # gave up on this setup and is retried.
+        light_entity._lamp_client.close()
+        return False
+
+    # Register the lamp for the services (by IP: see _ENTITY_REGISTRY).
+    ip = light_entity._ip
+    _ENTITY_REGISTRY[ip] = light_entity
+    _LOGGER.debug("[SETUP] Registered lamp %s for the services (lamps: %s)", ip, list(_ENTITY_REGISTRY))
+
+    async_add_entities([light_entity], update_before_add=True)
+
+    # For the other platforms, set up after this one (runtime_data.lamp_of).
+    runtime.light = light_entity
+    return True
+
+
+async def _async_create_light(hass: HomeAssistant, entry: ConfigEntry) -> "YeelightCubeLight":
+    """The lamp's connection and light entity, its capabilities and model
+    read (create and register it FIRST: this happens for EVERY device)."""
     ip = entry.data[CONF_IP]
     port = entry.data.get('port', LAN_PORT)
     
@@ -474,17 +503,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         ip, lamp_client.profile.name, lamp_client.profile.modules,
     )
     
-    light_entity = YeelightCubeLight(lamp_client, ip, entry)
-    
-    # Register the lamp for the services (by IP: see _ENTITY_REGISTRY).
-    _ENTITY_REGISTRY[ip] = light_entity
-    _LOGGER.debug("[SETUP] Registered lamp %s for the services (lamps: %s)", ip, list(_ENTITY_REGISTRY))
-    
-    async_add_entities([light_entity], update_before_add=True)
-    
-    # For the other platforms, set up after this one (runtime_data.lamp_of).
-    entry.runtime_data.light = light_entity
-    return True
+    return YeelightCubeLight(lamp_client, ip, entry)
 
 
 # Service registration lives in light_services.py; re-exported here so

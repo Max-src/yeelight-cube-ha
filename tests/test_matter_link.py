@@ -22,8 +22,8 @@ CUBE_ATTRIBUTES = {
     "0/40/2": 0x1312,
     LINK.PRODUCT: 4,
     "0/51/0": [
-        {"0": "WIFI_AP_DEF", "1": True, "4": "AAAAAAAA", "5": ["wKgEAQ=="]},
-        {"0": "WIFI_STA_DEF", "1": True, "4": "zLqXRDiY", "5": ["wKgEiw=="]},
+        {"0": "WIFI_AP_DEF", "1": True, "4": "AAAAAAAA", "5": ["wKgBAQ=="]},
+        {"0": "WIFI_STA_DEF", "1": True, "4": "zLqXRDiY", "5": ["wKgBiw=="]},
     ],
     LINK.LAN_CONTROL: True,
     LINK.MIC_MUSIC_ON: False,
@@ -32,7 +32,7 @@ CUBE_ATTRIBUTES = {
     LINK.EFFECT: 71,
     LINK.EFFECT_SUB: 72,
 }
-LAMP_IP, LAMP_MAC = "192.168.4.139", "cc:ba:97:44:38:98"
+LAMP_IP, LAMP_MAC = "192.168.1.139", "cc:ba:97:44:38:98"
 PRESETS = Path(__file__).parent.parent / "custom_components" / "yeelight_cube" / "presets"
 
 
@@ -69,7 +69,7 @@ def hass_with(client):
 class NodeMatchingTests(unittest.TestCase):
     def test_interfaces_from_the_real_node(self):
         self.assertEqual(
-            [(None, ["192.168.4.1"]), (LAMP_MAC, [LAMP_IP])],
+            [(None, ["192.168.1.1"]), (LAMP_MAC, [LAMP_IP])],
             LINK.node_interfaces(CUBE_ATTRIBUTES),
         )
         # Bytes and integer keys work too.
@@ -78,8 +78,8 @@ class NodeMatchingTests(unittest.TestCase):
 
     def test_the_lamp_is_its_cube_lite_node_by_ip_or_remembered_mac(self):
         self.assertEqual(LAMP_MAC, LINK.node_matches(CUBE_ATTRIBUTES, LAMP_IP, None))
-        self.assertEqual(LAMP_MAC, LINK.node_matches(CUBE_ATTRIBUTES, "192.168.4.200", LAMP_MAC))
-        self.assertIsNone(LINK.node_matches(CUBE_ATTRIBUTES, "192.168.4.200", None))
+        self.assertEqual(LAMP_MAC, LINK.node_matches(CUBE_ATTRIBUTES, "192.168.1.200", LAMP_MAC))
+        self.assertIsNone(LINK.node_matches(CUBE_ATTRIBUTES, "192.168.1.200", None))
         # Another vendor or product with the same address: not the lamp.
         self.assertIsNone(LINK.node_matches({**CUBE_ATTRIBUTES, "0/40/2": 0x1234}, LAMP_IP, None))
         self.assertIsNone(LINK.node_matches({**CUBE_ATTRIBUTES, LINK.PRODUCT: 9}, LAMP_IP, None))
@@ -87,7 +87,8 @@ class NodeMatchingTests(unittest.TestCase):
     def test_vendor_paths(self):
         self.assertEqual("2/320011269/319946752", LINK.EFFECT)
         self.assertEqual("2/320011266/319946753", LINK.ROTATION)
-        self.assertEqual({0: "left", 1: "up", 2: "right", 3: "down"}, LINK.ROTATION_ORIENTATIONS)
+        self.assertEqual({0: "left", 1: "up", 2: "right", 3: "down"},
+                         import_pure_module("mount_profile").LITE_ROTATION_ORIENTATIONS)
 
 
 class PairedAgainTests(unittest.TestCase):
@@ -104,7 +105,7 @@ class PairedAgainTests(unittest.TestCase):
         old = node(7, dict(CUBE_ATTRIBUTES))
         old.available = False  # the server noticed: listed offline
         other = dict(CUBE_ATTRIBUTES)
-        other["0/51/0"] = [{"0": "WIFI_STA_DEF", "1": True, "4": "AAECAwQF", "5": ["wKgEiw=="]}]
+        other["0/51/0"] = [{"0": "WIFI_STA_DEF", "1": True, "4": "AAECAwQF", "5": ["wKgBiw=="]}]
         client = FakeClient([old, node(5, other), node(9, dict(CUBE_ATTRIBUTES))])
         removed = []
 
@@ -216,19 +217,6 @@ class MatterLinkTests(unittest.TestCase):
         # The saved topology is read with the rotation (mount_profile).
         self.assertEqual(2, self.link.values["rotation"])
         self.assertIn("topology", self.link.values)
-
-    def test_another_server_is_read_when_home_assistants_has_no_live_node(self):
-        dead = node(2, dict(CUBE_ATTRIBUTES))
-        dead.available = False
-        self.client.nodes = [dead]
-        dev = FakeClient([node(1, dict(CUBE_ATTRIBUTES))])
-        link = LINK.MatterLink(hass_with(self.client), lambda *report: None, lambda: [dev])
-        self.assertTrue(link.refresh(LAMP_IP, None))
-        self.assertEqual((1, dev), (link.node_id, link.client))
-        # Home Assistant's own, once it has a live node, comes first.
-        self.client.nodes = [node(6, dict(CUBE_ATTRIBUTES))]
-        self.assertTrue(link.refresh(LAMP_IP, None))
-        self.assertEqual((6, self.client), (link.node_id, link.client))
 
     def test_without_matter_nothing_happens(self):
         link = LINK.MatterLink(hass_with(None), Mock())
@@ -404,7 +392,7 @@ class FollowedReportTests(unittest.TestCase):
 
     def test_the_app_direction_and_lan_control(self):
         self.report("rotation", 2)
-        self.assertIn("yeelight_cube_matter_orientation_192.168.4.139", self.light.tasks)
+        self.assertIn("yeelight_cube_matter_orientation_192.168.1.139", self.light.tasks)
         self.light.tasks.clear()
         self.light._device_orientation = "right"
         self.report("rotation", 2)  # already

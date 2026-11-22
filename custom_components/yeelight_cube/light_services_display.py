@@ -116,7 +116,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_brightness,
         schema=vol.Schema({
             vol.Required("brightness", description="Brightness percentage (1-100)"): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         }, extra=vol.ALLOW_EXTRA)
     )
 
@@ -134,7 +134,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_orientation,
         schema=vol.Schema({
             vol.Required("orientation"): vol.In(["normal", "flipped"]),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         })
     )
 
@@ -153,7 +153,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_device_orientation,
         schema=vol.Schema({
             vol.Required("orientation"): vol.In(list(DEVICE_ORIENTATIONS)),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         })
     )
 
@@ -169,7 +169,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_font,
         schema=vol.Schema({
             vol.Required("font"): vol.In(list(FONT_MAPS.keys())),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         })
     )
 
@@ -185,7 +185,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_alignment,
         schema=vol.Schema({
             vol.Required("alignment"): vol.In(["left", "center", "right"]),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         })
     )
 
@@ -212,7 +212,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
             vol.Required("text", description="Text to display on the cube matrix"): vol.All(
                 cv.string, vol.Length(max=MAX_TEXT_LENGTH)
             ),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         })
     )
 
@@ -233,7 +233,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_angle,
         schema=vol.Schema({
             vol.Required("angle", description="Gradient angle in degrees (0-360). Used for angle-based gradient modes."): vol.Coerce(float),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         })
     )
 
@@ -274,7 +274,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_text_colors,
         schema=vol.Schema({
             vol.Required("text_colors", description="Array of RGB color arrays, e.g. [[255,0,0], [0,255,0]] for red to green gradient"): COLOR_LIST_SCHEMA,
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
             vol.Optional("save_as_palette", default=False, description="Save these colors as a palette for later use"): bool,
         })
     )
@@ -324,7 +324,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
             vol.Required("image_b64"): vol.All(
                 cv.string, vol.Length(min=1, max=MAX_IMAGE_B64_LENGTH)
             ),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         })
     )
 
@@ -362,7 +362,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
                 "Custom Draw",
             ]),
             vol.Optional("full_panel", description="Whether to apply gradients to entire panel (true) or just text areas (false). If provided, sets full_panel and mode in one call."): cv.boolean,
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         })
     )
 
@@ -389,7 +389,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
                 vol.All(vol.ExactSequence((cv.byte, cv.byte, cv.byte)), vol.Coerce(tuple)),
                 cv.string
             ),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         })
     )
 
@@ -410,7 +410,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_full_panel,
         schema=vol.Schema({
             vol.Required("full_panel", description="Whether to apply gradients to entire panel (true) or just text areas (false)"): cv.boolean,
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         })
     )
 

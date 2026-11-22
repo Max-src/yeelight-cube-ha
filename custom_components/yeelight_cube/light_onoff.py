@@ -13,7 +13,7 @@ import asyncio
 import time
 from .matter_commands import MatterCommandsUnavailable
 from .const import LAMP_MODES, MODE_CLOCK, MODE_NATIVE_EFFECT
-from .lamp_protocol import LAMP_ERRORS, is_quota_error
+from .lamp_protocol import LAMP_ERRORS, is_connection_error, is_quota_error
 from .light_display import ACTIVATION_TIMING
 
 _LOGGER = logging.getLogger(__name__)
@@ -285,10 +285,13 @@ class OnOffMixin:
             # also when only the brightness is new (the lamp was showing black).
             await self._apply_display_mode_internal()
         except (*LAMP_ERRORS, MatterCommandsUnavailable) as e:
+            if is_connection_error(e):
+                # Not reached (unreachable, cooldown, a timeout): the lamp's
+                # queue (_execute_hardware_op) counts it as a failure, not
+                # as a turn_on that worked.
+                raise
             if is_quota_error(e):
                 _LOGGER.debug("Rate limit exceeded during turn_on")
-            elif isinstance(e, TimeoutError):
-                _LOGGER.warning("Timeout during turn_on - device may be unreachable")
             else:
                 _LOGGER.error("Unexpected error during turn_on: %s", e)
         
@@ -351,8 +354,7 @@ class OnOffMixin:
             # Powered off: its brightness is set again on the way back.
             self._forget_hardware_brightness()
             # A Cube Matrix: its effect is sent in full on the way back (a
-            # Matter effect powers it on; a live change would not, filmed
-            # 2026-11-10).
+            # Matter effect powers it on; a live change would not).
             self._matrix_shown = None
         else:
             if was_music_flow_enabled:

@@ -116,7 +116,7 @@ data:
   gain_r: 1.00
   gain_g: 1.00
   gain_b: 1.00
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 All fields are optional — only the keys you pass are updated.

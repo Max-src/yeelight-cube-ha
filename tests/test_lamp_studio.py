@@ -532,15 +532,15 @@ class PaletteAcceptedTests(unittest.TestCase):
         light = FakeLight()
         light._mode = "Native Effect"
         light.studio_selected = lambda: True
-        self.assertEqual(light._expected_effect(), MATTER.DRAWING_EFFECT)
+        self.assertEqual(light._expected_effect(), MATTER.LITE_DIRECT_MODE_EFFECT)
         light._note_lamp_command()
-        self.assertTrue(light._effect_echo(MATTER.DRAWING_EFFECT))
+        self.assertTrue(light._effect_echo(MATTER.LITE_DIRECT_MODE_EFFECT))
         light.studio_selected = lambda: False
         self.assertEqual(light._expected_effect(), EFFECTS["Rainbow"]["effect_id"])
         # A streamed clock too.
         light._mode = "Clock"
         light.studio_selected = lambda: True
-        self.assertEqual(light._expected_effect(), MATTER.DRAWING_EFFECT)
+        self.assertEqual(light._expected_effect(), MATTER.LITE_DIRECT_MODE_EFFECT)
 
 
 class FakeLock:
@@ -568,6 +568,7 @@ STREAM_NAMES = {
     "_publish_stream_frame", "_preview_shows_drive", "streamed_preview_frame", "_lite_lan_gap",
     "_skips_unchanged_frames", "_drawn_payload", "_studio_routes", "_studio_resume_origin",
     "_studio_stream_ended", "_restart_studio_loop", "_stream_led_stuck", "_stream_recover_now",
+    "_lite_clock_whole_hours",
 }
 CLOCK_FACE = import_pure_module("clock_face")
 LAMP_ERRORS = import_pure_module("lamp_protocol").LAMP_ERRORS
@@ -1002,7 +1003,7 @@ class StreamTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_a_still_frame_is_sent_at_the_stream_s_steady_rate(self):
         """A still moment is not a pause: the stream sends every render, the
-        same frame or not (the owner's rule: a steady 25 a second)."""
+        same frame or not (the rule: a steady 25 a second)."""
         timing = self.light._studio_payload.__func__.__globals__
         drawn = timing["studio_frame_at"]
         timing["studio_frame_at"] = lambda *args: [(10, 20, 30)] * 100
@@ -1241,6 +1242,35 @@ class StreamTests(unittest.IsolatedAsyncioTestCase):
         # The lamp takes one color itself: its own clock, no stream.
         light._text_colors = [list(RED)]
         self.assertFalse(light.studio_selected())
+
+    async def test_a_clock_in_a_half_hour_zone_is_streamed_at_local_time(self):
+        # The lamp's own clock takes whole hours only: in India (+5:30) it
+        # would be 30 minutes off, so the preview camera's clock is streamed.
+        light = self.light
+        light._mode = CONSTANTS["MODE_CLOCK"]
+        light._native_clock_style = CONSTANTS["DEFAULT_NATIVE_CLOCK_STYLE"]
+        light._native_clock_color_mode = "normal"
+        light._native_clock_color = None
+        light._text_colors = [list(RED)]
+        light._native_clock_content = "time"
+        light._native_clock_whole_hours = lambda: True
+        self.assertFalse(light.studio_selected())  # its own clock, as before
+        light._native_clock_whole_hours = lambda: False
+        self.assertTrue(light.studio_selected())
+        drawn = []
+        marker = [(1, 2, 3)] * 100
+
+        def own_frame(render):
+            drawn.append(render)
+            return marker
+
+        light._own_effect_frame_raw = own_frame
+        await light._start_studio_stream()
+        await self.run_for(0.05)
+        light.stop_studio_stream()
+        self.assertTrue(drawn)
+        self.assertTrue(self.frames())
+        self.assertTrue(all(list(entry[1][0]) == marker for entry in self.frames()))
 
     async def test_the_frames_follow_the_settings_live(self):
         await self.light._start_studio_stream()

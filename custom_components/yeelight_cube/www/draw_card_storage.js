@@ -1,4 +1,4 @@
-// Storage utilities for Yeelight Cube Lite Draw Card
+// Storage utilities for Yeelight Cube Draw Card
 // Centralized storage management with consistent error handling
 
 import {

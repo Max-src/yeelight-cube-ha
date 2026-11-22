@@ -7,10 +7,11 @@
 #   bash scripts/ha-tests.sh
 #
 # Uses a dev-only virtual environment, outside the repository (HA_TEST_VENV,
-# default ~/.venvs/yeelight_cube_ha), created on first use with
-# pytest-homeassistant-custom-component (which brings Home Assistant) and the
-# integration's requirement. Nothing of it is shipped or installed in Home
-# Assistant itself. CI installs the same packages directly.
+# default ~/.venvs/yeelight_cube_ha), created on first use with the pinned
+# packages of tests/ha/requirements.txt: pytest-homeassistant-custom-component
+# (which brings Home Assistant) and the integration's requirement, installed
+# again when that file changes. Nothing of it is shipped or installed in Home
+# Assistant itself. CI installs the same file directly.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -20,8 +21,13 @@ if [ -z "${CI:-}" ]; then
     python3 -m venv --without-pip "$VENV"
     curl -sSL https://bootstrap.pypa.io/get-pip.py | "$VENV/bin/python" - --quiet
   fi
-  if ! "$VENV/bin/python" -c "import pytest_homeassistant_custom_component, yeelight" 2>/dev/null; then
-    "$VENV/bin/python" -m pip install --quiet pytest-homeassistant-custom-component yeelight
+  # The requirements installed last, kept in the venv: installs again when the
+  # pins change (or the packages are missing).
+  INSTALLED="$VENV/.yeelight_cube_requirements.txt"
+  if ! cmp -s tests/ha/requirements.txt "$INSTALLED" ||
+    ! "$VENV/bin/python" -c "import pytest_homeassistant_custom_component, yeelight" 2>/dev/null; then
+    "$VENV/bin/python" -m pip install --quiet -r tests/ha/requirements.txt
+    cp tests/ha/requirements.txt "$INSTALLED"
   fi
   PYTHON="$VENV/bin/python"
 else

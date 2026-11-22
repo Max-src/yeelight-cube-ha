@@ -198,10 +198,11 @@ class YeelightCubeNativeEffectsCard extends YeelightCardMixin(LitElement) {
     }
     // A frozen display holds its current frame, mirroring the lamp.
     const seconds = this._clock.advance(!!this._controls.frozen);
-    // The display refreshes faster than the lamp renders: a frame already
-    // painted stays.
+    // The display refreshes faster than the lamp renders: between due
+    // frames, a render already painted stays. A due frame always paints (the
+    // tiles that are not smooth only paint then).
     const render = Math.floor(seconds / RENDER_SECONDS);
-    if (render !== this._paintedRender) {
+    if (due || render !== this._paintedRender) {
       this._paintedRender = render;
       this._paint(due);
     }

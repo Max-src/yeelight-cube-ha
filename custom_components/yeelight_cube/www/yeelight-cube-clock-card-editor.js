@@ -72,8 +72,6 @@ class YeelightCubeClockCardEditor extends YeelightEditorMixin(LitElement) {
       buttons_style: "modern",
       buttons_content_mode: "icon_text",
     });
-    if (cfg.show_color_override) cfg.show_color_modes = true;
-    delete cfg.show_color_override;
     this._config = normalizeClockAppearance(cfg);
     this.requestUpdate();
   }

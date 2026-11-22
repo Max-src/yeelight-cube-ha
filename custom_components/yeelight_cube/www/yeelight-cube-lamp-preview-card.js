@@ -288,7 +288,7 @@ class YeelightCubeLampPreviewCard extends MatrixPreviewMixin(
       // switch must update the preview even when nothing else changed.
       contentMode: attrs?.content_mode ?? seen.contentMode,
       // The Modules section's lamp (its modules, the power supply's side).
-      modules: MatrixModulesEditor.inputs(entity).join(" "),
+      modules: MatrixModulesEditor.inputs(entity).join("\u0000"),
     };
     // Adjustments the lamp now reports (or replaced: another dashboard) are
     // no longer shown locally. While others wait for the lamp's echo, only
@@ -748,6 +748,6 @@ defineOnce("yeelight-cube-lamp-preview-card", YeelightCubeLampPreviewCard);
 registerCustomCard({
     type: "yeelight-cube-lamp-preview-card",
     name: "Yeelight Preview Card",
-    description: "Preview the Yeelight Cube Lite lamp matrix and settings.",
+    description: "Preview the Yeelight Cube lamp matrix and settings.",
     preview: true,
   });

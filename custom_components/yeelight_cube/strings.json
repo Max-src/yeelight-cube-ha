@@ -20,7 +20,7 @@
                 "description": "A Yeelight Cube Lite was found at **{host}** ({name}).\n\nDo you want to set it up?"
             },
             "matter_confirm": {
-                "title": "Yeelight Cube Lite found via Matter",
+                "title": "Yeelight Cube found via Matter",
                 "description": "A Yeelight Cube ({name}) in Home Assistant's Matter integration, at **{host}**, is not set up here yet. Add it to control it over your local network too (pixel art, text, effects).\n\nIts LAN Control must be on: in the Yeelight app, open the lamp's settings and turn on LAN Control."
             },
             "orientation": {
@@ -50,6 +50,7 @@
         },
         "abort": {
             "already_configured": "This device is already configured",
+            "already_in_progress": "This lamp is already being set up: finish or dismiss its discovered entry first.",
             "no_address": "The lamp's Matter node does not report an address it can be reached at yet.",
             "not_cube_device": "This device is not a Yeelight Cube Lite",
             "reconfigure_successful": "The lamp's IP address was changed."
@@ -510,43 +511,18 @@
         },
         "matrix_modules_need_matter": {
             "message": "The Cube Matrix's modules are set over Matter: link the lamp to a Matter server that delivers the Yeelight commands."
+        },
+        "discovery_invalid_ip": {
+            "message": "{ip} is not an IP address."
+        },
+        "discovery_not_offered": {
+            "message": "The lamp at {ip} was not offered as discovered: {error}"
+        },
+        "yeelight_not_ignored": {
+            "message": "Could not ignore the Yeelight device at {ip}: {error}"
         }
     },
     "services": {
-        "add_managed_device": {
-            "name": "Add Managed Device",
-            "description": "Add a device IP to the managed devices list to prevent discovery conflicts",
-            "fields": {
-                "ip_address": {
-                    "name": "IP address",
-                    "description": "IP address of the device to manage"
-                }
-            }
-        },
-        "remove_managed_device": {
-            "name": "Remove Managed Device",
-            "description": "Remove a device IP from the managed devices list",
-            "fields": {
-                "ip_address": {
-                    "name": "IP address",
-                    "description": "IP address of the device to remove"
-                }
-            }
-        },
-        "is_device_managed": {
-            "name": "Check Device Managed",
-            "description": "Check if a device IP is managed by this component",
-            "fields": {
-                "ip_address": {
-                    "name": "IP address",
-                    "description": "IP address to check"
-                }
-            }
-        },
-        "list_managed_devices": {
-            "name": "List Managed Devices",
-            "description": "List all devices managed by this component to prevent discovery conflicts. Returns a list of IP addresses."
-        },
         "test_device_detection": {
             "name": "Test Device Detection",
             "description": "Test if a device would be detected as a cube device based on its properties",
@@ -577,7 +553,7 @@
         },
         "create_cube_discovery": {
             "name": "Create Cube Discovery",
-            "description": "Create a discovery flow specifically for the Yeelight Cube Lite component",
+            "description": "Create a discovery flow specifically for the Yeelight Cube integration",
             "fields": {
                 "ip_address": {
                     "name": "IP address",
@@ -613,7 +589,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -715,7 +691,7 @@
             "fields": {
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -729,7 +705,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -743,7 +719,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 },
                 "save_as_palette": {
                     "name": "Save as palette",
@@ -765,7 +741,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 },
                 "width": {
                     "name": "Width",
@@ -953,7 +929,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -967,7 +943,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -981,7 +957,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -995,7 +971,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1009,7 +985,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1053,7 +1029,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1149,7 +1125,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1233,7 +1209,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1247,7 +1223,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1261,7 +1237,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1275,7 +1251,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1289,7 +1265,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1299,7 +1275,7 @@
             "fields": {
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1349,7 +1325,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1359,7 +1335,7 @@
             "fields": {
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1369,7 +1345,7 @@
             "fields": {
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1379,7 +1355,7 @@
             "fields": {
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 },
                 "items": {
                     "name": "Items",
@@ -1409,7 +1385,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1427,7 +1403,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1451,7 +1427,7 @@
             "fields": {
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1461,7 +1437,7 @@
             "fields": {
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1471,7 +1447,7 @@
             "fields": {
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1481,7 +1457,7 @@
             "fields": {
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1495,7 +1471,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1509,7 +1485,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102)."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102)."
                 }
             }
         },
@@ -1555,7 +1531,7 @@
                 },
                 "entity_id": {
                     "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls."
+                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         }

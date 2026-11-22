@@ -543,8 +543,8 @@ class FallingBlocksTests(unittest.TestCase):
                 self.assertGreater(games, 0)
 
     def test_turns_and_moves_are_spread_over_the_fall(self):
-        # The owner (2026-11-14): pieces were turned and placed straight
-        # away; the player now takes its time, so the moves are seen: on the
+        # Pieces turned and placed straight away look wrong: the player
+        # takes its time, so the moves are seen: on the
         # long well a piece reaches its place about halfway down.
         settings = blocks_settings(intensity=128, seed=9)
         state = STREAMED["blocks_init"](settings)
@@ -570,7 +570,7 @@ class FallingBlocksTests(unittest.TestCase):
         self.assertLess(shares[len(shares) // 2], 0.75)  # and keeps falling after
 
     def test_a_piece_falls_at_the_same_pace_all_the_way_down(self):
-        # The owner (2026-11-14): no sudden drop once a piece is in place.
+        # No sudden drop once a piece is in place.
         for intensity in (0, 128, 255):
             for speed in (0, 128, 255):
                 settings = blocks_settings(intensity=intensity, seed=5, speed=speed)
@@ -638,7 +638,7 @@ class FallingBlocksTests(unittest.TestCase):
         self.assertEqual(height, len(state["grid"]))
 
     def test_a_lost_game_is_wiped_away_in_black_from_the_top(self):
-        # The owner (2026-11-14): the grey fill looked out of place; the
+        # A grey fill looks out of place: the
         # stack is erased row by row from the far end instead, only black and
         # the blocks' own colours, about the same time on either well.
         for direction in ("Right", "Down"):

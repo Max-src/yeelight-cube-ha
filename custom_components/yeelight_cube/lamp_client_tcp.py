@@ -85,18 +85,27 @@ class TcpSocketMixin:
         This avoids TIME_WAIT state which would prevent opening new
         connections when the lamp's TCP stack fills up.
         """
-        if self._fast_socket is not None:
-            try:
-                # Abortive close: send RST instead of FIN → avoids TIME_WAIT
-                self._fast_socket.setsockopt(
-                    socket.SOL_SOCKET, socket.SO_LINGER, _RST_LINGER
-                )
-                self._fast_socket.close()
-            except OSError as exc:
-                _LOGGER.debug("[%s] Failed to close fast socket: %s", self._ip, exc)
+        sock = self._fast_socket
+        if sock is not None:
             self._fast_socket = None
             self._fast_socket_time = 0.0
             self._fx_activated_on_socket = False
+            with self._fast_socket_guard:
+                if self._fast_socket_sending is sock:
+                    # A send on it still runs in its thread (an operation's
+                    # hard timeout cancelled only the wait for it): closed
+                    # by that thread once it ends, not under it.
+                    self._fast_socket_doomed = sock
+                    return
+            self._abort_socket(sock)
+
+    def _abort_socket(self, sock) -> None:
+        """Abortive close (RST instead of FIN: no TIME_WAIT) of a persistent socket."""
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, _RST_LINGER)
+            sock.close()
+        except OSError as exc:
+            _LOGGER.debug("[%s] Failed to close fast socket: %s", self._ip, exc)
 
     async def send_raw_command(
         self,
@@ -234,6 +243,13 @@ class TcpSocketMixin:
         ).encode("utf8")
 
         await self._tcp_turn(command)
+        async with self._command_lock:
+            # Under the command lock: no send on the persistent socket runs
+            # while it is closed, nor during the query.
+            return await self._query_raw(command, request, timeout)
+
+    async def _query_raw(self, command: str, request: bytes, timeout: float) -> str:
+        """query_raw_command's send and read, under _command_lock."""
         # Close the persistent fast socket first. The Cube is
         # sensitive to concurrent TCP connections while native renderers are
         # running; leaving it open causes the lamp to drop the active effect
@@ -416,10 +432,22 @@ class TcpSocketMixin:
                 return False
             
             def _send_on_existing(sock):
-                """Blocking: check peer is alive, then send.  Raises on failure."""
-                if _check_peer_closed(sock):
-                    raise ConnectionResetError("Peer closed the connection")
-                sock.sendall(request)
+                """Blocking: check peer is alive, then send.  Raises on failure.
+                A close_fast_socket meanwhile closes the socket here, after."""
+                with self._fast_socket_guard:
+                    self._fast_socket_sending = sock
+                try:
+                    if _check_peer_closed(sock):
+                        raise ConnectionResetError("Peer closed the connection")
+                    sock.sendall(request)
+                finally:
+                    with self._fast_socket_guard:
+                        self._fast_socket_sending = None
+                        doomed = self._fast_socket_doomed is sock
+                        if doomed:
+                            self._fast_socket_doomed = None
+                    if doomed:
+                        self._abort_socket(sock)
             
             def _open_and_send():
                 """Blocking: open a new socket, send, return the socket."""

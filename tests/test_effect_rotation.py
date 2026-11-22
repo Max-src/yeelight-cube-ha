@@ -155,7 +155,7 @@ class FakeLampClient:
 
 def make_light(helpers, kind="native", is_on=True):
     light = light_state(
-        _ip="192.168.4.102",
+        _ip="192.168.1.102",
         hass=SimpleNamespace(
             data={DOMAIN: {"clock_presets": [
                 {"id": "abc123", "name": "My Solid", "kind": "style", "color": [12, 34, 56]},
@@ -465,7 +465,7 @@ class EffectRotationEntityTests(unittest.IsolatedAsyncioTestCase):
         # item the group shows.
         timeline = {}
         lamps = []
-        for ip in ("192.168.4.101", "192.168.4.102"):
+        for ip in ("192.168.1.101", "192.168.1.102"):
             lamp = make_light(self.helpers, kind="clock")
             lamp._ip = ip
             lamp._mode = "Clock"

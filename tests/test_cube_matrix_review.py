@@ -124,14 +124,14 @@ class NewAddressTests(unittest.TestCase):
         return client, link
 
     def test_the_node_reports_its_address(self):
-        client, link = self.linked("wKgEiw==")   # 192.168.4.139
+        client, link = self.linked("wKgBiw==")   # 192.168.1.139
         self.assertEqual(LAMP_IP, link.address())
-        client.nodes = [matrix_node(8, "wKgEjA==")]  # 192.168.4.140
-        self.assertEqual("192.168.4.140", link.address())
+        client.nodes = [matrix_node(8, "wKgBjA==")]  # 192.168.1.140
+        self.assertEqual("192.168.1.140", link.address())
 
     def test_the_entry_follows_it(self):
-        client, link = self.linked("wKgEiw==")
-        client.nodes = [matrix_node(8, "wKgEjA==")]
+        client, link = self.linked("wKgBiw==")
+        client.nodes = [matrix_node(8, "wKgBjA==")]
         updates, checks = [], []
         entry = types.SimpleNamespace(data={CONSTANTS["CONF_IP"]: LAMP_IP, "matter_mac": LAMP_MAC})
         light = types.SimpleNamespace(
@@ -156,23 +156,23 @@ class NewAddressTests(unittest.TestCase):
             self.assertTrue(follow(light, entry, LAMP_MAC))
             self.assertEqual([], updates)
             # The lamp still answers at its address: the report is stale.
-            answering.update({LAMP_IP, "192.168.4.140"})
+            answering.update({LAMP_IP, "192.168.1.140"})
             self.assertFalse(asyncio.run(checks.pop()))
             # Nor when it answers nowhere (a wrong report).
             answering.clear()
             follow(light, entry, LAMP_MAC)
             self.assertFalse(asyncio.run(checks.pop()))
             # Silent at its address, answering at the new one: moved.
-            answering.add("192.168.4.140")
+            answering.add("192.168.1.140")
             follow(light, entry, LAMP_MAC)
             self.assertTrue(asyncio.run(checks.pop()))
-            self.assertEqual("192.168.4.140", updates[0][CONSTANTS["CONF_IP"]])
+            self.assertEqual("192.168.1.140", updates[0][CONSTANTS["CONF_IP"]])
         finally:
             MATTER.lamp_answers = saved
         # Not without the remembered MAC (the node may be another lamp), nor
         # when the address is the same.
         self.assertFalse(follow(light, entry, None))
-        light._ip = "192.168.4.140"
+        light._ip = "192.168.1.140"
         self.assertFalse(follow(light, entry, LAMP_MAC))
 
     def test_the_matter_discovery_moves_it_too(self):
@@ -192,7 +192,7 @@ EFFECTS = import_pure_module("matrix_effects")
 
 class EffectFixTests(unittest.TestCase):
     def test_triangular_palette_pulses_run_on_the_lamp(self):
-        # Its own (filmed: pulses on a black background), not a 5 fps stream:
+        # Its own (pulses on a black background), not a 5 fps stream:
         # Dark palette pulses (effect_catalog.MATRIX_VERSION_EFFECTS).
         self.assertIn(9, EFFECTS.ENGINE_MODES)
         self.assertNotIn(9, EFFECTS.STREAMED_MODES)
@@ -324,7 +324,7 @@ class MusicConnectionTests(unittest.TestCase):
             async def drain(self):
                 await asyncio.sleep(10)
 
-        channel = MUSIC.MusicChannel("192.168.4.188")
+        channel = MUSIC.MusicChannel("192.168.1.188")
         channel._writer = Stuck()
         MUSIC.WRITE_TIMEOUT, saved = 0.05, MUSIC.WRITE_TIMEOUT
         try:
@@ -349,7 +349,7 @@ class ClockAndSpeedTests(unittest.TestCase):
         self.assertIsNone(light.matrix_native_command())
 
     def test_its_own_clock_only_where_it_reads_as_a_cube_lite_s(self):
-        # Filmed 2026-11-12: the Cube Matrix's own clock never turns its
+        # The Cube Matrix's own clock never turns its
         # digits (upside down mounted left, from the bottom up mounted up);
         # a Cube Lite's reads upright on left and from the top down on up.
         light = self.FakeLight()
@@ -368,9 +368,9 @@ class ClockAndSpeedTests(unittest.TestCase):
         light._mount_profile_pending = None
 
     def test_its_brightness_goes_over_matter(self):
-        # 2026-11-12: the lamp's LAN read no command (every connection reset)
+        # Seen once: the lamp's LAN read no command (every connection reset)
         # while Matter went on; the slider did nothing. Level Control dims its
-        # own effects as set_bright does (filmed).
+        # own effects as set_bright does.
         import asyncio
         light = self.FakeLight()
         asyncio.run(light.matrix_send_brightness(20))
@@ -495,7 +495,7 @@ class UnusableAddressTests(unittest.TestCase):
     def test_0_0_0_0_is_no_address(self):
         for address in ("0.0.0.0", "169.254.3.4", "127.0.0.1", "255.255.255.255", "224.0.0.1", "x", "1.2.3"):
             self.assertFalse(LINK.usable_address(address), address)
-        self.assertTrue(LINK.usable_address("192.168.4.188"))
+        self.assertTrue(LINK.usable_address("192.168.1.188"))
         self.assertTrue(LINK.usable_address("10.0.0.5"))
 
     def test_the_node_s_0_0_0_0_is_ignored(self):
@@ -628,7 +628,7 @@ class RestartTests(unittest.TestCase):
         # Waits; the restart report redraws, the fallback then does nothing.
         light.matrix_await_restart()
         self.assertTrue(light._matrix_redraw_due)
-        self.assertEqual(["yeelight_cube_matrix_restart_fallback_192.168.4.189"], light.redraws)
+        self.assertEqual(["yeelight_cube_matrix_restart_fallback_192.168.1.189"], light.redraws)
         light._on_matrix_report("reboot_count", 6, False)
         self.assertFalse(light._matrix_redraw_due)
         self.assertEqual(2, len(light.redraws))
@@ -639,7 +639,7 @@ class RestartTests(unittest.TestCase):
         self.assertEqual([], light.redraws)
         light._outage_since = None
         light.matrix_await_restart()
-        self.assertEqual(["yeelight_cube_matrix_restarted_192.168.4.189"], light.redraws)
+        self.assertEqual(["yeelight_cube_matrix_restarted_192.168.1.189"], light.redraws)
         self.assertFalse(light._matrix_redraw_due)
         self.assertGreater(LIGHT_MATRIX.MATRIX_RESTART_FALLBACK, 90)
 
@@ -714,8 +714,8 @@ class StartupRotationTests(unittest.TestCase):
         self.assertIn('if note := getattr(self, "matrix_note_rotation", None):', source)
 
 
-class FilmedDirectionTests(unittest.TestCase):
-    """Filmed 2026-11-10 at rotation 0 (Device Orientation Right): Waterfall
+class LampDirectionTests(unittest.TestCase):
+    """On the lamp at rotation 0 (Device Orientation Right): Waterfall
     sent 2 ran toward the base, 3 away; Palette trails sent 2 ran across the
     lamp, 1 away from the base, 0 toward it."""
 
@@ -740,13 +740,13 @@ class FilmedDirectionTests(unittest.TestCase):
 
 
 class SweepDirectionTests(unittest.TestCase):
-    """Filmed 2026-11-11, the lamp standing, at each of its rotations (the
+    """On the lamp standing, at each of its rotations (the
     Device Orientation set for each): which way each value ran, on the lamp."""
 
     # rotation -> value -> the way Moving palette and Sine wave ran (across the lamp).
-    # Filmed 2026-11-12 standing at rotation 3 (speed 128): Moving palette ran
+    # Standing at rotation 3 (speed 128): Moving palette ran
     # Up on 0 and Down on 1, as the Cube Lite on the values it draws as 0 and 1.
-    FILMED_ROTATION_3 = {0: "Up", 1: "Down"}
+    ROTATION_3_RAN = {0: "Up", 1: "Down"}
 
     def sent(self, light, effect, label):
         light._native_effect, light._native_effect_direction = effect, label
@@ -767,11 +767,11 @@ class SweepDirectionTests(unittest.TestCase):
         from test_cube_matrix_matter import FakeLight
         from yeelight_cube.mount_profile import DIRECTION_TABLE, LOW_PAIR, one_axis_direction
         light = FakeLight()
-        light._device_orientation = "up"  # standing, as filmed
+        light._device_orientation = "up"  # standing, as checked on the lamp
         for effect in ("Moving palette", "Sine wave"):
             light._lamp_client.profile = dataclasses.replace(light._lamp_client.profile, rotation=3)
-            self.assertEqual("Up", self.FILMED_ROTATION_3[self.sent(light, effect, "Up")])
-            self.assertEqual("Down", self.FILMED_ROTATION_3[self.sent(light, effect, "Down")])
+            self.assertEqual("Up", self.ROTATION_3_RAN[self.sent(light, effect, "Up")])
+            self.assertEqual("Down", self.ROTATION_3_RAN[self.sent(light, effect, "Down")])
             for rotation in range(4):
                 light._lamp_client.profile = dataclasses.replace(light._lamp_client.profile, rotation=rotation)
                 for orientation in ("up", "right", "down", "left"):
@@ -788,7 +788,7 @@ class SweepDirectionTests(unittest.TestCase):
 
 
 class TurnOnAgainTests(unittest.TestCase):
-    """Filmed 2026-11-10: off, then on with the same effect sent nothing (a
+    """Off, then on with the same effect sent nothing (a
     live change with nothing to change) and the lamp stayed dark; a full
     Matter effect powers the lamp on."""
 
@@ -829,7 +829,7 @@ class FreezeTests(unittest.TestCase):
     """2026-11-11 on the lamp: Freeze sent the Cube Lite's set_fx_effect,
     which a Cube Matrix does not have ("not supported"): nothing froze. What
     it shows over Matter is now replaced by a still drawing of the held
-    frame; a streamed effect pauses (filmed: held 60 s)."""
+    frame; a streamed effect pauses (the lamp holds it, 60 s and more)."""
 
     def light(self, frames=None):
         from test_cube_matrix_matter import FakeLight, MATRIX

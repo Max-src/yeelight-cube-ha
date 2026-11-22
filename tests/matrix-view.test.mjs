@@ -269,7 +269,7 @@ test("the lamp's clock as it draws it: turned by its mount profile", () => {
       assert.equal(withPendingMount(lan, "left"), lan);
       // The light says it (mount_profile.clock_turned): a Cube Matrix numbers
       // its rotations otherwise (right 0, down 1, left 2, up 3) and its clock
-      // is streamed turned on left and up, as a Cube Lite's (filmed 2026-11-12).
+      // is streamed turned on left and up, as a Cube Lite's.
       const matrix = (orientation, rotation, turned) => ({
         device_orientation: orientation,
         matter: { commands: "matter" },

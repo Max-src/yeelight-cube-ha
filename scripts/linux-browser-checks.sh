@@ -58,8 +58,11 @@ if ! command -v node > /dev/null || [ "$(node -p 'process.versions.node.split(".
 fi
 
 # A Linux copy of the sources: node_modules must hold Linux builds, and the
-# Windows checkout's own node_modules stays untouched.
+# Windows checkout's own node_modules stays untouched. Everything but those
+# Linux node_modules is copied afresh: a file deleted or renamed in the
+# checkout must not linger here (an old browser check would run twice).
 mkdir -p "$WORK"
+find "$WORK" -mindepth 1 -maxdepth 1 ! -name node_modules -exec rm -rf {} +
 (cd "$SRC" && tar --exclude=./node_modules --exclude=./.git --exclude=./.claude \
   --exclude=./.venv --exclude=./test-results -cf - .) | (cd "$WORK" && tar -xf -)
 cd "$WORK"

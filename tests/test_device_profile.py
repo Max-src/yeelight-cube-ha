@@ -1,19 +1,19 @@
 """The lamp models (device_profile.py): the Cube Lite and the Cube Matrix.
 
-The Cube Matrix facts are from the lamp itself (2026-11-08, filmed: a base
+The Cube Matrix facts are the lamp's own (a base
 and 4 modules of 5 x 5 in a row, SSDP model CubeMatrix fw_ver 92,
 cube_topology "1,1,1,1,3,3,0,0,", rotation_angle 3, strip_lenth 110); see
 docs/CUBE_MATRIX.md.
 """
 
 import ast
-import runpy
 import unittest
 
 from tests.fakes import lamp_client_source
+from tests.ha_stubs import import_pure_module
 from tests.test_native_features import ROOT
 
-PROFILE = runpy.run_path(ROOT / "device_profile.py")
+PROFILE = vars(import_pure_module("device_profile"))
 CUBE_MATRIX_SUPPORT = (
     "get_prop set_default set_power toggle set_bright set_scene cron_add cron_get cron_del start_cf stop_cf "
     "set_name set_adjust adjust_bright set_ct_abx adjust_ct adjust_color set_rgb set_hsv set_music "
@@ -22,7 +22,7 @@ CUBE_MATRIX_SUPPORT = (
 ).split()
 
 
-def filmed_profile():
+def four_module_profile():
     return PROFILE["profile_for"]("CubeMatrix", CUBE_MATRIX_SUPPORT, "1,1,1,1,3,3,0,0,", "110")
 
 
@@ -49,8 +49,8 @@ class ModelTests(unittest.TestCase):
 
 
 class CubeMatrixTests(unittest.TestCase):
-    def test_the_filmed_lamp_has_four_modules(self):
-        profile = filmed_profile()
+    def test_the_four_module_lamp_has_four_modules(self):
+        profile = four_module_profile()
         self.assertEqual(profile.modules, 4)
         self.assertEqual(profile.wire_length, 110)
         self.assertTrue(profile.streams_effects)
@@ -68,10 +68,10 @@ class CubeMatrixTests(unittest.TestCase):
         self.assertEqual(PROFILE["profile_for"]("CubeMatrix").modules, 4)
 
     def test_wire_order_is_module_by_module_column_by_column_from_the_bottom(self):
-        # Filmed: wire pixel 0 = the bottom-left LED of the module at the
+        # Wire pixel 0 = the bottom-left LED of the module at the
         # base, 1-4 up that column, 5 the next column's bottom, 25 the next
         # module. Lamp order is row * 20 + column (row 0 the bottom).
-        profile = filmed_profile()
+        profile = four_module_profile()
         frame = [(row, column, 0) for row in range(5) for column in range(20)]
         wire = profile.to_wire(frame)
         self.assertEqual(len(wire), 110)
@@ -86,9 +86,9 @@ class CubeMatrixTests(unittest.TestCase):
         self.assertEqual(set(wire[100:]), {(0, 0, 0)})
 
     def test_the_columns_shown_and_the_layout_follow_the_modules(self):
-        # 2026-11-14, the owner's lamp after module splicing in the app:
+        # A real lamp after module splicing in the app:
         # Matrix, Matrix, Spot, Matrix (2,2,3,2, strip 80). Its Spot takes a
-        # block's place in the chain (2026-11-15, the owner: the lamp covers
+        # block's place in the chain (the lamp covers
         # 4 modules' length): one light for columns 10-14, the last block
         # columns 15-19, so effects use all 20.
         profile = PROFILE["profile_for"]("CubeMatrix", (), "2,2,3,2,0,0,0,0,", "80", "0")
@@ -127,7 +127,7 @@ class CubeMatrixTests(unittest.TestCase):
         self.assertEqual((20, 20, 4), (factory.columns, factory.width, len(factory.layout)))
 
     def test_a_long_chain_is_drawn_on_a_panel_as_wide_as_its_modules(self):
-        # 2026-11-21: matrix x3, spot, panel (the owner's lamp, 105 LEDs): the
+        # Matrix x3, spot, panel (a real lamp, 105 LEDs): the
         # panel was dark whenever Home Assistant drew, its columns past 20.
         five = PROFILE["profile_for"]("CubeMatrix", (), "2,2,2,3,1,0,0,0,", "105")
         self.assertEqual((25, 25, 125), (five.columns, five.width, five.pixels))
@@ -155,7 +155,7 @@ class CubeMatrixTests(unittest.TestCase):
     def test_a_spot_slot_takes_five_leds_where_it_is_in_the_chain(self):
         # The lamp (1.12.92, set_segment_rgb / update_leds): a type-3 slot is 5
         # LEDs, any other 25, in topology order. A spot lights its first LED
-        # only (filmed 2026-11-14), for the 5 columns it covers.
+        # only, for the 5 columns it covers.
         profile = PROFILE["profile_for"]("CubeMatrix", (), "2,3,2,0", "55")
         self.assertEqual(profile.slots, (25, 5, 25))
         self.assertEqual(profile.modules, 2)
@@ -181,11 +181,11 @@ class CubeMatrixTests(unittest.TestCase):
         self.assertEqual((255, 120, 0), profile.to_wire(frame)[50])
 
     def test_only_listed_commands_are_sent(self):
-        profile = filmed_profile()
+        profile = four_module_profile()
         for method in ("update_leds", "activate_fx_mode", "set_bright", "set_power", "udp_sess_new",
                        "udp_sess_keep_alive", "set_segment_rgb", "start_cf"):
             self.assertTrue(profile.accepts(method), method)
-        # Answered "method not supported" by the lamp (filmed session).
+        # Answered "method not supported" by the lamp.
         for method in ("set_fx_effect", "update_fx_effect", "reset_fx_effect", "set_ps", "get_fx_effect",
                        "update_persist_effect_list"):
             self.assertFalse(profile.accepts(method), method)

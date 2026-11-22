@@ -225,6 +225,19 @@ class ReportProblemTests(unittest.TestCase):
             expected, {call.args[1:] for call in self.registry.async_delete_issue.call_args_list},
         )
         self.assertTrue(all(call.args[0] is hass for call in self.registry.async_delete_issue.call_args_list))
+        # Unloaded (disabled, or reloaded): not checked any more, its issues
+        # go too (a reload's light reports what is still wrong again).
+        self.registry.async_delete_issue.reset_mock()
+        hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
+        self.assertTrue(run(INIT.async_unload_entry(hass, FakeEntry("e1", data={INIT.CONF_IP: "192.0.2.10"}))))
+        self.assertEqual(
+            expected, {call.args[1:] for call in self.registry.async_delete_issue.call_args_list},
+        )
+        # Not unloaded (a platform refused): kept, the lamp is still checked.
+        self.registry.async_delete_issue.reset_mock()
+        hass.config_entries.async_unload_platforms = AsyncMock(return_value=False)
+        self.assertFalse(run(INIT.async_unload_entry(hass, FakeEntry("e1", data={INIT.CONF_IP: "192.0.2.10"}))))
+        self.registry.async_delete_issue.assert_not_called()
 
     def test_a_cube_matrix_s_music_connection_and_factory_modules(self):
         problems = ISSUES.lamp_problems
@@ -311,6 +324,8 @@ class ReportProblemTests(unittest.TestCase):
 
         async def forward(entry, platforms):
             set_up.extend(platforms)
+            if "light" in platforms:  # the light the other platforms use
+                entry.runtime_data.light = object()
 
         async def unload(entry, platforms):
             unloaded.extend(platforms)

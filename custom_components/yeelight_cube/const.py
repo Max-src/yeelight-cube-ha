@@ -107,10 +107,9 @@ CONF_KEEP_STREAMING_WHEN_OFF = "keep_streaming_when_off"
 # rate limit still applies to the frames that change.
 CONF_SKIP_UNCHANGED_FRAMES = "skip_unchanged_frames"
 # A Cube Lite's Stream frame rate limit when the user has not set one (number.py,
-# light_studio): frames a second on the lamp. Tested on two Cube Lites over
-# the night of 2026-11-20: 2 and 3 a second, 12 lamp-hours (3 with and without
-# Skip Unchanged Stream Frames), no hang; 5 a second,
-# each lamp hung within 100 minutes.
+# light_studio): frames a second on the lamp. At 2 and 3 a second a Cube Lite
+# runs for hours without a hang (with and without Skip Unchanged Stream
+# Frames); at 5 a second it hangs within 100 minutes.
 LITE_STREAM_FPS_DEFAULT = 2
 # The lamp's own playlist (effect id, custom id per slot), saved while Buttons
 # as remote keeps an all-black one on the lamp (light_matter.py); written back

@@ -899,6 +899,11 @@ _FRAME_ORDERS: dict[int, tuple] = {}  # by segment length: lamp-order byte -> pa
 _PLACEMENTS: dict[tuple, object] = {}  # by (direction, profile, length): _picker
 _FRAME_PICKERS: dict[int, object] = {}  # by segment length: _picker of _frame_order
 _READ_BACKS: dict[tuple, tuple] = {}
+# The most maps (_READ_BACKS, _ROW_BLUR_VISITS) and tables (_BLENDS,
+# _TOWARDS) kept: past it they start again (as _COLOURS), each drawn again
+# the same when next asked for.
+_MAPS_LIMIT = 256
+_TABLES_LIMIT = 4096
 
 
 def _picker(order):
@@ -930,6 +935,8 @@ def pixel_map(direction: int, profile: int = REFERENCE_PROFILE, length: int = LE
     key = (direction, profile, length)
     out = _READ_BACKS.get(key)
     if out is None:
+        if len(_READ_BACKS) >= _MAPS_LIMIT:
+            _READ_BACKS.clear()
         out = _READ_BACKS[key] = tuple(
             mapper_index(pixel, length, direction, profile) for pixel in range(length)
         )
@@ -1084,6 +1091,8 @@ def _blend_table(amount: int, target: int) -> bytes:
             table = bytes([target]) * 256
         else:
             table = bytes((value * (255 - amount) + target * amount) >> 8 for value in range(256))
+        if len(_BLENDS) >= _TABLES_LIMIT:
+            _BLENDS.clear()
         _BLENDS[key] = table
     return table
 
@@ -1140,6 +1149,8 @@ def _row_blur_visits(width: int, height: int, index_of) -> tuple:
     key = (width, height, None if index_of is None else tuple(index_of))
     visits = _ROW_BLUR_VISITS.get(key)
     if visits is None:
+        if len(_ROW_BLUR_VISITS) >= _MAPS_LIMIT:
+            _ROW_BLUR_VISITS.clear()
         identity = range(width * height) if index_of is None else index_of
         walk = []
         for column in range(width + 1):
@@ -1227,6 +1238,8 @@ def _towards_table(amount: int, target: int) -> bytes:
             gap = target - value
             sign = (gap > 0) - (gap < 0)
             out[value] = (value + sign + int(f32(f32(gap) / divisor))) & 255
+        if len(_TOWARDS) >= _TABLES_LIMIT:
+            _TOWARDS.clear()
         table = _TOWARDS[key] = bytes(out)
     return table
 

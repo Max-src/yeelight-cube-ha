@@ -125,7 +125,7 @@ class YeelightCubeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=self._get_schema(),
             errors=errors,
             description_placeholders={
-                "example_ip": "192.168.4.139"
+                "example_ip": "192.168.1.139"
             }
         )
 
@@ -193,7 +193,7 @@ class YeelightCubeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 return self.async_abort(reason="already_configured")
 
-        # Format title like the built-in Yeelight: "CubeLite 0xABCD (192.168.4.144)"
+        # Format title like the built-in Yeelight: "CubeLite 0xABCD (192.168.1.144)"
         id_display = f"0x{device_id}" if device_id and not device_id.startswith("0x") else (device_id or "")
         kind = "Cube Matrix" if model_key(model) == CUBEMATRIX else "CubeLite"
         display_title = f"{kind} {id_display} ({ip})" if id_display else f"{kind} ({ip})"
@@ -250,7 +250,10 @@ class YeelightCubeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._discovered_ip = ip
         self._discovered_mac = mac
         self._discovered_model = model
-        kind = "Cube Matrix" if model_key(model) == CUBEMATRIX else "CubeLite"
+        cube_matrix = model_key(model) == CUBEMATRIX
+        # The model, as the confirmation names it (its {name}).
+        self._discovered_name = "Cube Matrix" if cube_matrix else "Cube Lite"
+        kind = "Cube Matrix" if cube_matrix else "CubeLite"
         self.context["title_placeholders"] = {"name": f"{kind} ({ip})", "host": ip}
         return await self.async_step_matter_confirm()
 
@@ -269,7 +272,7 @@ class YeelightCubeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="matter_confirm",
             errors=errors,
-            description_placeholders={"host": self._discovered_ip},
+            description_placeholders={"name": self._discovered_name, "host": self._discovered_ip},
         )
 
     async def async_step_discovery_confirm(self, user_input=None):

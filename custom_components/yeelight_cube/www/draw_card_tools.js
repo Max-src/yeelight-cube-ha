@@ -1,4 +1,4 @@
-// Tool Management Module for Yeelight Cube Lite Draw Card
+// Tool Management Module for Yeelight Cube Draw Card
 import { html } from "./lib/lit-all.js";
 import { handleColorPickerClick } from "./color-picker-utils.js";
 import { getExportImportButtonClass } from "./action-button-utils.js";
@@ -250,7 +250,7 @@ export class ToolManager {
   }
 }
 
-// Action Management Module for Yeelight Cube Lite Draw Card Action Buttons
+// Action Management Module for Yeelight Cube Draw Card Action Buttons
 export class ActionManager {
   constructor(card) {
     this.card = card;

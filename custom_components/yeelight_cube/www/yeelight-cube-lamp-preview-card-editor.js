@@ -23,7 +23,7 @@ import { renderSectionLayoutSettings } from "./section-layout-settings.js";
 import { normalizeCardOptions } from "./card-config.js";
 import { defineOnce } from "./card-registration.js";
 
-// Editor class for the Yeelight Cube Lite Lamp Preview Card
+// Editor class for the Yeelight Cube Lamp Preview Card
 class YeelightCubeLampPreviewCardEditor extends YeelightEditorMixin(LitElement) {
   static get properties() {
     return {

@@ -432,6 +432,48 @@ module.exports = async (t) => {
     [0, 2, 1, 2],
     "wheel: refreshed items keep the browsed item",
   );
+  // On a touch screen a tap stays a click (touchstart is not cancelled, so a
+  // gallery that only browses can pick), a move turns the wheel without
+  // scrolling the page, and a cancelled touch ends the drag.
+  assert.deepEqual(
+    await page.evaluate(async () => {
+      const wheel = document.createElement("yc-wheel");
+      wheel.items = ["a", "b", "c"].map((dataMode) => ({ dataMode }));
+      wheel.active = "a";
+      wheel.geometry = {
+        offsetFor: () => 0,
+        navPosition: "none",
+        maxWidth: 200,
+        height: 200,
+        paddingTop: 0,
+        columnWidth: 200,
+      };
+      wheel.renderItem = () => "";
+      document.body.append(wheel);
+      await wheel.updateComplete;
+      const surface = wheel.querySelector("[data-wheel-scroll]");
+      const touch = (type, y) => {
+        const point = new Touch({ identifier: 1, target: surface, clientX: 10, clientY: y });
+        const event = new TouchEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          touches: type === "touchcancel" ? [] : [point],
+          changedTouches: [point],
+        });
+        surface.dispatchEvent(event);
+        return event.defaultPrevented;
+      };
+      const result = { start: touch("touchstart", 100) };
+      result.move = touch("touchmove", 40);
+      result.centre = wheel.center;
+      touch("touchcancel", 40);
+      result.dragging = wheel._dragY != null;
+      wheel.remove();
+      return result;
+    }),
+    { start: false, move: true, centre: 1, dragging: false },
+    "wheel: a tap stays a click, a move turns it, a cancel ends the drag",
+  );
   await page
     .locator("yeelight-cube-clock-card .collection-album-item.active")
     .click();

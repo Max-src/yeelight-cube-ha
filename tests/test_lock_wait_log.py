@@ -55,7 +55,7 @@ class LampTestCase(unittest.IsolatedAsyncioTestCase):
         # The queue's own state, as the lamp starts with it.
         self.lamp._init_connection_state()
         self.lamp.__dict__.update(
-            _ip="192.168.4.104", _is_on=True, _fx_mode_is_direct=True,
+            _ip="192.168.1.104", _is_on=True, _fx_mode_is_direct=True,
             _lamp_client=SimpleNamespace(
                 state_summary=lambda: "", summary="", record_success=Mock(), record_failure=Mock(),
                 close_fast_socket=Mock(),

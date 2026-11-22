@@ -173,7 +173,7 @@ class SettingsMixin:
         self._lamp_client.forget_running_effect()
         if getattr(self, "is_cube_matrix", False):
             # A Cube Matrix turns an effect or its clock for its new rotation
-            # when it starts it, not while it runs (filmed 2026-11-11): sent
+            # when it starts it, not while it runs: sent
             # again in full, not as a live change with nothing to change.
             self._matrix_shown = None
         if orientation == self._device_orientation and self._mode in (MODE_CLOCK, MODE_NATIVE_EFFECT):

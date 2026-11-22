@@ -458,7 +458,7 @@ class RotationMixin:
         self._rotation_error = None
         self._rotation_retry_attempt = 0
         self._rotation_retry_at = None
-        self._rotation_kind = kind if kind in ("native", "clock") else "native"
+        self._rotation_kind = kind
         self._rotation_items = items
         # The lamps started together (one service call), saved so a restart
         # resumes them on one schedule: only compared, never resolved (a

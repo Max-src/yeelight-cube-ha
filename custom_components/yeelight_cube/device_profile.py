@@ -27,16 +27,15 @@ Two models answer this integration on the LAN, each with its own software:
   microphone**: this integration draws effects, clocks and animations itself
   and streams them (light_studio). ``update_leds`` takes the modules one after
   the other from the base, each 25 pixels **column by column from the bottom**
-  (filmed 2026-11-08 with 4 modules in a row, rotation_angle 3; see
-  docs/CUBE_MATRIX.md). Over TCP it takes 30 commands a minute per client
+  (with 4 modules in a row, rotation_angle 3; see docs/CUBE_MATRIX.md). Over TCP it takes 30 commands a minute per client
   (54 shared), then refuses ("client quota exceeded"): frames go over the
   music-mode connection. It converts every pixel of a frame with its own
   colour converter, as it does its own effects' colours: it is sent the
   colours before conversion (``raw_colours``), never the Cube Lite's LED
-  drive (filmed 2026-11-09: white turned orange). It never turns a frame for
-  its ``rotation_angle``: the mounting it names (MATRIX_ROTATION_ORIENTATIONS,
-  filmed lying base-left at 0 and standing on the base at 3) is the light's
-  Device Orientation, which lays every picture out for it.
+  drive (white would turn orange). It never turns a frame for
+  its ``rotation_angle``: the mounting it names
+  (mount_profile.MATRIX_ROTATION_ORIENTATIONS: lying base-left at 0 and
+  standing on the base at 3) is the light's Device Orientation, which lays every picture out for it.
 
 Frames are drawn in lamp order on a panel ``width`` columns wide and 5 high:
 20 for a Cube Lite and for a Cube Matrix of up to 4 modules, 5 a module for a
@@ -47,6 +46,8 @@ what the model's ``update_leds`` takes.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
+from .mount_profile import MATRIX_ROTATION_ORIENTATIONS
 
 CUBELITE = "cubelite"
 CUBEMATRIX = "cubematrix"
@@ -61,7 +62,7 @@ MODULE_SIZE = 5  # a Cube Matrix module is 5 x 5 pixels
 # TOPOLOGY_SLOTS, then zeros (CubeControlCubeType in the Yeelight app: 0 none,
 # 1 panel, 2 matrix, 3 spot). The lamp (1.12.92, set_segment_rgb and
 # update_leds) gives a type-3 slot 5 LEDs and any other non-zero slot 25 (a
-# 5 x 5 block); strip_lenth is their sum. The lamp filmed 2026-11-08 reports
+# 5 x 5 block); strip_lenth is their sum. A lamp with 4 modules reports
 # "1,1,1,1,3,3,0,0," and 110: 4 blocks of 25, then two 5-LED slots that are
 # configured but not fitted (LEDs 100-109 light nothing).
 TOPOLOGY_NONE = 0
@@ -113,22 +114,13 @@ _MATRIX_REFUSED = {
 # get_prop names that overflow the lamp's reply (its stored effects).
 _MATRIX_UNREADABLE = frozenset({"def_fx", "tmp_fx", "hp_fx"})
 
-# Frames a second a Cube Matrix shows, every one (filmed 2026-11-08 over its
-# music-mode connection: 4 and 6 all shown, 8 and more partly skipped).
+# Frames a second a Cube Matrix shows, every one (over its music-mode
+# connection: 4 and 6 all shown, 8 and more partly skipped).
 CUBEMATRIX_MAX_FPS = 6
 
 # The Yeelight product ids (Matter vendor cluster FC00).
 CUBE_LITE_PRODUCT = 4
 CUBE_MATRIX_PRODUCT = 16787457
-
-# The mounting each rotation_angle is for, as the light's Device Orientation
-# (const.DEVICE_ORIENTATIONS). Filmed 2026-11-09: 0 = lying, the base on the
-# left (the frame as drawn: "right"); 3 = standing on the base (the lamp's
-# own effects run upright, and the frame's first column is at the bottom,
-# its first row on the right: "up", the preview cards' standing view). 1 and
-# 2 are the other two quarter turns: standing with the base on top ("down")
-# and lying with the base on the right ("left").
-MATRIX_ROTATION_ORIENTATIONS = {0: "right", 1: "down", 2: "left", 3: "up"}
 
 # The music modes the Cube Matrix renders itself from update_music_data
 # (get_supported_fx_mode; music_note / music_impact: invalid params).
@@ -161,7 +153,7 @@ class DeviceProfile:
     # Commands the lamp lists in its SSDP support: (empty: not known).
     support: frozenset = field(default_factory=frozenset)
     # Frames a second the lamp shows (None: as many as the stream sends). The
-    # Cube Matrix shows every frame up to 6 a second (filmed), skips some
+    # Cube Matrix shows every frame up to 6 a second, skips some
     # beyond: its streams send at most that many.
     max_fps: int | None = None
     # Its Matter product id (FC00): which nodes the Matter link takes.
@@ -202,8 +194,9 @@ class DeviceProfile:
 
     @property
     def firmware_too_old(self) -> bool:
-        """A Cube Matrix whose firmware takes no frames (update_leds came with
-        1.11.57): nothing Home Assistant draws can be shown."""
+        """A Cube Matrix too old to take frames (update it in the Yeelight
+        app; update_leds came with 1.11.57): nothing Home Assistant draws can
+        be shown."""
         return self.key == CUBEMATRIX and bool(self.support) and "update_leds" not in self.support
 
     @property
@@ -294,8 +287,8 @@ class DeviceProfile:
                 wire.extend([black] * leds)
                 continue
             if leds != BLOCK_LEDS:
-                # A spot: one light (its first LED; filmed 2026-11-14, the
-                # other four light nothing) in a block's place: the colour of
+                # A spot: one light (its first LED; the other four
+                # light nothing) in a block's place: the colour of
                 # its 5 columns, so what moves along the lamp passes through
                 # it.
                 wire.append(_spot_colour(frame, column, width))
@@ -318,8 +311,8 @@ class DeviceProfile:
         block and one a spot slot (the Yeelight app's layout). A Cube Lite:
         its 100 pixels column by column from the base, each column from the
         bottom (``column * 5 + row``), whereas update_leds takes them row by
-        row (filmed 2026-11-16: the same pixels, both ways, gave the same
-        picture and the same colours)."""
+        row (the same pixels, both ways, give the same picture and the
+        same colours)."""
         if self.key != CUBEMATRIX:
             black = (0, 0, 0)
             return [
@@ -397,8 +390,8 @@ def cube_matrix_profile(support=(), topology=None, strip_length=None, rotation=N
 
     The slots follow cube_topology (25 LEDs a block, 5 a type-3 slot, as the
     lamp counts them), up to TOPOLOGY_SLOTS. Without a topology: strip_lenth's
-    25-LED blocks, else 4. The lamp
-    filmed 2026-11-08 reports "1,1,1,1,3,3" and 110: 4 blocks, then two
+    25-LED blocks, else 4. A lamp with 4 modules
+    reports "1,1,1,1,3,3" and 110: 4 blocks, then two
     5-LED slots not fitted (docs/CUBE_MATRIX.md)."""
     entries = parse_topology(topology)[:TOPOLOGY_SLOTS]
     try:

@@ -120,10 +120,10 @@ class ConnectionHealthMixin:
         previous = self._reconnect_cooldown
         self._reconnect_cooldown = min(previous * 2, RECONNECT_COOLDOWN_MAX)
         self._device_unreachable = True
-        # Count again from 1, so the next escalation takes another
-        # MAX_CONSECUTIVE_FAILURES failures (one "capped" log per tier, not
-        # one per failure).
-        self._consecutive_failures = 1
+        # The count goes on (it is not set back): the next escalation takes
+        # another MAX_CONSECUTIVE_FAILURES failures (one "capped" log per
+        # tier, not one per failure). Set back to 1 with MAX of 2, every
+        # later failure escalated again.
         return previous
 
     def _reset_backoff(self) -> tuple[int, float, bool]:

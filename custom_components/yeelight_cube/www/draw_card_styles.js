@@ -1,5 +1,5 @@
 // Removed duplicate string export. Swatch shape styles merged below.
-// CSS styles for Yeelight Cube Lite Draw Card
+// CSS styles for Yeelight Cube Draw Card
 import { css, unsafeCSS } from "./lib/lit-all.js";
 import { cardLayoutStyles, cardSpacing } from "./card-layout-utils.js";
 import { compactLayoutStyles } from "./compact-layout-utils.js";

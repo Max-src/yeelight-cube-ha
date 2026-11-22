@@ -84,6 +84,17 @@ class CompensationTests(unittest.TestCase):
         self.assertIsNone(check("unclear"))
         self.assertEqual("Arrow down (270°)", PROFILE.arrow_text(3))
 
+    def test_each_model_s_rotation_and_orientation_both_ways(self):
+        # A Cube Lite's rotation is the app's arrow; a Cube Matrix's counts
+        # quarter turns clockwise from Right, the Device Orientations' order.
+        self.assertEqual({0: "left", 1: "up", 2: "right", 3: "down"}, PROFILE.LITE_ROTATION_ORIENTATIONS)
+        self.assertEqual({"left": 0, "up": 1, "right": 2, "down": 3}, PROFILE.LITE_ORIENTATION_ROTATIONS)
+        self.assertEqual({0: "right", 1: "down", 2: "left", 3: "up"}, PROFILE.MATRIX_ROTATION_ORIENTATIONS)
+        self.assertEqual(PROFILE.MOUNT_QUARTER_TURNS, PROFILE.MATRIX_ORIENTATION_ROTATIONS)
+        self.assertEqual(list(CONSTANTS["DEVICE_ORIENTATIONS"]), list(PROFILE.MATRIX_ROTATION_ORIENTATIONS.values()))
+        self.assertEqual(["Arrow left (0°)", "Arrow up (90°)", "Arrow right (180°)", "Arrow down (270°)"],
+                         [PROFILE.arrow_text(profile) for profile in PROFILE.PROFILES])
+
     def test_the_star_check_on_every_mount(self):
         check = PROFILE.star_check_profile
         for mount in ("right", "down", "left", "up"):
@@ -318,6 +329,57 @@ class MatterProfileTests(unittest.TestCase):
         self.assertEqual([], light.pending)  # nothing turned again
 
 
+class RotationWriteTests(unittest.TestCase):
+    """A direction write and what can change while it is on its way."""
+
+    def test_a_node_linked_during_the_write_keeps_its_own_values(self):
+        # The lamp paired again while the write was on its way: the new
+        # node's rotation is its own, not the one written to the old node.
+        light = ProfileLight()
+        light._device_orientation = "right"
+
+        class Repaired(Channel):
+            async def async_write(self, path, value):
+                await super().async_write(path, value)
+                light._matter.node_id = 8
+                light._matter.values = {"rotation": 3}
+
+        light.link(7, 2, Repaired())
+        light._lamp_rotation_seen = 2
+        self.assertFalse(asyncio.run(light._sync_lamp_rotation("left")))
+        self.assertEqual({"rotation": 3}, light._matter.values)
+        self.assertEqual(2, light._lamp_rotation_seen)
+        self.assertNotEqual(8, light._config_entry.options.get("mount_profile_node"))
+        self.assertNotEqual(7, light._config_entry.options.get("mount_profile_node"))
+
+    def test_the_confirming_write_waits_for_a_choice_being_written(self):
+        # One direction write at a time (light_settings._follow_lamp_rotation's
+        # lock): the confirming write comes after, with the orientation then.
+        light = ProfileLight()
+        light._device_orientation = "right"
+        light.link(7, 2, None)
+        writes = []
+
+        async def sync(orientation, force=False):
+            writes.append(orientation)
+            return False
+
+        light._sync_lamp_rotation = sync
+
+        async def scenario():
+            lock = light._rotation_lock()
+            await lock.acquire()
+            confirm = asyncio.ensure_future(light._async_confirm_mount_profile())
+            await asyncio.sleep(0)
+            self.assertEqual([], writes)  # waits for the write under way
+            light._device_orientation = "left"
+            lock.release()
+            await confirm
+
+        asyncio.run(scenario())
+        self.assertEqual(["left"], writes)
+
+
 class PendingProfileTests(unittest.TestCase):
     """While a Device Orientation is written, the previews follow the
     profile the lamp is about to run, never the new orientation with the
@@ -416,7 +478,7 @@ class LanOnlyTests(unittest.TestCase):
         value = CONSTANTS["effect_direction_value"]
         for name, spec in CONSTANTS["NATIVE_EFFECTS"].items():
             if spec.get("one_axis"):
-                continue  # chosen for the rotation (test_effect_direction.FilmedSweepTests)
+                continue  # chosen for the rotation (test_effect_direction.LampSweepTests)
             for direction in spec.get("directions") or ():
                 self.assertEqual(value(spec, direction), self.sent_direction(2, name, direction), name)
 

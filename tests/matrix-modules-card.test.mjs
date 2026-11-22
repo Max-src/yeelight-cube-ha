@@ -16,7 +16,7 @@ import {
   withModuleRemoved,
 } from "../custom_components/yeelight_cube/www/matrix-modules-card-utils.js";
 
-// The owner's lamp, 2026-11-14: Matrix, Matrix, Spot, Matrix, mounted "right"
+// A real lamp: Matrix, Matrix, Spot, Matrix, mounted "right"
 // (the base on the left).
 const LAMP = {
   device_orientation: "right",

@@ -641,8 +641,8 @@ def _blocks_play(state) -> None:
                 piece["x"] += step
             else:
                 piece["goal_x"] = piece["x"]
-    # The same pace all the way down, in place or not (the owner,
-    # 2026-11-14: no sudden drop).
+    # The same pace all the way down, in place or not (no sudden
+    # drop).
     if state["tick"] - state["last_fall"] >= state["fall"]:
         state["last_fall"] = state["tick"]
         cells = rotations[piece["rotation"]]

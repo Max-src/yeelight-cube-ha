@@ -308,7 +308,7 @@ export const modulePreviewRadius = (pixelStyle) =>
   pixelStyle === "circle" ? "12%" : pixelStyle === "rounded" ? "6%" : "0";
 
 // ── How a spot and a panel look ─────────────────────────────────────────
-// As filmed on the owner's lamp (2026-11-21): a spot is a square face with a
+// As they look on a lamp: a spot is a square face with a
 // recessed round bezel (about 87% of its width) and in it a round lens (60%)
 // glowing in its colour, nearly white at the centre when bright, its colour
 // at the rim, a soft halo on the bezel; unlit, a dark disc in the ring. A

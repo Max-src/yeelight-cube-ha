@@ -18,8 +18,8 @@ STORAGE = module("pixel_art_storage")
 IMAGES = module("image_utils")
 RENDER = module("light_render")
 
-# Chains from the base (1 panel, 2 matrix, 3 spot), the owner's filmed one
-# (2026-11-21) first.
+# Chains from the base (1 panel, 2 matrix, 3 spot), a real lamp's
+# chain first.
 CHAINS = {
     "matrix,matrix,matrix,spot,panel": "2,2,2,3,1",
     "spot first, 6": "3,2,2,2,2,1",

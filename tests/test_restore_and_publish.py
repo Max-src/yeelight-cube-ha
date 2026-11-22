@@ -252,12 +252,9 @@ class SourceFixTests(unittest.TestCase):
         entry = FakeEntry("e1")
         entry.runtime_data = types.SimpleNamespace(active_ip="192.0.2.10")
         cleanup = Mock()
-        prevention = Mock()
-        with patch.object(module("light"), "cleanup_module_state", cleanup), \
-                patch.object(init, "get_conflict_prevention", return_value=prevention):
+        with patch.object(module("light"), "cleanup_module_state", cleanup):
             self.assertFalse(run(init.async_unload_entry(hass, entry)))
             cleanup.assert_not_called()
-            prevention.remove_managed_device.assert_not_called()
             hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
             self.assertTrue(run(init.async_unload_entry(hass, entry)))
             cleanup.assert_called_once_with("192.0.2.10")

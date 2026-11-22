@@ -57,7 +57,7 @@ Cube Lite found via Matter*, with its address filled in:
   mode, the integration's own effects, text, drawings and scrolling text go
   to a Cube Lite in direct mode over the LAN, paced, with or without Matter
   (each Matter frame would dim the picture for a moment). When a streamed
-  lamp stops answering, Matter tells whether its LED part is stuck (for the
+  lamp stops answering, Matter tells whether its display is stuck (for the
   log): see [How streamed effects reach the lamps](STREAMING.md).
 - **LAN Control turned off** in the app: a Repairs message tells you, since
   Home Assistant cannot reach the lamp until it is on again.

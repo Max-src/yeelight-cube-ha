@@ -127,7 +127,7 @@ class SegmentLengthTests(unittest.TestCase):
         self.assertEqual([], failures)
 
     def test_falling_blocks_land_on_the_last_column_shown(self):
-        # 2026-11-15: the owner's Cube Matrix, 3 blocks (15 columns), Falling
+        # A Cube Matrix with 3 blocks (15 columns), Falling
         # Blocks falling right: the pieces landed in columns 15-19, unseen.
         settings = settings_for("Falling Blocks", 15, "Right")
         settings["seed"] = 1

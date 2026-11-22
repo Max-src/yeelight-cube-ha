@@ -18,6 +18,7 @@ import { normalizeCardOptions } from "../custom_components/yeelight_cube/www/car
 const CardBase = YeelightCardMixin(class { connectedCallback() {} });
 const asCard = (fake) => Object.setPrototypeOf(fake, CardBase.prototype);
 import { AngleCommandController } from "../custom_components/yeelight_cube/www/angle-wheel-utils.js";
+import { notifyUnreported } from "../custom_components/yeelight_cube/www/notify-utils.js";
 
 test("angle commands coalesce unsent values and preserve target snapshots", async () => {
   const calls = [],
@@ -40,7 +41,7 @@ test("angle commands coalesce unsent values and preserve target snapshots", asyn
   angles.schedule(hass, config, 20, true);
   angles.schedule(hass, config, 30, true);
   finish();
-  for (let tick = 0; tick < 5; tick++) await Promise.resolve();
+  for (let tick = 0; tick < 10; tick++) await Promise.resolve(); // the call goes through withCallTimeout
   assert.deepEqual(calls[1], { entity_id: "light.b", angle: 30 });
   assert.equal(calls.length, 2);
   angles.reset();
@@ -52,6 +53,30 @@ test("angle commands coalesce unsent values and preserve target snapshots", asyn
   await angles.flush();
   assert.equal(calls.length, 2);
   assert.equal(angles.schedule(hass, config, Infinity), false);
+});
+
+test("an angle call Home Assistant never answers does not drop later angles", async () => {
+  const calls = [],
+    errors = [];
+  const hass = {
+    callService(domain, service, data) {
+      calls.push(data);
+      // The first call is never answered, the next ones are.
+      return calls.length === 1 ? new Promise(() => {}) : Promise.resolve();
+    },
+  };
+  const angles = new AngleCommandController(
+    () => {},
+    (error) => errors.push(error),
+    10,
+  );
+  const config = { target_entities: ["light.a"] };
+  angles.schedule(hass, config, 10, true);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(errors.length, 1, "the unanswered call is reported");
+  angles.schedule(hass, config, 20, true);
+  for (let tick = 0; tick < 5; tick++) await Promise.resolve();
+  assert.deepEqual(calls[1], { entity_id: "light.a", angle: 20 });
 });
 
 test("collection reconciliation requires content confirmation and isolates rollbacks", (context) => {
@@ -119,15 +144,7 @@ test("color-save failures roll back only their own pending edit", async (context
   const commit = cardMethod(
     "yeelight-cube-color-list-editor-card",
     "_commitColors",
-    {
-      PENDING_COLORS: pending,
-      CardCommandController,
-      CustomEvent: class {
-        constructor(type, options) {
-          Object.assign(this, { type }, options);
-        }
-      },
-    },
+    { PENDING_COLORS: pending, CardCommandController, notifyUnreported },
   );
   let fail;
   const notices = [];
@@ -160,6 +177,15 @@ test("color-save failures roll back only their own pending edit", async (context
   assert.equal(await second, false);
   assert.equal(pending.value("light.a"), null);
   assert.equal(notices[0].detail.message, "offline again");
+  // A failed service call (Home Assistant's own error, a plain object): its
+  // toast was shown already, no second one.
+  pending.set("light.a", newer);
+  const third = commit.call(card, "light.a", newer, { entity: "light.a" });
+  await Promise.resolve();
+  fail({ code: "home_assistant_error", message: "Lamp offline" });
+  assert.equal(await third, false);
+  assert.equal(pending.value("light.a"), null);
+  assert.equal(notices.length, 1);
 });
 
 test("Gradient shares requests and notifies every subscriber, isolating entities", async () => {
@@ -609,4 +635,39 @@ test("an unanswered call stops holding the queue after the timeout", async (cont
   assert.deepEqual(sent, ["update_entity", "apply_custom_pixels"]);
   assert.match(warnings[0], /homeassistant\.update_entity got no answer/);
   assert.equal(commands.busy, false);
+});
+
+test("Draw left mid-stroke: the stroke ends, its repaint and the drawing are not lost", () => {
+  const source = readFileSync(
+    new URL("../custom_components/yeelight_cube/www/yeelight-cube-draw-card.js", import.meta.url),
+    "utf8",
+  );
+  const match = source.match(/  disconnectedCallback\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(match, "disconnectedCallback exists");
+  const flushed = [],
+    cancelled = [];
+  const object = new Function(
+    "StorageUtils",
+    "cancelAnimationFrame",
+    `return ({${match[0]}})`,
+  )({ flushMatrix: () => flushed.push(1) }, (id) => cancelled.push(id));
+  Object.setPrototypeOf(object, { disconnectedCallback() {} });
+  let updates = 0;
+  const card = Object.assign(Object.create(object), {
+    _pixelArtStore: { reset() {} },
+    _commands: new CardCommandController(),
+    _pendingDrawUpdate: 7,
+    _drawingActive: true,
+    isDrawing: true,
+    requestUpdate: () => updates++,
+  });
+  const context = card._commands.context;
+  card.disconnectedCallback();
+  assert.deepEqual(cancelled, [7]);
+  assert.equal(card._pendingDrawUpdate, null);
+  assert.equal(updates, 1, "the last pixels still render");
+  assert.equal(card._drawingActive, false);
+  assert.equal(card.isDrawing, false);
+  assert.deepEqual(flushed, [1]);
+  assert.equal(card._commands.context, context + 1);
 });

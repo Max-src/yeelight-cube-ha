@@ -7,7 +7,7 @@
 //   • its clock (PreviewClock): the seconds an animation has run, held while
 //     the lamp's display is frozen and going on from there once it resumes;
 //   • the frames the lamp's stream sends (stream-frames.js), subscribed only
-//     while the card is on screen;
+//     while the card is on screen and its tab shown;
 //   • the paint skipped when nothing changed: the same render of an effect,
 //     the same streamed frame at the same brightness.
 import { createRafLoop, createVisibilityTracker } from "./matrix-animator.js";
@@ -63,6 +63,12 @@ export class AnimatedPreview {
     this._stream = null;
     this._painted = null;
     this._render = null;
+    // A hidden tab paints nothing (createRafLoop): its streamed frames are
+    // released too, and subscribed again when a preview asks once shown.
+    this._onTabChange = () => {
+      if (globalThis.document?.hidden) this.releaseStream();
+    };
+    this._tabWatched = false;
   }
 
   /** Whether the card is on screen (always, before it is observed or
@@ -85,6 +91,10 @@ export class AnimatedPreview {
   start() {
     this._wanted = true;
     this._observe();
+    if (!this._tabWatched && globalThis.document?.addEventListener) {
+      this._tabWatched = true;
+      globalThis.document.addEventListener("visibilitychange", this._onTabChange);
+    }
     if (this.onScreen) this._loop.start();
   }
 
@@ -102,6 +112,10 @@ export class AnimatedPreview {
     this.stop();
     this._visibility?.disconnect();
     this._visibility = null;
+    if (this._tabWatched) {
+      this._tabWatched = false;
+      globalThis.document?.removeEventListener?.("visibilitychange", this._onTabChange);
+    }
   }
 
   _observe() {
@@ -125,9 +139,10 @@ export class AnimatedPreview {
   }
 
   /** The frame the lamp `entityId`'s stream sent last while it streams (and
-   * the card is on screen), else null: the preview draws the effect itself. */
+   * the card is on screen, its tab shown), else null: the preview draws the
+   * effect itself. */
   streamed(connection, entityId) {
-    if (!connection || !entityId || !this.onScreen) return null;
+    if (!connection || !entityId || !this.onScreen || globalThis.document?.hidden) return null;
     const current = this._stream;
     if (!current || current.entityId !== entityId || current.connection !== connection) {
       current?.release();

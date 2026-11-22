@@ -89,11 +89,19 @@ for (const [kind, attribute] of [
       _primaryEntity: () => "light.top",
       _attrs: () => ({ [attribute]: mode }),
       _controls: { send: async (name) => order.push(["send", name, hass.calls.length]) },
+      // The card's command queue: the palette goes through it, in order with
+      // the card's other commands (and its timeout).
+      _commands: {
+        call: async (target, domain, name, data) => {
+          order.push(["queue", name]);
+          return target.callService(domain, name, data);
+        },
+      },
     };
     const colors = new ColorModeController(card, kind);
     await colors.send(service, { color_mode: "palette" });
     // The palette was given (one call) before the command was sent.
-    assert.deepEqual(order, [["send", service, 1]]);
+    assert.deepEqual(order, [["queue", "set_text_colors"], ["send", service, 1]]);
     assert.equal(hass.calls[0].data.entity_id, "light.bottom");
     // Already in the Palette mode: picking an effect or style shares it too.
     mode = "palette";

@@ -14,7 +14,7 @@ import {
 } from "../custom_components/yeelight_cube/www/matrix-modules.js";
 import { matrixView, toDisplayOrder, viewerFrame } from "../custom_components/yeelight_cube/www/matrix-view.js";
 
-// The owner's lamp, 2026-11-14: Matrix, Matrix, Spot, Matrix (topology
+// A real lamp: Matrix, Matrix, Spot, Matrix (topology
 // 2,2,3,2). The spot takes a block's place: one light for columns 10-14.
 const SPOT_THIRD = {
   matrix_columns: 20,
@@ -77,7 +77,7 @@ test("the spot sits at the centre of its area whatever the orientation", () => {
 });
 
 
-// 2026-11-15: the owner set Matrix + Spot on the lamp: every preview shows
+// Matrix + Spot set on the lamp: every preview shows
 // those two modules only (10 columns), the spot one round light.
 const MATRIX_SPOT = {
   matrix_columns: 10,
@@ -144,7 +144,7 @@ test("a shared preview is laid out as the lamp's modules", async () => {
   assert.equal(layout.places.filter(Boolean).length, 26);
 });
 
-// The owner's lamp (filmed 2026-11-21): three Matrix modules, the spot, the
+// A real lamp's chain: three Matrix modules, the spot, the
 // panel at the end of the chain.
 const OWNER = {
   matrix_columns: 25,

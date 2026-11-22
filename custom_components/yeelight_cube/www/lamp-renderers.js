@@ -283,10 +283,11 @@ export const hasRenderer = (mode) => REGISTRY.has(mode);
 
 /** The run of `settings`, the most recently used last. */
 export function timelineFor(settings) {
-  const { mode, selector, intensity, rate, direction, primary, coloured, colours, handover, variant, seed } = settings;
-  // seed: a simulation's run (Lava Lamp), a new one for each; the segment
-  // drawn on (a Cube Matrix's columns).
-  const key = `${mode},${selector},${intensity},${rate},${direction},${primary},${Boolean(coloured)},${colours ?? ""},${Boolean(handover)},${variant ?? ""},${seed ?? ""},${settingsLength(settings)}`;
+  const { mode, selector, intensity, rate, direction, primary, coloured, colours, handover, variant, palette, seed } = settings;
+  // palette: a music mode's whole palette (musicPalette), its colour words
+  // carry only the first ones; seed: a simulation's run (Lava Lamp), a new
+  // one for each; the segment drawn on (a Cube Matrix's columns).
+  const key = `${mode},${selector},${intensity},${rate},${direction},${primary},${Boolean(coloured)},${colours ?? ""},${Boolean(handover)},${variant ?? ""},${palette ?? ""},${seed ?? ""},${settingsLength(settings)}`;
   const timeline = effectTimelines.get(key) ?? new Timeline(slotFor(settings), settings);
   effectTimelines.delete(key);
   effectTimelines.set(key, timeline);
@@ -639,7 +640,7 @@ export function renderFireworks(seconds, rate, direction, profile = REFERENCE_PR
 const EXTENDED_EFFECT_ID = 63;
 const ALL_DIRECTIONS = ["Up", "Down", "Left", "Right"];
 const SWAP_UP_DOWN = { Up: "Down", Down: "Up" };
-// effect_catalog.py _REVERSED, _QUARTER_TURN, _QUARTER_TURN_BACK (filmed 2026-11-11).
+// effect_catalog.py _REVERSED, _QUARTER_TURN, _QUARTER_TURN_BACK.
 const REVERSED = { Up: "Down", Down: "Up", Left: "Right", Right: "Left" };
 const QUARTER_TURN = { Up: "Left", Down: "Right", Left: "Down", Right: "Up" };
 const QUARTER_TURN_BACK = { Up: "Right", Down: "Left", Left: "Up", Right: "Down" };

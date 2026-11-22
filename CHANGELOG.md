@@ -5,11 +5,55 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+- **The `add_managed_device`, `remove_managed_device`, `is_device_managed` and `list_managed_devices` debug
+  actions.** They only kept a list of addresses in memory that nothing else read; hiding the Yeelight integration's
+  discoveries of your lamps works as before (from your configured lamps).
+
 ### Fixed
 - **A Cube Matrix's power supply side after a restart.** When the lamp's LAN did not answer as Home Assistant started,
   the side was taken from the Matter server's copy, which can be older than the one Home Assistant last wrote: that
   older side was shown and written back to the lamp. It is now read from the lamp itself, as the modules are; if it
   cannot be read, the side Home Assistant kept stays.
+- **A Cube Matrix no longer stays dark when its module list can't be set.** It is switched off while modules are
+  taken off the list; if the lamp then refused the new list, it stayed off while Home Assistant showed it on. It is
+  now switched back on either way.
+- **A Cube Lite's own clock in half-hour time zones.** The lamp's clock takes whole-hour offsets only, so in India,
+  Nepal, Newfoundland or parts of Australia it was 30 or 45 minutes off. There, Home Assistant's clock is now
+  streamed instead, as on a Cube Matrix; whole-hour zones are unchanged.
+- **Failures are reported as failures.** A turn on that never reached the lamp, or a command dropped while the
+  connection was waiting to reconnect, counted as done: no retry, and the health check missed it. They are now
+  counted as failed and recovered like any other.
+- **"Too many commands" only when it is.** A command a model doesn't take, or the lamp's "invalid parameters", was
+  reported on the cards as "too many commands in a short time" and retried; the lamp's own message is shown now.
+  After a real "too many commands", only the lamp's TCP commands pause, briefly, instead of every command
+  waiting up to 20 s.
+- **Steadier connection handling.** A display retry no longer cancels itself; a late notice from a closed UDP
+  connection no longer clears the new one; a closing socket is no longer closed under a send still using it; the
+  reconnect back-off escalates as documented; a Music Flow that can't be restarted after an outage logs once
+  instead of a warning with a traceback.
+- **Matter.** Commands keep working after one unclear error from the Matter server (it is checked again a minute
+  later instead of turning Matter commands off until a restart); commands sent together share one check; a Cube
+  Lite whose Matter link drops no longer offers its animations; the Device Orientation written is always the last
+  one chosen, also during a restart or a new pairing.
+- **Adding a lamp found through Matter** shows its model ("Cube Lite" or "Cube Matrix") instead of "{name}", under
+  the title "Yeelight Cube found via Matter".
+- **`create_cube_discovery` and `ignore_specific_yeelight` work.** The first now offers the lamp under Discovered;
+  the second ignores the Yeelight integration's discovery of that address, as its Ignore button does. Both show an
+  error when they can't, instead of reporting success. `ignore_yeelight_discovery` now finds the Yeelight
+  integration's discoveries by their address, whichever way they were found (it compared the address with an id
+  and could miss them).
+- **A lamp whose light fails to set up is retried.** It stayed loaded with no entities; Home Assistant now retries
+  it, as for a lamp that is offline at startup.
+- **Repairs of a removed or disabled lamp are cleared** when it is unloaded.
+- **Previews.** Changing a later colour of a palette music effect now shows in the previews and stream; a drawing
+  with the same pixel given twice looks the same once saved; several viewers of a preview camera share one render;
+  the live previews come back after the integration is reloaded or a subscription fails, and pause while the
+  browser tab is hidden; the other effect tiles keep 10 frames a second next to smooth ones.
+- **Cards.** A tap picks a pixel art or palette in the Wheel layout on a phone; the gradient angle no longer freezes
+  after one unanswered call; sharing the shown palette waits its turn behind earlier commands; a failed save shows
+  one message, not two; the Clock card editor shows the same save buttons as the card for older card settings; the
+  Draw card keeps its drawing when moved on the dashboard.
 
 ## [2.0.0] - 2026-11-21
 

@@ -117,12 +117,27 @@ const OPTION_ALIASES = Object.freeze({
  * (RETIRED_OPTIONS).
  */
 const OPTION_MIGRATIONS = Object.freeze({
-  // The visible styles applied only with custom_visible_styles on.
-  clock: (config) =>
-    config.custom_visible_styles !== true &&
-    ("visible_styles" in config || "hidden_clock_styles" in config)
-      ? { visible_styles: undefined, hidden_clock_styles: undefined }
-      : {},
+  clock: (config) => ({
+    // The visible styles applied only with custom_visible_styles on.
+    ...(config.custom_visible_styles !== true &&
+      ("visible_styles" in config || "hidden_clock_styles" in config) && {
+        visible_styles: undefined,
+        hidden_clock_styles: undefined,
+      }),
+    // Custom color moved from its own section (show_color_override) into
+    // the color-mode selector: a config that showed it shows the color modes.
+    ...(config.show_color_override && { show_color_modes: true }),
+    // The one save button (show_save_preset_button) became one per kind:
+    // hidden, it hides both unless one is set.
+    ...(config.show_save_preset_button === false && {
+      ...(config.show_save_color_mode_button == null && {
+        show_save_color_mode_button: false,
+      }),
+      ...(config.show_save_clock_style_button == null && {
+        show_save_clock_style_button: false,
+      }),
+    }),
+  }),
   gradient: (config) => ({
     // The visible modes applied only with custom_visible_modes on, and an
     // empty list showed every mode.
@@ -428,7 +443,7 @@ const RETIRED_OPTIONS = Object.freeze({
     "brightness_max",
     "show_brightness_label",
   ],
-  clock: ["custom_visible_styles"],
+  clock: ["custom_visible_styles", "show_color_override", "show_save_preset_button"],
   gradient: [
     "gallery_preview_size",
     "custom_visible_modes",

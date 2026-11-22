@@ -46,7 +46,7 @@ const lamp = (types, extra = {}) => ({
   matrix_modules: types.map((type, index) => ({ type, column: index * 5 })),
   ...extra,
 });
-// The owner's 5 modules (filmed 2026-11-21): the panel past the 20 columns.
+// A real lamp's 5 modules: the panel past the 20 columns.
 const FIVE = lamp(["matrix", "matrix", "matrix", "spot", "panel"]);
 const SIX = lamp(["matrix", "panel", "matrix", "matrix", "matrix", "matrix"]);
 const EIGHT = lamp(["matrix", "spot", "matrix", "panel", "matrix", "matrix", "spot", "panel"]);

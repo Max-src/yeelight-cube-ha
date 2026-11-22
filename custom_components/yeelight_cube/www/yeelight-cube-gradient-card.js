@@ -6,6 +6,7 @@ import { VISIBILITY_KEYS, visibleItems } from "./visible-items.js";
 import { SUPERSEDED } from "./card-command-controller.js";
 
 import { AngleCommandController } from "./angle-wheel-utils.js";
+import { notifyUnreported } from "./notify-utils.js";
 
 import {
   TEXT_SELECTOR_STYLES,
@@ -140,16 +141,9 @@ class YeelightCubeGradientCard extends ModeSelectorMixin(
         this._lastAngleSent = angle;
         this._onAngleApplied();
       },
+      // A failed service call was shown by Home Assistant already.
       (error) =>
-        this.dispatchEvent(
-          new CustomEvent("hass-notification", {
-            bubbles: true,
-            composed: true,
-            detail: {
-              message: error.message || "The angle could not be updated.",
-            },
-          }),
-        ),
+        notifyUnreported(this, error, error?.message || "The angle could not be updated."),
     );
     this._lastAngleSent = null;
     // A picked mode and the full-panel switch show until the lamp confirms
@@ -789,7 +783,7 @@ if (typeof window !== "undefined") {
       type: "yeelight-cube-gradient-card",
       name: "Yeelight Gradient Card",
       description:
-        "Control gradient settings for Yeelight Cube Lite matrix display",
+        "Control gradient settings for Yeelight Cube matrix display",
       preview: true,
     });
 }

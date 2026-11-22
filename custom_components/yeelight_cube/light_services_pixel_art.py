@@ -317,7 +317,7 @@ def async_register_pixel_art_services(hass: HomeAssistant) -> None:
             vol.Required("pixels", description="Array of {position, color} entries (position row * width + column, row 0 at the bottom: 0-99 on the 20x5 matrix; or a list of positions, color [R, G, B]); missing positions stay black"): PIXEL_LIST_SCHEMA,
             vol.Optional("name"): vol.Any(None, cv.string),
             vol.Optional("width", description="The drawing's width in columns (default 20; a Cube Matrix of more than 4 modules: 5 a module)"): PIXEL_ART_WIDTH_SCHEMA,
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         }, extra=vol.ALLOW_EXTRA)
     )
 

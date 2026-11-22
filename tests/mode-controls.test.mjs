@@ -1058,3 +1058,35 @@ test("frozen resets to idle when the displayed mode changes", async () => {
   controller.update();
   assert.equal(controller.frozen, false);
 });
+
+// Smooth tiles tick every display refresh (due = false between the interval's
+// frames): one painting the current render must not make the next due frame
+// skip the other tiles.
+test("a smooth tile's in-between paint never costs the other tiles their due frame", () => {
+  const source = readFileSync(
+    new URL("../custom_components/yeelight_cube/www/mode-controls-ui.js", import.meta.url),
+    "utf8",
+  );
+  const match = source.match(/  _paintPreviews\(now, due = true\) \{([\s\S]*?)\n  \}/);
+  assert.ok(match, "_paintPreviews method not found");
+  const paint = new Function(
+    "RENDER_SECONDS",
+    "paintCellBackground",
+    "paintModuleCells",
+    `return function(now, due = true) {${match[1]}}`,
+  )(0.04, () => {}, () => {});
+  const frames = [];
+  const view = {
+    shadowRoot: {},
+    _previewTargets: [
+      { key: "smooth", smooth: true, cells: [], faces: [] },
+      { key: "other", smooth: false, cells: [], faces: [] },
+    ],
+    model: { config: {}, adapter: { frame: (key) => frames.push(key) } },
+  };
+  paint.call(view, 0, true);
+  paint.call(view, 96, false); // render 2, between due frames
+  paint.call(view, 100, true); // render 2 again, due
+  paint.call(view, 104, false); // the same render, not due: nothing
+  assert.deepEqual(frames, ["smooth", "other", "smooth", "smooth", "other"]);
+});

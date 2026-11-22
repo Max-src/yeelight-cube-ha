@@ -22,6 +22,7 @@ import { previewOnly } from "./offline-preview-state.js";
 import { defineOnce, registerCustomCard } from "./card-registration.js";
 import { ColorListLayoutsMixin } from "./color-list-layouts.js";
 import { normalizeCardOptions } from "./card-config.js";
+import { notifyUnreported } from "./notify-utils.js";
 import { ColorListDragMixin } from "./color-list-drag.js";
 import { ColorInfoMixin } from "./color-list-color-info.js";
 import { hexToRgb, rgbToHex } from "./color-utils.js";
@@ -544,28 +545,23 @@ class YeelightCubeColorListEditorCard extends ColorInfoMixin(
   async _commitColors(entityId, colors, config) {
     const commands = this._commands;
     const context = commands.context;
-    const success = await commands.execute(
-      this._hass,
-      config,
-      "set_text_colors",
-      {
+    // request (not execute): the error itself tells whether Home Assistant
+    // has shown it already.
+    let success = false;
+    let failure;
+    try {
+      success = await commands.request(this._hass, config, "set_text_colors", {
         text_colors: colors,
-      },
-    );
+      });
+    } catch (error) {
+      failure = error;
+    }
     if (context !== commands.context || success) return success;
     // Only these colors: a newer save keeps its own.
     if (PENDING_COLORS.value(entityId) !== colors) return false;
     PENDING_COLORS.clear(entityId);
     this.requestUpdate?.();
-    this.dispatchEvent(
-      new CustomEvent("hass-notification", {
-        bubbles: true,
-        composed: true,
-        detail: {
-          message: commands.error || "The colors could not be saved.",
-        },
-      }),
-    );
+    notifyUnreported(this, failure, commands.error || "The colors could not be saved.");
     return false;
   }
 
@@ -606,6 +602,6 @@ defineOnce("yeelight-cube-color-list-editor-card", YeelightCubeColorListEditorCa
 registerCustomCard({
   type: "yeelight-cube-color-list-editor-card",
   name: "Yeelight Colors Card",
-  description: "Edit the list of text colors for the Yeelight Cube Lite.",
+  description: "Edit the list of text colors for the Yeelight Cube.",
   preview: true,
 });

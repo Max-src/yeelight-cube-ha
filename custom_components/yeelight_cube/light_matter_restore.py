@@ -15,7 +15,7 @@ from .effect_catalog import (
     NATIVE_CLOCK_EFFECT_ID,
 )
 from .light_matter import (
-    DRAWING_EFFECT,
+    LITE_DIRECT_MODE_EFFECT,
     NATIVE_EFFECT_IDS,
 )
 
@@ -129,9 +129,9 @@ class LampRestoreMixin:
     def _lamp_showed_effect(self, effect_id: int) -> None:
         """The lamp switched to effect ``effect_id`` by itself (a button, the
         app): follow it when it is a Music Flow or native effect. Anything
-        but DRAWING_EFFECT means the lamp left this integration's drawing
+        but LITE_DIRECT_MODE_EFFECT means the lamp left this integration's drawing
         mode: the next frame enters it again."""
-        if effect_id != DRAWING_EFFECT:
+        if effect_id != LITE_DIRECT_MODE_EFFECT:
             self._direct_mode_lost()
         music = MUSIC_FLOW_EFFECT_IDS.get(effect_id)
         if music is not None:

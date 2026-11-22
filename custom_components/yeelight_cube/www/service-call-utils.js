@@ -1,5 +1,5 @@
 /**
- * Shared utility for calling Yeelight Cube Lite services on multiple target entities.
+ * Shared utility for calling Yeelight Cube services on multiple target entities.
  *
  * Sends a SINGLE service call with entity_id as a list so the Python backend
  * can dispatch to all lamps in parallel via asyncio.gather.  This avoids the
@@ -133,9 +133,16 @@ export async function callServiceOnTargetEntities(
  * would show other colors than the card. Those lamps are given the shown
  * palette first (set_text_colors, one call). Only available lamps; nothing
  * is sent when they all have it already, or the shown lamp has none.
+ * `call(domain, service, data)` sends it: a card passes its command queue
+ * (in order, with the queue's timeout); Home Assistant directly otherwise.
  * Resolves to the lamps that were given it.
  */
-export async function shareShownPalette(hass, config, shownEntity) {
+export async function shareShownPalette(
+  hass,
+  config,
+  shownEntity,
+  call = (domain, service, data) => hass.callService(domain, service, data),
+) {
   const shown = hass?.states?.[shownEntity]?.attributes?.text_colors;
   if (!Array.isArray(shown) || !shown.length) return [];
   const wanted = JSON.stringify(shown);
@@ -145,7 +152,7 @@ export async function shareShownPalette(hass, config, shownEntity) {
       JSON.stringify(hass.states[entity]?.attributes?.text_colors ?? null) !== wanted,
   );
   if (!others.length) return [];
-  await hass.callService("yeelight_cube", "set_text_colors", {
+  await call("yeelight_cube", "set_text_colors", {
     entity_id: others.length === 1 ? others[0] : others,
     text_colors: shown.map((colour) => [...colour]),
   });

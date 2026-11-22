@@ -92,6 +92,10 @@ class UdpTooLarge(UdpUnavailable):
 class _Protocol(asyncio.DatagramProtocol):
     def __init__(self, session: "UdpSession") -> None:
         self._session = session
+        self._transport = None
+
+    def connection_made(self, transport) -> None:
+        self._transport = transport
 
     def datagram_received(self, data: bytes, addr) -> None:
         self._session._received(data)
@@ -101,7 +105,7 @@ class _Protocol(asyncio.DatagramProtocol):
         self._session._fail_waiting()
 
     def connection_lost(self, exc) -> None:
-        self._session._lost()
+        self._session._lost(self._transport)
 
 
 class UdpSession:
@@ -222,7 +226,12 @@ class UdpSession:
             if future is not None and not future.done():
                 future.set_result(None)
 
-    def _lost(self) -> None:
+    def _lost(self, transport=None) -> None:
+        """The socket ``transport`` closed. A late report from a socket
+        already replaced (close, then a new session opened before the
+        loop reported it) leaves the new one as it is."""
+        if transport is not None and transport is not self._transport:
+            return
         self._transport = None
         self._token = None
         self._fail_waiting()

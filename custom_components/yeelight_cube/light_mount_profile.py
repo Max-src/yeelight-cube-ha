@@ -18,8 +18,9 @@ from .const import (
     MODE_CLOCK,
     MODE_NATIVE_EFFECT,
 )
-from .device_profile import CUBEMATRIX, MATRIX_ROTATION_ORIENTATIONS
+from .device_profile import CUBEMATRIX
 from .mount_profile import (
+    MATRIX_ROTATION_ORIENTATIONS,
     STAR_CHECK_PARAMS,
     SOURCE_MATTER,
     SOURCE_USER,
@@ -74,7 +75,7 @@ class MountProfileMixin:
         written (_mount_profile_pending) as soon as the Device Orientation
         changes, so they never show the new orientation with the old
         profile. A Cube Lite does it itself on its profiles 0 and 1. A Cube
-        Matrix's own clock never does (filmed 2026-11-12: upside down when
+        Matrix's own clock never does (upside down when
         mounted left, read from the bottom up when mounted up), so there its
         clock is streamed, turned on the same Device Orientations as a Cube
         Lite's (CLOCK_TURNED_ORIENTATIONS; light_matrix._matrix_clock_command).

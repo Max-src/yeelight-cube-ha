@@ -2,6 +2,10 @@
 draws (tests/fixtures/lamp_effects.json.gz): every config, all 240 renders, in
 Python and in JS, and the timeline every preview reads.
 
+The reference frames are made outside this repository and updated by the
+maintainer when an effect's look is meant to change; a test failing here
+means a renderer no longer draws what the lamp does.
+
 A slot registered in lamp_renderers is picked up here by itself. JS always
 checks every config (tests/lamp_effects_check.mjs). Python checks them all
 too while they fit a run; past _ALL_CONFIGS it checks _QUICK_CONFIGS of each

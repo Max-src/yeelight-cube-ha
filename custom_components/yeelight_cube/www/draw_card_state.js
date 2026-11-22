@@ -1,4 +1,4 @@
-// State and config helpers for Yeelight Cube Lite Draw Card
+// State and config helpers for Yeelight Cube Draw Card
 
 export function parseConfig(config) {
   return {

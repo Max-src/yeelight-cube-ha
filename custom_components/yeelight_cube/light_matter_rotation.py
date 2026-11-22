@@ -14,11 +14,17 @@ from .const import (
 from .matter_commands import (
     MatterCommandsUnavailable,
 )
-from .device_profile import CUBEMATRIX, MATRIX_ROTATION_ORIENTATIONS
-from .matter_link import ROTATION, ROTATION_ORIENTATIONS
-from .mount_profile import SOURCE_MATTER, saved_on_lamp, valid_profile
+from .device_profile import CUBEMATRIX
+from .matter_link import ROTATION
+from .mount_profile import (
+    LITE_ORIENTATION_ROTATIONS,
+    LITE_ROTATION_ORIENTATIONS,
+    MATRIX_ORIENTATION_ROTATIONS,
+    SOURCE_MATTER,
+    saved_on_lamp,
+    valid_profile,
+)
 from .light_matter import (
-    ORIENTATION_ROTATIONS,
     ROTATION_WRITE_TIMEOUT,
 )
 
@@ -30,12 +36,13 @@ class MatterRotationMixin:
 
     def _rotation_for(self, orientation: str) -> int | None:
         """The lamp's direction setting for a Device Orientation: the Cube
-        Lite's arrows (ROTATION_ORIENTATIONS), or the mounting each Cube
-        Matrix rotation is for (device_profile.MATRIX_ROTATION_ORIENTATIONS):
-        the two lamps number them differently."""
+        Lite's arrows (mount_profile.LITE_ORIENTATION_ROTATIONS), or the
+        mounting each Cube Matrix rotation is for
+        (mount_profile.MATRIX_ORIENTATION_ROTATIONS): the two lamps number
+        them differently."""
         if getattr(getattr(self, "device_profile", None), "key", None) == CUBEMATRIX:
-            return {name: value for value, name in MATRIX_ROTATION_ORIENTATIONS.items()}.get(orientation)
-        return ORIENTATION_ROTATIONS.get(orientation)
+            return MATRIX_ORIENTATION_ROTATIONS.get(orientation)
+        return LITE_ORIENTATION_ROTATIONS.get(orientation)
 
     def _expect_lamp_rotation(self, orientation: str) -> None:
         """Before ``orientation`` is published: the profile the lamp is about
@@ -86,15 +93,27 @@ class MatterRotationMixin:
             return False
         finally:
             self._mount_profile_pending = None
+        if link.node_id != node or not link.linked:
+            # Linked to another node meanwhile (the lamp paired again): its
+            # values are its own, and its profile is checked on its own.
+            _LOGGER.debug(
+                "[MATTER] [%s] Lamp direction written to node %s, linked to %s since",
+                self._ip, node, link.node_id,
+            )
+            return False
         _LOGGER.info("[MATTER] [%s] Lamp direction set to %s", self._ip, orientation)
         # As the lamp will report it: previews turn now, its echo is no change.
         link.values["rotation"] = rotation
         self._lamp_rotation_seen = rotation
         if note := getattr(self, "matrix_note_rotation", None):
             note(rotation)
-        if link.node_id == node:
-            self._store_mount_profile(rotation, SOURCE_MATTER, node)
+        self._store_mount_profile(rotation, SOURCE_MATTER, node)
         return True
+
+    def _rotation_lock(self) -> asyncio.Lock:
+        """One direction write at a time (light_settings._follow_lamp_rotation
+        holds it around _sync_lamp_rotation): never taken inside it."""
+        return self.__dict__.setdefault("_rotation_write_lock", asyncio.Lock())
 
     def _mount_profile_confirmed(self) -> bool:
         """Whether the linked node's rotationAngle is the lamp's profile: it
@@ -144,7 +163,10 @@ class MatterRotationMixin:
 
     async def _async_confirm_mount_profile(self) -> None:
         try:
-            if not await self._sync_lamp_rotation(self._device_orientation, force=True):
+            # After a Device Orientation being written: the one chosen last.
+            async with self._rotation_lock():
+                written = await self._sync_lamp_rotation(self._device_orientation, force=True)
+            if not written:
                 _LOGGER.debug(
                     "[MATTER] [%s] Lamp direction not confirmed (no server delivers "
                     "the write): its Matter value is not used", self._ip,
@@ -166,7 +188,7 @@ class MatterRotationMixin:
         link = self._matter
         if valid_profile(rotation) is not None and link is not None and link.linked:
             self._store_mount_profile(rotation, SOURCE_MATTER, link.node_id)
-        orientation = ROTATION_ORIENTATIONS.get(rotation)
+        orientation = LITE_ROTATION_ORIENTATIONS.get(rotation)
         if orientation is None or orientation == self._device_orientation:
             # Only the profile changed: effects are compensated anew.
             self._create_tracked_task(

@@ -17,12 +17,12 @@ IP, MAC = CONST.CONF_IP, CONST.CONF_MATTER_MAC
 
 class MatterOnlyLampsTests(unittest.TestCase):
     def test_a_cube_lite_no_entry_has_is_offered_with_its_wifi_address(self):
-        # Its Wi-Fi interface, not the access point one (192.168.4.1, no MAC).
+        # Its Wi-Fi interface, not the access point one (192.168.1.1, no MAC).
         self.assertEqual([(LAMP_IP, LAMP_MAC)], DISCOVERY.matter_only_lamps([CUBE_ATTRIBUTES], []))
 
     def test_a_lamp_already_set_up_is_not(self):
         by_ip = {IP: LAMP_IP}
-        by_mac = {IP: "192.168.4.200", MAC: LAMP_MAC}
+        by_mac = {IP: "192.168.1.200", MAC: LAMP_MAC}
         for entry in (by_ip, by_mac):
             self.assertEqual([], DISCOVERY.matter_only_lamps([CUBE_ATTRIBUTES], [entry]))
         self.assertEqual([(LAMP_IP, LAMP_MAC)], DISCOVERY.matter_only_lamps([CUBE_ATTRIBUTES], [{IP: "10.0.0.9"}]))

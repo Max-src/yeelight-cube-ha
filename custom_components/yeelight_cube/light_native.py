@@ -350,6 +350,12 @@ class NativeModesMixin:
         offset = dt_util.now().utcoffset()
         return int(offset.total_seconds()) if offset else 0
 
+    def _native_clock_whole_hours(self) -> bool:
+        """The local UTC offset is whole hours, the only ones the lamp's own
+        clock takes (light_studio.studio_selected streams the clock in
+        other zones)."""
+        return self._native_clock_utc_offset_seconds() % 3600 == 0
+
     @staticmethod
     def _native_clock_timezone_hours() -> int:
         """Return the current local UTC offset in whole hours."""

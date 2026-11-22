@@ -16,6 +16,8 @@ from fakes import FakeEntry, FakeHass, instant_sleeps, make_light, module, run
 fakes.install_stubs()
 CONNECTION = module("light_connection")
 UDP_SESSION = module("udp_session")
+PROTOCOL = module("lamp_protocol")
+BULB_EXCEPTION = fakes.BulbException
 
 
 def light_in_effect():
@@ -172,6 +174,114 @@ class BackgroundCheckTests(unittest.TestCase):
             self.assertIsNone(light._matter_commands_check)  # checked again next time
 
         run(scenario())
+
+
+class FailedOperationTests(unittest.TestCase):
+    """What the lamp's queue (_execute_hardware_op) is told of a failure."""
+
+    def test_a_turn_on_that_did_not_reach_the_lamp_is_a_failure(self):
+        async def scenario():
+            light = make_light(hass=FakeHass(), entry=FakeEntry())
+            light._fx_mode_is_direct = True
+            light._apply_display_mode_internal = AsyncMock(
+                side_effect=PROTOCOL.CubeConnectionError("Lamp unreachable (TCP probe failed)")
+            )
+            light._lamp_client.consecutive_failures = 2
+            light._hard_timeout_times = [time.monotonic()]
+            ok = await light._execute_hardware_op(light._internal_turn_on, "turn_on")
+            # Not a success: the failures and the circuit breaker are kept.
+            self.assertFalse(ok)
+            self.assertEqual(2, light._lamp_client.consecutive_failures)
+            self.assertEqual(1, len(light._hard_timeout_times))
+            self.assertTrue(light._hardware_failure_retryable)
+            # The service call itself does not raise for an offline lamp.
+            await light.async_turn_on(brightness=10)
+
+        run(scenario())
+
+    def test_a_turn_on_refused_for_the_quota_is_still_quiet(self):
+        async def scenario():
+            light = make_light(hass=FakeHass(), entry=FakeEntry())
+            light._fx_mode_is_direct = True
+            light._apply_display_mode_internal = AsyncMock(side_effect=BULB_EXCEPTION(
+                {"code": -1, "message": "client quota exceeded"}
+            ))
+            return await light._execute_hardware_op(light._internal_turn_on, "turn_on")
+
+        self.assertTrue(run(scenario()))
+
+    def test_the_display_retry_is_not_cancelled_by_its_own_redraw(self):
+        async def scenario(redraw):
+            light = make_light(hass=FakeHass(), entry=FakeEntry())
+            after = []
+
+            async def retry():
+                await light._execute_hardware_op(redraw, "display:display_retry")
+                await asyncio.sleep(0)  # the rest of the retry still runs
+                after.append(True)
+
+            light._retry_display_task = asyncio.ensure_future(retry())
+            task = light._retry_display_task
+            await asyncio.gather(task, return_exceptions=True)
+            follow_up = light._retry_display_task
+            if follow_up is not task:
+                follow_up.cancel()  # the next retry, scheduled after a failure
+                await asyncio.gather(follow_up, return_exceptions=True)
+            return task.cancelled(), after, follow_up is not task
+
+        cancelled, after, rescheduled = run(scenario(AsyncMock()))
+        self.assertEqual((False, [True], False), (cancelled, after, rescheduled))
+        failing = AsyncMock(side_effect=PROTOCOL.CubeConnectionError("unreachable"))
+        cancelled, after, rescheduled = run(scenario(failing))
+        self.assertEqual((False, [True], True), (cancelled, after, rescheduled))
+
+
+class MusicFlowRecoveryTests(unittest.TestCase):
+    def test_a_music_flow_restart_that_fails_is_logged_once(self):
+        async def scenario():
+            light = make_light(hass=FakeHass(), entry=FakeEntry())
+            light._is_on = True
+            light._music_flow_enabled = True
+            client = light._lamp_client
+
+            async def music_flow(enabled, *args, **kwargs):
+                client.consecutive_failures = 1  # still failing
+                raise fakes.HomeAssistantError("music_flow_failed")
+
+            light.async_set_music_flow = music_flow
+            client.consecutive_failures = 1
+            with self.assertLogs(CONNECTION._LOGGER, level=logging.DEBUG) as logs:
+                with instant_sleeps("light_connection") as fast:
+                    task = asyncio.ensure_future(light._periodic_health_check())
+                    while len(fast.slept) < 5:
+                        await asyncio.sleep(0)
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+            return logs.records
+
+        records = run(scenario())
+        loud = [r for r in records if r.levelno >= logging.WARNING]
+        self.assertEqual(1, len(loud), [r.getMessage() for r in loud])
+        self.assertIsNone(loud[0].exc_info)
+        self.assertIn("Music Flow not restarted", loud[0].getMessage())
+
+
+class UdpSessionLossTests(unittest.TestCase):
+    def test_a_late_loss_of_a_replaced_socket_keeps_the_new_session(self):
+        session = UDP_SESSION.UdpSession("192.0.2.1")
+        old, new = Mock(), Mock()
+        old_protocol = UDP_SESSION._Protocol(session)
+        old_protocol.connection_made(old)
+        session._transport, session._token = new, "a" * 32
+        old_protocol.connection_lost(None)  # reported after the new socket opened
+        self.assertIs(new, session._transport)
+        self.assertEqual("a" * 32, session._token)
+        # The current socket's loss still ends the session.
+        new_protocol = UDP_SESSION._Protocol(session)
+        new_protocol.connection_made(new)
+        new_protocol.connection_lost(None)
+        self.assertIsNone(session._transport)
+        self.assertIsNone(session._token)
 
 
 if __name__ == "__main__":

@@ -17,17 +17,28 @@ class PixelArtStorageTests(unittest.TestCase):
         flat = [
             {"position": 5, "color": [255, 0, 0]},
             {"position": 1, "color": [255, 0, 0]},
-            {"position": 5, "color": [0, 255, 0]},  # duplicate: first wins
+            {"position": 5, "color": [0, 255, 0]},  # duplicate: the last wins
             {"position": 7, "color": [0, 0, 0]},  # black: background
             {"position": 3, "color": [0, 255, 0]},
         ]
         self.assertEqual(
             group_pixels(flat),
             [
-                {"color": [255, 0, 0], "position": [1, 5]},
-                {"color": [0, 255, 0], "position": [3]},
+                {"color": [255, 0, 0], "position": [1]},
+                {"color": [0, 255, 0], "position": [3, 5]},
             ],
         )
+
+    def test_a_position_keeps_its_last_color_as_the_lamp_shows_it(self):
+        # light_render draws the last definition of a position (a later black
+        # clears it): saved and loaded again, the drawing reads the same.
+        flat = [
+            {"position": 2, "color": [9, 9, 9]},
+            {"position": 2, "color": [0, 0, 0]},
+            {"position": 4, "color": [1, 1, 1]},
+            {"position": [4, 6], "color": [5, 5, 5]},
+        ]
+        self.assertEqual(group_pixels(flat), [{"color": [5, 5, 5], "position": [4, 6]}])
 
     def test_legacy_positions_key_is_grouped(self):
         legacy = [{"color": [1, 2, 3], "positions": [9, 4]}]

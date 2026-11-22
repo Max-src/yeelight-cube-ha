@@ -1302,3 +1302,37 @@ test("the card offers a style over every slot, a formerly numbered one too, not 
     ],
   );
 });
+
+// The clock's older options, read the same by the card and its editor
+// (card-config.js OPTION_MIGRATIONS): the former color override switch shows
+// the color modes, the former single save button's "hidden" hides both.
+test("the clock card and its editor read its older options alike", () => {
+  assert.deepEqual(normalizeCardOptions({ show_color_override: true }, "clock"), {
+    show_color_modes: true,
+  });
+  assert.deepEqual(
+    normalizeCardOptions({ show_color_override: false, show_color_modes: true }, "clock"),
+    { show_color_modes: true },
+  );
+  assert.deepEqual(normalizeCardOptions({ show_save_preset_button: false }, "clock"), {
+    show_save_color_mode_button: false,
+    show_save_clock_style_button: false,
+  });
+  // A per-kind switch already set wins.
+  assert.deepEqual(
+    normalizeCardOptions(
+      { show_save_preset_button: false, show_save_color_mode_button: true },
+      "clock",
+    ),
+    { show_save_color_mode_button: true, show_save_clock_style_button: false },
+  );
+  assert.deepEqual(normalizeCardOptions({ show_save_preset_button: true }, "clock"), {});
+  // Neither file keeps its own copy.
+  for (const file of ["yeelight-cube-clock-card.js", "yeelight-cube-clock-card-editor.js"]) {
+    const source = readFileSync(
+      new URL(`../custom_components/yeelight_cube/www/${file}`, import.meta.url),
+      "utf8",
+    );
+    assert.doesNotMatch(source, /show_color_override|show_save_preset_button/, file);
+  }
+});

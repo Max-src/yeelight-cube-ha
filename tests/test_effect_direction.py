@@ -267,8 +267,8 @@ class ColorTests(unittest.TestCase):
         )))
 
 
-class FilmedSweepTests(unittest.TestCase):
-    """Filmed 2026-11-11: the Cube Lite standing, the Device Orientation set to
+class LampSweepTests(unittest.TestCase):
+    """The Cube Lite standing, the Device Orientation set to
     each mount and the lamp's rotation written for it (left 0, up 1, right 2,
     down 3). On the lamp, each value runs the same way at every rotation (the
     lamp turns it); per effect, the way each value ran on a standing lamp
@@ -284,7 +284,7 @@ class FilmedSweepTests(unittest.TestCase):
     }
     # rotation -> value -> the way Moving palette, Sine wave and Flicker sweep
     # ran on the standing lamp (along its long side only).
-    ONE_AXIS_FILMED = {
+    ONE_AXIS_RAN = {
         1: {0: "Down", 1: "Up", 2: "Up", 3: "Down"},
         2: {0: "Up", 1: "Down", 2: "Up", 3: "Down"},
         3: {0: "Up", 1: "Down", 2: "Down", 3: "Up"},
@@ -319,7 +319,7 @@ class FilmedSweepTests(unittest.TestCase):
     def test_a_one_axis_effect_runs_along_the_lamp_for_its_rotation(self):
         for name in ("Moving palette", "Sine wave"):
             self.assertTrue(EFFECTS[name].get("one_axis"), name)
-            for rotation, ran in self.ONE_AXIS_FILMED.items():
+            for rotation, ran in self.ONE_AXIS_RAN.items():
                 for label in ("Up", "Down"):
                     sent, _ = _sent(label, "up", name, profile=rotation)
                     self.assertEqual(label, ran[sent], (name, rotation, label))
@@ -333,7 +333,7 @@ class FilmedSweepTests(unittest.TestCase):
                 self.assertEqual(_sent("Down", "up", name, profile=rotation)[0], _sent("Right", "up", name, profile=rotation)[0])
 
     def test_hacking_falls_along_the_lamp_on_0_and_1(self):
-        # Filmed 2026-11-12, rotation 1, raw values: 0 ran Down, 1, 2 and 3 Up
+        # Rotation 1, raw values: 0 ran Down, 1, 2 and 3 Up
         # (2 and 3 run as 0). Standing (`up`): Up forward, Down back.
         spec = EFFECTS["Hacking"]
         self.assertTrue(spec.get("one_axis") and spec.get("one_axis_low_pair"))

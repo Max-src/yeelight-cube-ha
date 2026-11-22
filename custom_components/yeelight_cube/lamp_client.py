@@ -13,6 +13,7 @@ lamp_protocol.py. No Home Assistant import.
 """
 import logging
 import asyncio
+import threading
 from yeelight import BulbException # type: ignore
 
 from .device_profile import CUBE_LITE_PROFILE, CUBEMATRIX, model_key, profile_for
@@ -91,6 +92,12 @@ class LampClient(UdpChannelMixin, TcpSocketMixin, BulbCommandsMixin, ConnectionH
         self._fast_socket_time = 0.0  # When the socket was opened (for diagnostics)
         self._last_fast_command = None  # Last command sent via send_command_fast
         self._fx_activated_on_socket = False  # True if activate_fx_mode was sent on current socket
+        # The persistent socket a send runs on in its thread, and the one to
+        # close once that send ends (close_fast_socket during it: an
+        # operation's hard timeout cancels only the wait for the thread).
+        self._fast_socket_guard = threading.Lock()
+        self._fast_socket_sending = None
+        self._fast_socket_doomed = None
         # Whether the lamp's fx-mode flag may be set: every activate_fx_mode
         # (direct mode) sets it, only deactivate_fx_mode clears it, and while it
         # is set a music effect's first frame stops the microphone instead of

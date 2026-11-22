@@ -2,11 +2,11 @@
 
 The Cube Matrix (device_profile) answers the classic Yeelight LAN protocol.
 Over TCP it takes about 60 commands a minute; its UDP sessions answer
-commands but, filmed on 2026-11-08, showed a stream of frames late (tens of
+commands but show a stream of frames late (tens of
 seconds behind) or not at all. Its music mode does not: ``set_music [1, host,
 port]`` makes the lamp connect back to ``host:port``, and every command sent
-on that connection is taken at once, unanswered and without quota. Filmed:
-frames shown in real time; up to 6 frames a second all shown, beyond that the
+on that connection is taken at once, unanswered and without quota:
+frames are shown in real time; up to 6 frames a second all shown, beyond that the
 lamp skips some but never falls behind. The connection stays up idle (2 min
 tested), ordinary TCP commands still work meanwhile (``get_prop`` answered,
 ``music_on`` 1), and the lamp leaves music mode when it is closed.
@@ -19,7 +19,7 @@ connection: a command is taken as accepted ({"result": ["ok"]}); the commands
 that read something (get_prop...) go over a short TCP connection instead.
 
 Opening the connection puts the lamp in music mode, which shows the last
-frame over whatever it ran (2026-11-09: its own effect, started over
+frame over whatever it ran (its own effect, started over
 Matter, froze a few seconds later, when a connection check opened it). So it
 is opened only for frames: direct mode, a frame, or any command while direct
 mode is on (session_setup). Anything else, and a connection check, goes over
@@ -27,8 +27,7 @@ TCP while it is closed (NotOpen).
 
 Direct mode is sent again at least every DIRECT_REFRESH seconds while frames
 go (before the frame that is due): sent once, a stream froze on its last
-frame after 10 to 20 s (filmed 2026-11-09, on some ticks of the lamp's demo
-loop); every 2 s kept 5 to 6 frames a second shown, a 15-minute stream
+frame after 10 to 20 s (on some ticks of the lamp's demo loop); every 2 s kept 5 to 6 frames a second shown, a 15-minute stream
 without a freeze. Before every frame also works, but halves the frames shown.
 
 No Home Assistant import.

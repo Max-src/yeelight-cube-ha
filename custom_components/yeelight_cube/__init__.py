@@ -6,7 +6,7 @@ import re
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP # type: ignore
 from homeassistant.core import HomeAssistant, callback as ha_callback # type: ignore
 from homeassistant.config_entries import ConfigEntry # type: ignore
-from homeassistant.exceptions import ConfigEntryNotReady # type: ignore
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady # type: ignore
 from homeassistant.exceptions import HomeAssistantError  # type: ignore
 from yeelight import BulbException  # type: ignore
 from homeassistant.helpers.typing import ConfigType # type: ignore
@@ -15,7 +15,6 @@ from homeassistant.helpers import entity_registry as er # type: ignore
 from .const import DOMAIN, CONF_IP, CONF_DEVICE_ID, CONF_MATTER_MAC, LAN_PORT, PROBE_TIMEOUT
 from .lamp_protocol import check_tcp
 from .device_profile import CUBEMATRIX, model_key
-from .conflict_prevention import get_conflict_prevention
 from .discovery_services import async_setup_services
 from .issues import clear_problems
 from .runtime_data import CubeConfigEntry, CubeRuntimeData
@@ -376,11 +375,10 @@ def _schedule_device_discovery(hass: HomeAssistant) -> None:
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Yeelight Cube Lite component."""
+    """Set up the Yeelight Cube integration."""
     _LOGGER.debug("Yeelight Cube Lite async_setup() called")
 
     hass.data.setdefault(DOMAIN, {})
-    get_conflict_prevention(hass)
     _schedule_dismiss_yeelight_discoveries(hass)
     async_setup_services(hass)
     # Entity-facing actions resolve their target from the runtime registry, so
@@ -456,7 +454,7 @@ async def _async_migrate_entity_unique_ids(
 ) -> None:
     """Migrate entity unique_ids from the old IP-based scheme to entry_id-based.
 
-    Old format:  yeelight_cube_192_168_4_139{suffix}
+    Old format:  yeelight_cube_192_168_1_139{suffix}
     New format:  yeelight_cube_{entry_id}{suffix}
 
     This is idempotent — if no old entities are found, it's a no-op.
@@ -558,6 +556,29 @@ async def _async_require_reachable(
         ) from err
 
 
+async def _async_require_light(hass: HomeAssistant, entry: CubeConfigEntry, ip_address: str) -> None:
+    """Raise unless the light platform created the lamp's light: Home
+    Assistant only logs a platform's error (and gives up on one after 60 s),
+    which would leave the entry loaded without its entities, never retried.
+    Its platform is unloaded first, so the next setup can forward it again.
+    A network or lamp error (OSError, timeouts included; the yeelight
+    library's BulbException, which CubeConnectionError and refusals are) or a
+    setup that took too long becomes ConfigEntryNotReady, so Home Assistant
+    retries. Any other error (a bug) fails the setup visibly instead of
+    being retried forever as if the lamp were unreachable."""
+    runtime = entry.runtime_data
+    if runtime.light is not None:
+        return
+    runtime.light_abandoned = True
+    await hass.config_entries.async_unload_platforms(entry, ["light"])
+    exc = runtime.light_error
+    reason = "it did not finish in time" if exc is None else (str(exc) or type(exc).__name__)
+    if exc is not None and not isinstance(exc, (OSError, BulbException)):
+        raise ConfigEntryError(f"Light platform setup failed for {ip_address}: {reason}") from exc
+    _LOGGER.warning("[SETUP] Light platform setup failed for %s — will retry: %s", ip_address, reason)
+    raise ConfigEntryNotReady(f"Light platform setup failed for {ip_address}: {reason}") from exc
+
+
 async def _async_store_device_id(
     hass: HomeAssistant, entry: ConfigEntry, ip_address: str, port: int
 ) -> None:
@@ -599,11 +620,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: CubeConfigEntry) -> bool
     
     await async_load_storage(hass)
 
-    # Register this device as managed by our component (for all entries)
     ip_address = entry.data[CONF_IP]
     port = entry.data.get('port', LAN_PORT)
-    conflict_prevention = get_conflict_prevention(hass)
-    conflict_prevention.add_managed_device(ip_address)
     
     # Listen for config entry updates (e.g. IP change from zeroconf rediscovery)
     entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
@@ -621,7 +639,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CubeConfigEntry) -> bool
     await _async_store_device_id(hass, entry, ip_address, port)
 
     # --- Migrate entity unique_ids from IP-based to entry_id-based ---
-    # Old format: yeelight_cube_192_168_4_139{suffix}
+    # Old format: yeelight_cube_192_168_1_139{suffix}
     # New format: yeelight_cube_{entry_id}{suffix}
     # This migration runs once; after that the old entities no longer exist.
     await _async_migrate_entity_unique_ids(hass, entry, ip_address)
@@ -629,26 +647,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: CubeConfigEntry) -> bool
     # Set up light platform FIRST — it creates the LampClient and stores the
     # light entity in entry.runtime_data, which the other platforms (switch,
     # camera, …) depend on.
-    # A network or lamp error while the light sets up (OSError, timeouts
-    # included; the yeelight library's BulbException, which CubeConnectionError
-    # and refusals are) becomes ConfigEntryNotReady, so Home Assistant
-    # retries. Any other error (a bug) fails the setup visibly instead of
-    # being retried forever as if the lamp were unreachable.
-    try:
-        await hass.config_entries.async_forward_entry_setups(entry, ["light"])
-    except ConfigEntryNotReady:
-        raise  # Already a retry — let it through
-    except Exception as exc:
-        if not isinstance(exc, (OSError, BulbException)):
-            raise
-        _LOGGER.warning(
-            "[SETUP] Light platform setup failed for %s — will retry: %s",
-            ip_address, exc, exc_info=True,
-        )
-        raise ConfigEntryNotReady(
-            f"Light platform setup failed for {ip_address}: {exc}"
-        ) from exc
-    
+    await hass.config_entries.async_forward_entry_setups(entry, ["light"])
+    await _async_require_light(hass, entry, ip_address)
+
     # Now set up all dependent platforms (they can safely read the light entity)
     await hass.config_entries.async_forward_entry_setups(entry, ["switch", "text", "select", "sensor", "binary_sensor", "number", "button", "camera", "event"])
     
@@ -859,9 +860,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .light import cleanup_module_state  # noqa: E402
     cleanup_module_state(ip_address)
 
-    # Remove device from managed list
-    conflict_prevention = get_conflict_prevention(hass)
-    conflict_prevention.remove_managed_device(ip_address)
+    # Its Repairs (issues.py) go with it: a lamp disabled or unloaded is not
+    # checked any more. Loaded again (a reload), its light reports a problem
+    # that is still there at its next checks.
+    clear_problems(hass, entry.entry_id)
 
     # Home Assistant drops entry.runtime_data once the entry is unloaded.
 

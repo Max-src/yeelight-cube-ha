@@ -16,13 +16,13 @@ from yeelight import Bulb, BulbException # type: ignore
 
 from .lamp_protocol import (
     MAX_CONSECUTIVE_FAILURES,
-    QUOTA_BACKOFF_MULTIPLIER,
     RECONNECT_COOLDOWN_INITIAL,
     SOCKET_ERROR_WAIT,
     CONNECT_TIMEOUT,
     _RST_LINGER,
     _USE_TCP,
     CubeConnectionError,
+    is_quota_error,
 )
 from .music_channel import MusicChannel
 
@@ -305,26 +305,29 @@ class BulbCommandsMixin:
             if not self._connection_healthy:
                 await self._check_connection_health()
             
+            if self._library_socket() is None:
+                time_since_last = time.time() - self._last_reconnect_attempt
+                if time_since_last < self._reconnect_cooldown:
+                    # Still in cooldown: not sent, and not counted as a
+                    # failure (no connection was tried, only "too soon").
+                    # Raised, not returned: a caller taking the return for
+                    # the lamp's answer believed it applied.
+                    _LOGGER.debug(
+                        "[COMMAND #%s] SKIP %s: cooldown active "
+                        "(%.1fs remaining, "
+                        "failures=%s)",
+                        cmd_id, command,
+                        self._reconnect_cooldown - time_since_last,
+                        self._consecutive_failures
+                    )
+                    raise CubeConnectionError(
+                        f"{command} not sent: reconnect cooldown active"
+                    )
             
             try:
                 # Check if socket is None — need to reconnect first
                 if self._library_socket() is None:
-                    current_time = time.time()
-                    time_since_last = current_time - self._last_reconnect_attempt
-                    
-                    if time_since_last < self._reconnect_cooldown:
-                        # Still in cooldown — don't attempt, just skip.
-                        # DON'T increment _consecutive_failures for this — it's not
-                        # a real connection attempt, just a "too soon" skip.
-                        _LOGGER.debug(
-                            "[COMMAND #%s] SKIP %s: cooldown active "
-                            "(%.1fs remaining, "
-                            "failures=%s)",
-                            cmd_id, command,
-                            self._reconnect_cooldown - time_since_last,
-                            self._consecutive_failures
-                        )
-                        return None  # Skip silently — not a failure
+                    time_since_last = time.time() - self._last_reconnect_attempt
                     
                     # Distinguish between error recovery and normal "closed" flow.
                     # The Cube closes TCP after EVERY command in direct mode — that's
@@ -404,12 +407,18 @@ class BulbCommandsMixin:
                 error_code = error_dict.get('code', 0)
                 error_message = error_dict.get('message', str(e))
                 
-                if error_code == -1:  # Quota exceeded
+                if is_quota_error(e):
+                    # The pause is the TCP gate's (_tcp_turn: TCP_QUOTA_PAUSE
+                    # more before the next TCP command, whichever sends it),
+                    # not a sleep here: holding _command_lock it stopped
+                    # every other command, and outlasted the operation's
+                    # hard timeout.
                     self._tcp_quota_hit = True
                     self._count_failure()
-                    backoff_time = self._reconnect_cooldown * QUOTA_BACKOFF_MULTIPLIER
-                    _LOGGER.warning("[COMMAND #%s] QUOTA EXCEEDED - backing off %.1fs", cmd_id, backoff_time)
-                    await asyncio.sleep(backoff_time)
+                    _LOGGER.warning(
+                        "[COMMAND #%s] QUOTA EXCEEDED (%s) - pausing the TCP commands",
+                        cmd_id, command,
+                    )
                     raise e
                     
                 elif "closed the connection" in error_message.lower():
@@ -502,7 +511,11 @@ class BulbCommandsMixin:
                         "[%s]",
                         cmd_id, command, RECONNECT_COOLDOWN_INITIAL, self.summary
                     )
-                    await asyncio.sleep(RECONNECT_COOLDOWN_INITIAL)
+                    # The back-off is the next TCP command's wait at the gate
+                    # (_tcp_turn), not a sleep holding _command_lock.
+                    self._tcp_next_at = (
+                        max(self._tcp_next_at, time.monotonic()) + RECONNECT_COOLDOWN_INITIAL
+                    )
                     raise e
                     
                 else:

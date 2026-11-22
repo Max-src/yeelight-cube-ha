@@ -366,7 +366,7 @@ if (typeof window !== "undefined") {
   registerCustomCard({
     type: "yeelight-cube-palette-card",
     name: "Yeelight Palettes Card",
-    description: "View and manage palettes for the Yeelight Cube Lite.",
+    description: "View and manage palettes for the Yeelight Cube.",
     preview: true,
   });
 }

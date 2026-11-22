@@ -12,7 +12,7 @@ from tests.test_native_features import CONSTANTS, ROOT, _load_standalone_functio
 from tests.fakes import light_state
 
 REDACTED = "**REDACTED**"
-IP = "192.168.4.145"
+IP = "192.168.1.145"
 DEVICE_ID = "0x0000000012fc02"
 
 
@@ -55,7 +55,7 @@ def _lamp():
         connection_state=lambda: {"transport": "udp", "consecutive_failures": 0},
     )
     attributes = {
-        "light_entity_id": "light.cubelite_192_168_4_145",
+        "light_entity_id": "light.cubelite_192_168_1_145",
         "ip_address": IP,
         "mode": "Custom Draw",
         "custom_text": "Happy birthday Alex",

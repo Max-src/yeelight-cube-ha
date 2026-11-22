@@ -165,10 +165,12 @@ class YeelightModeControls extends LitElement {
     const model = this.model;
     if (!model?.adapter || !this.shadowRoot) return;
     this._previewTargets ||= this._collectPreviewTargets();
-    // The display refreshes faster than the lamp renders: a frame already
-    // painted stays (a new target list is painted at once).
+    // The display refreshes faster than the lamp renders: between due
+    // frames, a render already painted stays (a new target list is painted
+    // at once). A due frame always paints: the tiles that are not smooth
+    // only paint then.
     const render = Math.floor(now / 1000 / RENDER_SECONDS);
-    if (render === this._paintedRender && this._paintedTargets === this._previewTargets)
+    if (!due && render === this._paintedRender && this._paintedTargets === this._previewTargets)
       return;
     this._paintedRender = render;
     this._paintedTargets = this._previewTargets;

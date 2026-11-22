@@ -117,18 +117,22 @@ class MatrixSettingsMixin:
         if self._lamp_client.close_music_session():
             await asyncio.sleep(MUSIC_CLOSE_SETTLE)
         # Blocks and Spots taken off the list are no longer written by the
-        # lamp: they would keep their last picture (filmed 2026-11-20; a
-        # Spot left lit, 2026-11-21). Switched off first, the lamp writes them
+        # lamp: they would keep their last picture (a Spot stays lit).
+        # Switched off first, the lamp writes them
         # black while they are still listed.
         blank = _drives_fewer(topology, self._lamp_client.profile.module_types)
         if blank:
             await self.matrix_send_power(False)
             await asyncio.sleep(MODULES_BLANK_SETTLE)
-        self._matrix_command_at = time.monotonic()
-        await self._matter_commands.async_command(CUBE_CONTROL_CLUSTER, "updateTopology", {"topology": topology})
-        _LOGGER.info("[MATRIX] [%s] Modules set: %s", self._ip, modules)
-        if blank and self._is_on:
-            await self.matrix_send_power(True)
+        try:
+            self._matrix_command_at = time.monotonic()
+            await self._matter_commands.async_command(CUBE_CONTROL_CLUSTER, "updateTopology", {"topology": topology})
+            _LOGGER.info("[MATRIX] [%s] Modules set: %s", self._ip, modules)
+        finally:
+            # On again even when the list was not written: left dark, the
+            # lamp would be off while Home Assistant shows it on.
+            if blank and self._is_on:
+                await self.matrix_send_power(True)
         self._matrix_modules_changed(topology)
         if self.hass is not None:
             self.async_write_ha_state()

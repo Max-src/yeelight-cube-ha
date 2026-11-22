@@ -357,6 +357,9 @@ def timeline_for(settings) -> Timeline:
         settings["direction"], tuple(settings["primary"]), bool(settings["coloured"]),
         tuple(map(tuple, settings.get("colours", ()))), bool(settings.get("handover")),
         settings.get("variant"),
+        # A music mode's whole palette (music_palette): its colour words carry
+        # only the first ones.
+        tuple(map(tuple, settings.get("palette", ()))),
         # A simulation's run (Lava Lamp): a new one for each seed.
         settings.get("seed"),
         settings_length(settings),

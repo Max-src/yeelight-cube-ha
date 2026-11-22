@@ -3,7 +3,9 @@
 cards), not their own drawing of the effect with its own start and seeds."""
 
 import base64
+import types
 import unittest
+from unittest.mock import Mock, patch
 
 import fakes
 from fakes import FakeEntry, FakeHass, make_light, module
@@ -64,6 +66,44 @@ class StreamPreviewTests(unittest.TestCase):
              namespace)
         encoded = namespace["encode_preview_frame"](FRAME)
         self.assertEqual(bytes(channel for rgb in FRAME for channel in rgb), base64.b64decode(encoded))
+
+    def test_a_removed_light_ends_its_subscriptions(self):
+        # A config entry reload removes the light and makes a new one: a card
+        # still subscribed to the old one is told, so it subscribes again.
+        light = streaming_light()
+        seen, ended = [], []
+        light.add_stream_preview_listener(seen.append, on_end=lambda: ended.append(1))
+        light.add_stream_preview_listener(lambda frame: seen.append(frame))
+        stop = light.add_stream_preview_listener(lambda frame: None, on_end=lambda: ended.append(2))
+        stop()
+        # Registered once with the light's removal.
+        self.assertEqual(1, len(light.on_remove))
+        light.on_remove[0]()
+        self.assertEqual([1], ended)
+        light._studio_rendered = (FRAME, False)
+        light._publish_stream_frame()
+        self.assertEqual([], seen)
+
+    def test_the_websocket_subscription_ends_with_the_light(self):
+        ws = module("stream_preview_ws")
+        light = streaming_light()
+        light.entity_id = "light.cube"
+        sent = []
+        connection = types.SimpleNamespace(
+            subscriptions={}, send_result=Mock(), send_error=Mock(), send_message=sent.append)
+        with patch.object(ws, "_light_for", lambda hass, entity_id: light),                 patch.object(ws.websocket_api, "event_message", lambda id_, event: (id_, event), create=True):
+            ws.ws_stream_frames(None, connection, {"id": 5, "entity_id": "light.cube"})
+            connection.send_result.assert_called_once_with(5)
+            light._studio_rendered = (FRAME, False)
+            light._publish_stream_frame()
+            self.assertEqual(5, sent[0][0])
+            self.assertIn("frame", sent[0][1])
+            light.on_remove[0]()
+            self.assertEqual((5, {"ended": True}), sent[-1])
+            light._publish_stream_frame()
+            self.assertEqual(2, len(sent))
+            # The card's unsubscribe afterwards still succeeds.
+            connection.subscriptions.pop(5)()
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ Two camera entities per lamp:
   • **Round**  — prettier rendering with ellipses (LED-style circles).
 """
 
+import asyncio
 import io
 import logging
 import math
@@ -190,8 +191,8 @@ def _views_for(vertical: bool, width: int, live: bool) -> tuple[Image.Image, lis
 
 
 # ── A spot's and a panel's face ───────────────────────────────────────
-# As the cards draw them (www/matrix-modules.js moduleLook), as filmed on the
-# owner's lamp (2026-11-21): a spot is a square face with a recessed round
+# As the cards draw them (www/matrix-modules.js moduleLook), as they look on a
+# lamp: a spot is a square face with a recessed round
 # bezel (about 87% of its width) and in it a round lens (60%) glowing in its
 # colour, nearly white at the centre when bright, its colour at the rim, a
 # soft halo on the bezel; unlit, a dark disc in the ring. A panel is one
@@ -397,6 +398,14 @@ def _chosen_intensity(state) -> int:
     only to those that read it, as light_native sends it."""
     return int(state.native_effect_intensity)
 
+
+def _render_done(task: asyncio.Task) -> None:
+    """A shared render's error is read even when every viewer left (no
+    "never retrieved" warning); the next request starts a new one."""
+    if not task.cancelled() and task.exception() is not None:
+        _LOGGER.debug("camera render failed: %s", task.exception())
+
+
 class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
     """Abstract base for the 20×5 LED matrix live-preview cameras.
 
@@ -427,6 +436,10 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
         # next image may be drawn.
         self._cached_frame: tuple[list[tuple], bool, bool] | None = None
         self._next_frame_at = 0.0
+        # The render under way (_async_render) and the frame count it began
+        # at: viewers asking meanwhile, before a new frame, await it instead
+        # of each drawing and encoding the same frame.
+        self._render_task: tuple[int, asyncio.Task] | None = None
         # Live streams open right now (handle_async_mjpeg_stream).
         self._live_streams = 0
         self._native_preview_key: tuple[str, str] | None = None
@@ -491,7 +504,13 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
             or _time.monotonic() < self._next_frame_at
         ):
             return self._cached_image
-        return await self._async_render()
+        generation, task = self._render_task or (None, None)
+        if task is None or task.done() or generation != self._image_generation:
+            task = asyncio.get_running_loop().create_task(self._async_render())
+            task.add_done_callback(_render_done)
+            self._render_task = (self._image_generation, task)
+        # Shielded: a viewer that leaves stops waiting, the others still get it.
+        return await asyncio.shield(task)
 
     def camera_image(
         self, width: int | None = None, height: int | None = None

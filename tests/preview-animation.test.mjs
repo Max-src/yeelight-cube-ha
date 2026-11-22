@@ -4,7 +4,7 @@ import test from "node:test";
 const WWW = "../custom_components/yeelight_cube/www";
 const { createRafLoop } = await import(`${WWW}/matrix-animator.js`);
 const { AnimatedPreview, PreviewClock } = await import(`${WWW}/preview-animation.js`);
-const { acquireStreamFrames } = await import(`${WWW}/stream-frames.js`);
+const { acquireStreamFrames, STREAM_RETRY_MS } = await import(`${WWW}/stream-frames.js`);
 const { nativeEffectCatalog, withNativeEffectCatalog, CATALOG_RETRY_MS } =
   await import(`${WWW}/native-effect-catalog.js`);
 const { loadBuiltinPixelArts, BUILTIN_PIXEL_ARTS_RETRY_MS } = await import(
@@ -192,6 +192,93 @@ test("a preview off screen receives no streamed frames", async () => {
     assert.equal(preview.running, false);
   } finally {
     delete globalThis.IntersectionObserver;
+  }
+});
+
+test("a failed stream subscription is tried again while shown", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"] });
+  const connection = streamConnection();
+  const subscribe = connection.subscribeMessage;
+  let failing = true;
+  connection.subscribeMessage = (...args) => {
+    if (!failing) return subscribe(...args);
+    connection.subscribed += 1;
+    return Promise.reject(new Error("not_found"));
+  };
+  const stream = acquireStreamFrames(connection, "light.retry");
+  await settle();
+  // Asked meanwhile: no new subscription before the delay.
+  assert.equal(stream.latest(), null);
+  assert.equal(connection.subscribed, 1);
+  failing = false;
+  t.mock.timers.tick(STREAM_RETRY_MS);
+  assert.equal(stream.latest(), null);
+  assert.equal(connection.subscribed, 2);
+  connection.send({ frame: base64([1, 2, 3]) });
+  assert.deepEqual(stream.latest(), [[1, 2, 3]]);
+  // Another preview of the lamp shares the working one.
+  const other = acquireStreamFrames(connection, "light.retry");
+  assert.deepEqual(other.latest(), [[1, 2, 3]]);
+  assert.equal(connection.subscribed, 2);
+  other.release();
+  stream.release();
+  await settle();
+  assert.equal(connection.unsubscribed, 1);
+});
+
+test("a stream subscription the integration ends is subscribed again", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"] });
+  const connection = streamConnection();
+  const stream = acquireStreamFrames(connection, "light.reloaded");
+  connection.send({ frame: base64([1, 1, 1]) });
+  assert.deepEqual(stream.latest(), [[1, 1, 1]]);
+  // The light was removed (its integration reloaded): its subscription ends.
+  connection.send({ ended: true });
+  await settle();
+  assert.equal(connection.unsubscribed, 1);
+  assert.equal(stream.latest(), null);
+  assert.equal(connection.subscribed, 1);
+  t.mock.timers.tick(STREAM_RETRY_MS);
+  stream.latest();
+  assert.equal(connection.subscribed, 2);
+  connection.send({ frame: base64([2, 2, 2]) });
+  assert.deepEqual(stream.latest(), [[2, 2, 2]]);
+  stream.release();
+  await settle();
+  assert.equal(connection.unsubscribed, 2);
+});
+
+test("a preview in a hidden tab receives no streamed frames", async () => {
+  const listeners = new Set();
+  globalThis.document = {
+    hidden: false,
+    addEventListener: (type, listener) => type === "visibilitychange" && listeners.add(listener),
+    removeEventListener: (type, listener) => listeners.delete(listener),
+  };
+  const turn = (hidden) => {
+    globalThis.document.hidden = hidden;
+    listeners.forEach((listener) => listener());
+  };
+  fakeFrames();
+  try {
+    const connection = streamConnection();
+    const preview = new AnimatedPreview(null, { onFrame() {} });
+    preview.start();
+    preview.streamed(connection, "light.tab");
+    assert.equal(connection.subscribed, 1);
+    turn(true);
+    await settle();
+    assert.equal(connection.unsubscribed, 1);
+    assert.equal(preview.streamed(connection, "light.tab"), null);
+    assert.equal(connection.subscribed, 1);
+    // Back: subscribed again when asked.
+    turn(false);
+    preview.streamed(connection, "light.tab");
+    assert.equal(connection.subscribed, 2);
+    preview.disconnect();
+    assert.equal(listeners.size, 0);
+  } finally {
+    delete globalThis.document;
   }
 });
 

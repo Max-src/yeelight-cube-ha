@@ -5,11 +5,11 @@ command its network part passes on a fixed number of bytes too early (the
 offset, R): none is ever whole, so none is answered. A command that is
 exactly R bytes long on that link is read whole, and the lamp answers it.
 R is not known and moves: about a multiple of 115 bytes plus a few (346,
-117, 462, 345 and 229 measured on 2026-11-16).
+117, 462, 345 and 229 for example).
 
 req_ota [1, 1] is sent padded to each likely size in turn until one is
 answered: the lamp then re-opens its link at once and restarts itself about
-20 s later (filmed 2026-11-16: answered at 229 bytes, normal commands
+20 s later (for example: answered at 229 bytes, normal commands
 answered 10 s later, a 0.5 s black restart at 18 s). Over TCP, one command at
 a time.
 

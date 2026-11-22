@@ -25,7 +25,7 @@ def clock_text(now, content: str, twelve_hour: bool, colon_blink: bool) -> tuple
     """What the clock shows at ``now`` (an aware datetime, local time): its
     text and whether its colon is lit. In "time_date" the time shows 6 s,
     then the date 4 s (while the seconds end in 6 to 9), as the lamps' own
-    clocks do (filmed on a Cube Matrix); a blinking colon is off on odd
+    clocks do; a blinking colon is off on odd
     seconds."""
     if content == "date":
         date_phase = True

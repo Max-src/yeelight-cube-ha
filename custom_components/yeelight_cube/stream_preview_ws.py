@@ -7,7 +7,9 @@ Each event is ``{"frame": <base64 of width x 5 R, G, B bytes>}``: the lamp's
 frame (device_profile.width: 20, or 5 a module of a Cube Matrix of more than
 4 modules, so 100 to 200 pixels), in lamp order (row 0 at the bottom), in
 the colours a preview shows (light_studio._publish_stream_frame), before the
-preview's brightness boost.
+preview's brightness boost. When the light is removed (its config entry
+reloaded), a last event ``{"ended": true}`` tells the card to subscribe
+again.
 """
 from __future__ import annotations
 
@@ -52,7 +54,14 @@ def ws_stream_frames(hass: HomeAssistant, connection, msg) -> None:
     def send(frame) -> None:
         connection.send_message(websocket_api.event_message(msg["id"], {"frame": encode_preview_frame(frame)}))
 
-    connection.subscriptions[msg["id"]] = light.add_stream_preview_listener(send)
+    @callback
+    def ended() -> None:
+        # The light was removed (its config entry reloaded): no frame comes
+        # any more, the card subscribes again (to the light now there). Its
+        # unsubscribe still finds the subscription (the stop does nothing).
+        connection.send_message(websocket_api.event_message(msg["id"], {"ended": True}))
+
+    connection.subscriptions[msg["id"]] = light.add_stream_preview_listener(send, on_end=ended)
     connection.send_result(msg["id"])
 
 

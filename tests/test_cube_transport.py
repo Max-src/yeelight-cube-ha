@@ -4,7 +4,10 @@ fake lamp of test_udp_session. TCP is the python-yeelight stand-in below,
 which records what it was asked to send."""
 import asyncio
 import importlib
+import socket
 import sys
+import threading
+import time
 import types
 import unittest
 from unittest.mock import patch
@@ -504,11 +507,18 @@ class CubeTransportTests(unittest.IsolatedAsyncioTestCase):
         self.short_stream_timings()
         self.cube.stream_running("studio", True)
         await self.cube.send_command_fast("update_leds", ["AAAA"])
-        await asyncio.sleep(1.0)  # 2.5 x STREAM_HOLD without a new frame
+        await asyncio.sleep(2.5 * client_udp.STREAM_HOLD)  # without a new frame
+        ended = time.monotonic()
         busy = self.frames()
-        self.assertGreaterEqual(len(busy), 12)  # timers on Windows run a little late
         self.assertEqual({"AAAA"}, set(busy))
-        self.assertLess(self.gaps(), 0.05 * 3)
+        # Sent again all along, not only for STREAM_HOLD: the lamp heard the
+        # frame within 3 x STREAM_KEEP_BUSY of the wait's end, and never waited
+        # longer than that between two. (Times, not a count of frames: timers
+        # on Windows run late, by their ~15 ms granularity.)
+        times = [m["at"] for m in self.lamp.received if m["method"] == "update_leds"]
+        self.assertLess(ended - times[-1], client_udp.STREAM_KEEP_BUSY * 3)
+        self.assertGreater(times[-1] - times[0], 2 * client_udp.STREAM_HOLD)
+        self.assertLess(self.gaps(), client_udp.STREAM_KEEP_BUSY * 3)
         # The producer stopped: the re-sends end STREAM_HOLD after its last frame.
         self.cube.stream_running("studio", False)
         await self.cube.send_command_fast("update_leds", ["BBBB"])
@@ -775,6 +785,146 @@ class CubeTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("udp", self.cube.transport)
         self.assertTrue(tcp.closed)
         self.assertIsNone(self.cube._fast_socket)
+
+
+class _HeldSocket:
+    """A persistent socket whose send waits until released (a thread still
+    sending when an operation's hard timeout gave up on it)."""
+
+    def __init__(self):
+        self._ends = socket.socketpair()
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.sending = False
+        self.closed = False
+        self.closed_while_sending = False
+
+    def fileno(self):
+        return self._ends[0].fileno()
+
+    def recv(self, size):
+        return self._ends[0].recv(size)
+
+    def sendall(self, data):
+        self.sending = True
+        self.entered.set()
+        self.release.wait(2)
+        self.sending = False
+
+    def setsockopt(self, *args):
+        pass
+
+    def close(self):
+        self.closed_while_sending = self.sending
+        self.closed = True
+
+    def dispose(self):
+        self.release.set()
+        for end in self._ends:
+            end.close()
+
+
+class TcpFallbackTests(unittest.IsolatedAsyncioTestCase):
+    """The TCP path (UDP failed or turned off): what a refusal, the reconnect
+    cooldown and a closing persistent socket do."""
+
+    async def asyncSetUp(self):
+        await CubeTransportTests.asyncSetUp(self)
+        self.cube.force_tcp(60)
+
+    asyncTearDown = CubeTransportTests.asyncTearDown
+
+    def refusing(self, error):
+        def send_command(bulb, method, params):
+            _Bulb.sent.append((method, params))
+            raise _BulbException(error)
+
+        return patch.object(_Bulb, "send_command", send_command)
+
+    def test_only_the_lamps_quota_message_is_its_quota(self):
+        quota = protocol.is_quota_error
+        self.assertTrue(quota(_BulbException({"code": -1, "message": "client quota exceeded"})))
+        # -1 is also a method or parameters the lamp does not take, and a
+        # command refused before it is sent: not "too many commands".
+        self.assertFalse(quota(_BulbException({"code": -1, "message": "invalid params"})))
+        self.assertFalse(quota(_BulbException({"code": -1, "message": "method not supported"})))
+        self.assertFalse(quota(_BulbException(
+            {"code": -1, "message": "set_fx_effect is not supported by the Cube Matrix"}
+        )))
+        self.assertFalse(quota(_BulbException(
+            {"code": -1, "message": "set_default is not sent to a Cube Matrix: it would overwrite"}
+        )))
+
+    async def test_a_quota_refusal_pauses_at_the_gate_without_holding_the_lock(self):
+        with self.refusing({"code": -1, "message": "client quota exceeded"}):
+            with self.assertRaises(_BulbException):
+                await asyncio.wait_for(self.cube.send_command_with_recovery("set_bright", [50]), 2)
+        self.assertTrue(self.cube._tcp_quota_hit)  # the gate's TCP_QUOTA_PAUSE
+        self.assertFalse(self.cube._command_lock.locked())
+
+    async def test_a_refusal_that_is_not_the_quota_is_no_quota_pause(self):
+        with self.refusing({"code": -1, "message": "invalid params"}):
+            with self.assertRaises(_BulbException):
+                await asyncio.wait_for(self.cube.send_command_with_recovery("set_bright", [50]), 2)
+        self.assertFalse(self.cube._tcp_quota_hit)
+
+    async def test_an_illegal_request_backs_off_at_the_gate_without_holding_the_lock(self):
+        with self.refusing({"code": 6, "message": "illegal request"}):
+            with self.assertRaises(_BulbException):
+                await asyncio.wait_for(self.cube.send_command_with_recovery("set_bright", [50]), 2)
+        self.assertFalse(self.cube._command_lock.locked())
+        # The next TCP command waits the back-off.
+        self.assertGreater(self.cube._tcp_next_at - time.monotonic(), 3)
+
+    async def test_a_command_in_the_reconnect_cooldown_is_not_taken_for_sent(self):
+        self.cube._last_reconnect_attempt = time.time()
+        with self.assertRaises(protocol.CubeConnectionError):
+            await self.cube.send_command_with_recovery("set_ps", ["mic_music_mode", "x"])
+        self.assertEqual([], _Bulb.sent)
+        # Not a connection attempt: neither counted nor escalated.
+        self.assertEqual(0, self.cube._consecutive_failures)
+        self.assertFalse(self.cube._device_unreachable)
+
+    async def test_the_cooldown_doubles_once_per_tier_of_failures(self):
+        escalated = [self.cube._connection_failed() is not None for _ in range(6)]
+        self.assertEqual([False, True, False, True, False, True], escalated)
+        self.assertEqual(protocol.RECONNECT_COOLDOWN_MAX, self.cube._reconnect_cooldown)
+
+    async def test_a_query_waits_for_the_command_lock_before_closing_the_socket(self):
+        kept = _HeldSocket()
+        self.addCleanup(kept.dispose)
+        self.cube._fast_socket = kept
+        async with self.cube._command_lock:
+            query = asyncio.ensure_future(self.cube.query_raw_command("get_prop", ["power"], timeout=0.2))
+            await asyncio.sleep(0.2)
+            self.assertFalse(kept.closed)  # a send may be using it
+        try:
+            await asyncio.wait_for(query, 5)
+        except OSError:
+            pass  # nothing listens: only the order is tested
+        self.assertTrue(kept.closed)
+
+    async def test_a_socket_closed_while_its_send_runs_is_closed_after_it(self):
+        held = _HeldSocket()
+        self.addCleanup(held.dispose)
+        self.cube._fast_socket, self.cube._fast_socket_time = held, time.time()
+        send = asyncio.ensure_future(self.cube.send_command_fast("update_leds", ["AAAA"]))
+        self.assertTrue(await asyncio.to_thread(held.entered.wait, 2))
+        # The hard timeout: the wait is cancelled, the thread goes on.
+        send.cancel()
+        await asyncio.gather(send, return_exceptions=True)
+        self.cube.close_fast_socket()
+        self.assertIsNone(self.cube._fast_socket)
+        self.assertFalse(held.closed)
+        held.release.set()
+        for _ in range(100):
+            if held.closed:
+                break
+            await asyncio.sleep(0.01)
+        self.assertTrue(held.closed)
+        self.assertFalse(held.closed_while_sending)
+        # Closed once, not again by the next close.
+        self.cube.close_fast_socket()
 
 
 if __name__ == "__main__":

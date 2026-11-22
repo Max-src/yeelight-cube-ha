@@ -5,8 +5,8 @@ LAN stays the lamp's control path. When the lamp is also a Matter node, the
 lamp pushes over Matter what LAN never reports: its buttons (the playlist
 and the microphone music modes), changes made in the Yeelight app and its
 direction setting. This module finds that node and forwards the reports to
-the light (light_matter.py); it never writes to it (Home Assistant's Matter
-server refuses Yeelight's vendor clusters for writes and commands).
+the light (light_matter.py); what is written to the node or sent to it as a
+command goes through matter_commands.py, on the same server connection.
 
 A Cube Matrix (device_profile) shared to Home Assistant's Matter server is
 linked the same way (its product id, CUBE_MATRIX_PRODUCT), with its own set of
@@ -21,8 +21,7 @@ behind when the lamp was factory reset (which erases its Matter pairing)
 keeps its old attributes, but is unavailable. Re-checked every minute
 (light._async_check_problems), so Matter set up before or after the lamp, or
 a re-commissioned node, links on its own; without the Matter integration
-nothing happens. Other servers (the development one, matter_commands.py) are
-read the same way when Home Assistant's own has no live node for the lamp.
+nothing happens.
 
 A lamp paired again (a factory reset erases its pairing) is a new node, while
 the old one can stay listed, even as available. The newest node (the highest
@@ -38,13 +37,12 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from .device_profile import CUBE_LITE_PRODUCT, CUBE_MATRIX_PRODUCT
+
 _LOGGER = logging.getLogger(__name__)
 
 MATTER_DOMAIN = "matter"
 YEELIGHT_VENDOR_ID = 0x1312
-CUBE_LITE_PRODUCT = 4  # Yeelight's product id (vendor cluster FC00)
-# The Cube Matrix (the original Yeelight Cube, "Cube Smart Lamp").
-CUBE_MATRIX_PRODUCT = 16787457
 CUBE_PRODUCTS = (CUBE_LITE_PRODUCT, CUBE_MATRIX_PRODUCT)
 
 
@@ -118,10 +116,6 @@ MATRIX_REPORTED = {
     "start_up_on_off": START_UP_ON_OFF,
     "reboot_count": REBOOT_COUNT,
 }
-
-# The app's direction arrows (CubeControl rotation angle), verified with the
-# Yeelight app: each step clockwise adds 90 degrees.
-ROTATION_ORIENTATIONS = {0: "left", 1: "up", 2: "right", 3: "down"}
 
 
 def _octets(value: Any) -> bytes | None:
@@ -238,7 +232,6 @@ class MatterLink:
         self,
         hass,
         on_report: Callable[[str, Any, bool], None],
-        other_clients: Callable[[], list] = lambda: [],
         products=(CUBE_LITE_PRODUCT,),
         reported: dict[str, str] | None = None,
     ) -> None:
@@ -247,9 +240,6 @@ class MatterLink:
         # The lamp's model (its product ids) and what it reports.
         self._products = tuple(products)
         self._reported = dict(REPORTED if reported is None else reported)
-        # Other Matter servers' connected clients, read when Home Assistant's
-        # own has no live node for the lamp.
-        self._other_clients = other_clients
         self._client = None
         self.node_id: int | None = None
         self.mac: str | None = None
@@ -270,9 +260,8 @@ class MatterLink:
     def refresh(self, ip: str | None, mac: str | None) -> bool:
         """Link (or keep, or drop) the lamp's node; True when that changed."""
         found = None
-        for client in [matter_client(self._hass), *self._other_clients()]:
-            if client is None:
-                continue
+        client = matter_client(self._hass)
+        if client is not None:
             try:
                 nodes = client.get_nodes()
             except Exception as err:  # noqa: BLE001 -- the client is not ours
@@ -294,7 +283,6 @@ class MatterLink:
                     node.node_id for node, node_mac in matches
                     if node.node_id < newest.node_id and newest_mac and node_mac == newest_mac
                 )
-                break
         if found is None:
             self.stale_node_ids = []
             if not self.linked:
@@ -403,8 +391,8 @@ class MatterLink:
     async def async_read_live(self, name: str) -> Any:
         """``name``'s value (a REPORTED name) read from the lamp now, not the
         server's copy: that copy keeps the value last reported to it, and a
-        value written over Matter is not reported back (2026-11-21: after a
-        restart the copy held a module list of the night before). The read
+        value written over Matter is not reported back (after a restart the
+        copy can hold an older module list). The read
         does not update the copy. None: not linked, or no answer."""
         path = self._reported.get(name)
         client, node_id = self._client, self.node_id

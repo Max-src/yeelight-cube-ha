@@ -100,14 +100,13 @@ STUDIO_FRAME_SECONDS = 1 / STUDIO_FPS
 # A Cube Lite's LAN stream gets a frame when the picture changed, never
 # sooner than LITE_LAN_GAP after the last one, and the last one again after
 # LITE_LAN_RESEND without a change (direct mode is never left silent).
-# Measured 2026-11-17 on two Cube Lites, streams ended abruptly: frames 40 ms
-# apart left a lamp stuck about 1 time in 5 (two frames reaching its LED part
-# back to back cross the 1,024 bytes its serial link takes at once); 200 ms
-# apart, 0 times in 50. Every LAN frame is shown at once and in full. The
-# repeat stays under the 300 ms after which the lamp's network part sends
-# again, in one block, every frame its LED part has not confirmed (old
-# frames shown again; two or more cross the 1,024 bytes): with frames
-# 0.2-0.24 s apart that never happens mid-stream, only at a stream's end.
+# Frames 40 ms apart leave a Cube Lite stuck about 1 stream end in 5 (frames
+# that reach it back to back are too much at once); 200 ms apart, none in 50.
+# Every LAN frame is shown at once and in full. The repeat stays under the
+# 300 ms after which the lamp's network part sends again, in one block, every
+# frame its LED part has not confirmed (old frames shown again, and enough at
+# once to get it stuck): with frames 0.2-0.24 s apart that never happens
+# mid-stream, only at a stream's end.
 LITE_LAN_GAP = 0.2
 LITE_LAN_RESEND = 0.2
 # The rate LITE_LAN_GAP is the gap of (frames a second).
@@ -117,13 +116,12 @@ LITE_LAN_GAP_FPS = 5
 # this many times a second over time (stream_routes.LanPacer). At 5 and under
 # every frame goes one gap after the one before, the new picture, else the
 # last one again: one steady rhythm of exactly the limit (a 0.2 s repeat
-# between new pictures made every limit 5 frames a second on the lamp, which
-# hung Cube Lites set to 1 a second on 2026-11-20). Never a new picture right
-# after a repeat: 120 ms apart (3 a second, 2026-11-19) hung a Cube Lite
-# within minutes, four times in a row. Above 5 frames come closer
-# than the 0.2 s measured safe (the user's experiment; the top Lite hung
-# every 10-20 min at 8-12 a second; 2026-11-20 night, 5 a second hung both
-# Cube Lites within 100 min, 2 and 3 a second never in 12 lamp-hours).
+# between new pictures would make every limit 5 frames a second on the lamp,
+# which can hang a Cube Lite set to 1 a second). Never a new picture right
+# after a repeat: 120 ms apart (at 3 a second) hangs a Cube Lite within
+# minutes. Above 5 frames come closer than the 0.2 s known to be safe (at
+# the user's choice: at 8-12 a second a Cube Lite can hang every 10-20 min;
+# 5 a second can hang one within 100 min, 2 and 3 a second run for hours).
 LITE_STREAM_FPS_MIN = 1
 LITE_STREAM_FPS_MAX = 25
 # After a frame could not be sent, the stream waits this long before the
@@ -143,15 +141,14 @@ STREAM_PREVIEW_FRESH = 1.0
 # A streamed Cube Lite is asked every this long (s) for an answer of its own
 # (LampClient.probe, set_scene keep): frames are never answered, so a lamp
 # that stopped answering mid-stream (its LAN part stuck, only a power cycle
-# helps) was not seen: 2026-11-14, one stayed "on" in Home Assistant for
-# minutes. Unanswered: frames pause, the problem check runs (the Repair and
+# helps) would not be seen, and would stay "on" in Home Assistant.
+# Unanswered: frames pause, the problem check runs (the Repair and
 # the Power cycle sensor, issues.py), and the stream goes on once it answers.
 # Every 5 minutes, not 30 s: each check holds the frames 0.2 s and has the
-# lamp's LED part answer mid-stream, and checks during a stream are what hung
-# the far Cube Lite in tests (2026-11-15: every 15 s, 4 hangs in 14 min; rare
-# checks, none in 20 min). 2026-11-19 it still hung after 44 min of frames an
-# even 0.2 s apart with a check every 30 s. A lamp that stops answering is
-# reported up to 5 minutes later.
+# lamp's LED part answer mid-stream, and frequent checks during a stream can
+# hang a Cube Lite (a check every 15 s hung one within minutes; every 30 s
+# still did, after longer). A lamp that stops answering is reported up to
+# 5 minutes later.
 STUDIO_PROBE_SECONDS = 300.0
 # While it is silent, it is asked again this often: an answer lost on Wi-Fi
 # must not leave a working lamp without frames for STUDIO_PROBE_SECONDS.
@@ -159,22 +156,20 @@ STUDIO_SILENT_PROBE_SECONDS = 5.0
 # Frames pause only after this many checks in a row went unanswered (about
 # STUDIO_PROBE_SECONDS + 2 x STUDIO_SILENT_PROBE_SECONDS); the frames go on
 # through a lost answer or two. A pause is the end of a stream, and stream
-# ends are when a Cube Lite has hung (2026-11-15: every hang found at a
-# stream's end, 10 of 57 ends; none during a stream): on the far lamp one
-# answer in ~30 is lost, and each lost one used to pause the stream and so
+# ends are when a Cube Lite hangs (about 1 end in 6; not during a stream):
+# on a lamp with a poor link one answer in ~30 can be lost, and each lost one used to pause the stream and so
 # risk a hang. A lamp that really hangs gets frames meanwhile, which is
 # harmless, and is reported ~10 s later than with 1.
 STUDIO_SILENT_AFTER = 3
 # A Cube Lite's LED part can stop taking frames mid-stream while its network
-# part still answers everything it answers itself (filmed 2026-11-20: the
-# picture froze 1.5 to 2.5 minutes before the network part restarted, and
-# only then were frames refused). Over Matter the network part asks the LED
+# part still answers everything it answers itself (the picture freezes 1.5
+# to 2.5 minutes before the network part restarts, and only then are frames
+# refused). Over Matter the network part asks the LED
 # part (light_matrix.matter_controller_check): "stuck" within a second. So
 # while streaming it is asked this often, and a lamp found stuck twice in a
 # row (STREAM_LED_CONFIRM_SECONDS apart) gets no more frames and is brought
 # back over the LAN at once (light_link_recovery), inside the window where
-# that works (2026-11-16: brought back before its network part restarted;
-# never after). Lamps without Matter: the LAN check above only.
+# that works (before its network part restarts; never after). Lamps without Matter: the LAN check above only.
 STREAM_LED_CHECK_SECONDS = 10.0
 STREAM_LED_CONFIRM_SECONDS = 2.0
 # Seconds without frames before the recovery starts: the network part's
@@ -287,10 +282,20 @@ class StudioStreamMixin:
             )
         if self._mode == MODE_CLOCK:
             effect = clock_style_effect(self._clock_style())
-            return effect in LITE_STREAMED_EFFECTS or clock_studio_runs(
-                effect, self._native_clock_color_mode, palette,
+            return (
+                effect in LITE_STREAMED_EFFECTS
+                or clock_studio_runs(effect, self._native_clock_color_mode, palette)
+                or not self._lite_clock_whole_hours()
             )
         return False
+
+    def _lite_clock_whole_hours(self) -> bool:
+        """The local UTC offset is whole hours: the lamp's own clock takes no
+        other (in India, Nepal, Newfoundland or parts of Australia it would
+        be 30 or 45 minutes off), so Home Assistant's clock is streamed, as
+        on a Cube Matrix (light_matrix._matrix_clock_whole_hours)."""
+        whole = getattr(self, "_native_clock_whole_hours", None)
+        return whole is None or whole()
 
     def studio_streaming(self) -> bool:
         """Whether the stream should be sending frames now."""
@@ -343,6 +348,17 @@ class StudioStreamMixin:
             direct = clock_style_direct(style)
             effect = clock_style_effect(style)
             colour_mode = self._native_clock_color_mode
+            if (
+                effect not in LITE_STREAMED_EFFECTS
+                and not clock_studio_runs(effect, colour_mode, palette)
+                and not self._lite_clock_whole_hours()
+            ):
+                # Streamed only for its time (a zone the lamp's clock can't
+                # take, studio_selected): the clock the preview camera
+                # shows, at Home Assistant's local time, as on a Cube Matrix.
+                frame, payload = await run(self._drawn_payload, self._own_effect_frame_raw, render)
+                self._studio_rendered = (frame, False)
+                return payload
             colours = None
             if effect is not None and ALL_NATIVE_EFFECTS[effect].get("streamed"):
                 # One of the integration's own effects: its renderer takes
@@ -780,12 +796,43 @@ class StudioStreamMixin:
             return None
         return frame
 
-    def add_stream_preview_listener(self, listener):
+    def add_stream_preview_listener(self, listener, on_end=None):
         """Call ``listener(frame)`` with every frame the stream sends (as
-        streamed_preview_frame gives it); returns what stops it."""
+        streamed_preview_frame gives it); returns what stops it. When the
+        light is removed (its config entry reloaded: a new light takes its
+        place), the listener is dropped and ``on_end()`` called, so a
+        subscriber can subscribe again (end_stream_preview_listeners)."""
         listeners = self.__dict__.setdefault("_stream_preview_listeners", set())
+        ends = self.__dict__.setdefault("_stream_preview_ends", {})
         listeners.add(listener)
-        return lambda: listeners.discard(listener)
+        if on_end is not None:
+            ends[listener] = on_end
+        if not self.__dict__.get("_stream_preview_ends_on_remove"):
+            self.__dict__["_stream_preview_ends_on_remove"] = True
+            self.async_on_remove(self.end_stream_preview_listeners)
+
+        def stop() -> None:
+            listeners.discard(listener)
+            ends.pop(listener, None)
+
+        return stop
+
+    def end_stream_preview_listeners(self) -> None:
+        """The light is removed: every preview listener is dropped, and told
+        (its ``on_end``). A light added again (a new entity id) registers
+        this again with its next listener."""
+        self.__dict__["_stream_preview_ends_on_remove"] = False
+        listeners = self.__dict__.get("_stream_preview_listeners", set())
+        ends = self.__dict__.get("_stream_preview_ends", {})
+        for listener in tuple(listeners):
+            listeners.discard(listener)
+            on_end = ends.pop(listener, None)
+            if on_end is None:
+                continue
+            try:
+                on_end()
+            except Exception:  # noqa: BLE001 -- one preview never stops the removal
+                _LOGGER.debug("[STUDIO] [%s] A preview listener's end failed", self._ip, exc_info=True)
 
     def _standby_payload(self) -> str:
         """A black frame, as update_leds takes it (the standby stream)."""
@@ -865,7 +912,7 @@ class StudioStreamMixin:
                         # fails and the stream falls back to TCP, holding its
                         # frames, while the lamp still accepts connections --
                         # the connection's own check, which only connects,
-                        # does not see it (2026-11-16). The probe asks the
+                        # does not see it. The probe asks the
                         # lamp itself, over TCP too (one command per check,
                         # far within its TCP quota).
                         answered = await self._stream_probe(misses, lock)

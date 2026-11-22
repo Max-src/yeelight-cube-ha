@@ -47,8 +47,13 @@ SOURCE_UNKNOWN = "unknown"
 # The app's orientation buttons, by profile.
 PROFILE_DEGREES = {0: 0, 1: 90, 2: 180, 3: 270}
 
-# The app's arrow for each profile (its rotationAngle, matter_link).
-PROFILE_ARROWS = {0: "left", 1: "up", 2: "right", 3: "down"}
+# A Cube Lite's rotation_angle (Matter FC02 rotationAngle, its profile) as the
+# Yeelight app's arrow, which is the light's Device Orientation of the same
+# name: each step clockwise adds 90 degrees. And the way back.
+LITE_ROTATION_ORIENTATIONS = {0: "left", 1: "up", 2: "right", 3: "down"}
+LITE_ORIENTATION_ROTATIONS = {
+    orientation: rotation for rotation, orientation in LITE_ROTATION_ORIENTATIONS.items()
+}
 
 # The guided check: Shooting Star (mode 47) at direction 3, sent as is (not
 # compensated): the way its stars fly tells the profile, a different way on
@@ -63,6 +68,20 @@ STAR_DRAWN_MOTION = ("right", "left", "up", "down")
 # left / up upside down, down / up standing with the lamp's left end on top).
 MOTIONS = ("up", "right", "down", "left")
 MOUNT_QUARTER_TURNS = {"right": 0, "down": 1, "left": 2, "up": 3}
+
+# The mounting each Cube Matrix rotation_angle is for, as the light's Device
+# Orientation (const.DEVICE_ORIENTATIONS): its rotation_angle counts the same
+# quarter turns clockwise. 0 = lying, the base on the left (the frame as
+# drawn: "right"); 3 = standing on the base (the lamp's own effects run
+# upright, and the frame's first column is at the bottom, its first row on
+# the right: "up", the preview cards' standing view). 1 and 2 are the other
+# two quarter turns: standing with the base on top ("down") and lying with
+# the base on the right ("left"). A Cube Lite numbers them differently
+# (LITE_ROTATION_ORIENTATIONS).
+MATRIX_ORIENTATION_ROTATIONS = MOUNT_QUARTER_TURNS
+MATRIX_ROTATION_ORIENTATIONS = {
+    rotation: orientation for orientation, rotation in MATRIX_ORIENTATION_ROTATIONS.items()
+}
 
 # The module type the app's Save writes into the topology ([2, 2, 2, 2]:
 # the Cube Lite's four 5 x 5 matrix tiles, kTypeMatrix).
@@ -145,8 +164,8 @@ def resolve_profile(
 
 
 # Where a direction the viewer picks lies on the lamp itself, for a lamp
-# mounted ``orientation`` (its top toward that side): filmed 2026-11-11, both
-# models, Waterfall Up turned this way by each orientation's rotation.
+# mounted ``orientation`` (its top toward that side), on both models:
+# Waterfall Up is turned this way by each orientation's rotation.
 BODY_DIRECTIONS = {
     "up": {"Up": "Up", "Down": "Down", "Left": "Left", "Right": "Right"},
     "right": {"Up": "Left", "Down": "Right", "Left": "Down", "Right": "Up"},
@@ -167,7 +186,7 @@ LOW_PAIR = (0, 1)
 def one_axis_direction(label: str, orientation: str | None, rotation: int | None,
                        forward: str, pair: tuple[int, int] = HIGH_PAIR) -> int:
     """The direction value for an effect that runs along one line of the
-    lamp whatever its rotation (filmed 2026-11-11 and 12 on both models:
+    lamp whatever its rotation (on both models:
     Moving palette, Sine wave, Hacking, the Cube Lite's Flicker sweep). The
     lamp draws DIRECTION_TABLE[rotation] of the value; 0 and 3 there run
     toward ``forward`` on the lamp (its Up), 1 and 2 the other way. Which
@@ -219,4 +238,4 @@ def star_check_profile(seen: str, device_orientation: str | None = None) -> int 
 
 def arrow_text(profile: int) -> str:
     """The app's arrow for a profile, as the dialogs name it."""
-    return f"Arrow {PROFILE_ARROWS[profile]} ({PROFILE_DEGREES[profile]}°)"
+    return f"Arrow {LITE_ROTATION_ORIENTATIONS[profile]} ({PROFILE_DEGREES[profile]}°)"

@@ -40,7 +40,6 @@ def trace_frame(ip: str, what: str, rgb_data: str) -> None:
 
 RECONNECT_COOLDOWN_INITIAL = 5.0  # Starting cooldown — Cube needs time to recover its TCP stack
 RECONNECT_COOLDOWN_MAX = 10.0    # Maximum cooldown — caps backoff for faster recovery after transient outages
-QUOTA_BACKOFF_MULTIPLIER = 2.0  # Multiplier for backoff on quota errors
 SOCKET_ERROR_WAIT = 0.5         # Seconds to wait after socket errors
 MAX_CONSECUTIVE_FAILURES = 2    # Circuit breaker: double cooldown after just 2 failures (was 5)
 CONNECT_TIMEOUT = 0.5           # TCP connect timeout — LAN connects take <10ms, 0.5s catches failures fast
@@ -164,12 +163,15 @@ def is_connection_error(err: BaseException) -> bool:
 
 
 def is_quota_error(err: BaseException) -> bool:
-    """Whether the lamp refused a command because of its rate limit (a Cube
-    Lite: code -1; a Cube Matrix: code 5 "client quota exceeded", 5 also
-    being its "hardware fault": told apart by the message)."""
+    """Whether the lamp refused a command because of its rate limit: "client
+    quota exceeded" (a Cube Lite: code -1; a Cube Matrix: code 5). Told by
+    the message, not the code: -1 is also the lamp's answer to a method or
+    parameters it does not take, and a command refused here before it is
+    sent (LampClient._check_supported); 5 is also a Cube Matrix's "hardware
+    fault"."""
     if not (isinstance(err, BulbException) and err.args and isinstance(err.args[0], dict)):
         return False
-    return err.args[0].get("code") == -1 or "quota" in str(err.args[0].get("message", ""))
+    return "quota" in str(err.args[0].get("message", "")).lower()
 
 
 _ERROR_CODE = re.compile(rb'"code"\s*:\s*(-?\d+)')

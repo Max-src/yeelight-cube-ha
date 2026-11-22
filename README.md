@@ -167,7 +167,7 @@ Obsid products. Yeelight Classic and Yeelight Pro do not support this lamp.
      as its first cell. -->
 
 4. **Enable LAN Control**: in the app, go to your lamp's **Device Settings** and activate **LAN Control**. This is required for the integration to communicate with the lamp over your local network
-5. **Find the lamp's IP address**: in Device Settings → **Device info**, find the IP address assigned to the lamp (e.g. `192.168.4.139`)
+5. **Find the lamp's IP address**: in Device Settings → **Device info**, find the IP address assigned to the lamp (e.g. `192.168.1.139`)
 6. **Save the lamp's orientation**: open the lamp's orientation (direction) page, pick the arrow for how the lamp is mounted, and tap **Save**. The lamp turns its built-in effects by this setting: see [Set the lamp's orientation](#set-the-lamps-orientation-before-judging-effect-directions)
 
 <!-- 📸 SCREENSHOTS TO CHECK: the three images below were taken in the app when it was still called
@@ -232,7 +232,7 @@ If the lamp is not discovered automatically (e.g. different subnet or mDNS is bl
 
    <img src="https://raw.githubusercontent.com/Max-src/yeelight-cube-ha/main/images/Home-Assistant-Integrations-Add-Entry.png" alt="Integration Detail Page - Add entry">
 
-5. Enter the **IP address** from the Yeelight app (e.g. `192.168.4.139`)
+5. Enter the **IP address** from the Yeelight app (e.g. `192.168.1.139`)
 
    <img src="https://raw.githubusercontent.com/Max-src/yeelight-cube-ha/main/images/Home-Assistant-Integrations-Add-Entry-Device-IP.png" alt="Add entry - Device IP">
 
@@ -1104,11 +1104,11 @@ Each lamp creates its own set of per-device entities, plus the integration creat
 | **Tone: Contrast** | Number | Contrast level (0–200%) |
 | **Tone: Glow** | Number | Bloom / glow effect (0–100%) |
 | **Power limit** | Number | Dim bright pictures to keep the lamp under this many watts (7 W = off). See [Power Supply](#power-supply) |
-| **Stream frame rate limit** | Number | Cube Lite only. The new pictures a second for what the integration streams to it (effects it can't run itself, clocks, scrolling text), 1–25, default 5: exactly that many over time (frames leave on the lamp's 40 ms renders, so at 12 they go 80 or 120 ms apart). Above 5 is smoother but a Cube Lite is much more likely to stop answering; at 5 and below the lamp gets one frame every 0.2 s, the last picture again until the next one is due. See [How streamed effects reach the lamps](docs/STREAMING.md) |
+| **Stream frame rate limit** | Number | Cube Lite only. The new pictures a second for what the integration streams to it (effects it can't run itself, clocks, scrolling text), 1–25, default 2: exactly that many frames a second over time (frames leave on the lamp's 40 ms renders, so at 12 they go 80 or 120 ms apart). At 5 and below the lamp gets one steady frame every 1/limit s: the new picture, else the last one again. Above 5 is smoother but a Cube Lite is much more likely to stop answering (2 and 3 a second ran for hours without a problem; 5 a second could stop both Cube Lites within two hours). See [How streamed effects reach the lamps](docs/STREAMING.md) |
 | **Buttons: Right as Remote** | Switch | Off by default. Replaces the lamp's right-button playlist with tagged black entries (the original is written back when turned off): a press fires `right_button` and the integration's content comes back. Needs Matter settings; its `remote_status` attribute shows the actual state. See [Matter and buttons](docs/MATTER.md#buttons-as-remote) |
 | **Buttons: Left as Remote** | Switch | Off by default. Undoes microphone music started or changed by the left button (or an app): the integration's content comes back. Needs the Matter link. See [Matter and buttons](docs/MATTER.md#buttons-as-remote) |
 | **Buttons: Wake Lamp When Off** | Switch | On by default. With Right or Left as Remote, a press on a lamp that is off turns it on with its content. Off: presses only fire their events and the lamp stays dark ("off" then keeps it powered, black). See [Matter and buttons](docs/MATTER.md#buttons-as-remote) |
-| **Skip Unchanged Stream Frames** | Switch | Cube Lite. Off by default. A streamed frame that is the same as the last one is not sent, not even as the 0.2 s repeat: the Stream frame rate limit becomes a maximum, and still frames send nothing. Fewer frames, but each pause is like a stream ending, when a Cube Lite is more likely to stop answering |
+| **Skip Unchanged Stream Frames** | Switch | Cube Lite. Off by default. A streamed frame that is the same as the last one is not sent, not even as the repeat of the last picture: the Stream frame rate limit becomes a maximum, and still frames send nothing. Fewer frames, but each pause is like a stream ending, when a Cube Lite is more likely to stop answering |
 | **Keep Streaming When Off** | Switch | Cube Lite. Off by default. Turning off an effect or clock that Home Assistant streams (the lamp has no such effect itself, or a palette it cannot take) keeps the stream going with black frames until the lamp is turned on again, instead of powering it off; the effect then goes on where it was. A Cube Lite can stop answering, until it is unplugged, when a busy stream stops: this keeps it from ever going silent |
 
 #### Diagnostic
@@ -1260,11 +1260,11 @@ automation:
   action:
     - action: yeelight_cube.set_custom_text
       data:
-        entity_id: light.yeelight_cube_192_168_4_139
+        entity_id: light.yeelight_cube_192_168_1_139
         text: "DOOR"
     - action: yeelight_cube.set_mode
       data:
-        entity_id: light.yeelight_cube_192_168_4_139
+        entity_id: light.yeelight_cube_192_168_1_139
         mode: "Text Color Sequence"
 ```
 
@@ -1302,7 +1302,7 @@ Use an **Inject** node → **Change** node (set `msg.payload.idx`) → **Call Se
 
 - **Domain**: `yeelight_cube`
 - **Service**: `apply_pixel_art`
-- **Data**: `{"idx": {{payload.idx}}, "entity_id": "light.yeelight_cube_192_168_4_139"}`
+- **Data**: `{"idx": {{payload.idx}}, "entity_id": "light.yeelight_cube_192_168_1_139"}`
 
 </details>
 

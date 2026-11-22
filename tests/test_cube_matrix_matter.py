@@ -4,14 +4,13 @@ its own effects, clock and drawings (matrix_effects.py), when the light
 sends them (light_matrix.py), the demo loop, and the migration of an entry
 made before models were told apart.
 
-The facts are the lamp's (2026-11-09: node 7 on Home Assistant's Matter
-server, 4 Matrix modules, rotation 0, filmed): see docs/CUBE_MATRIX.md.
+The facts are the lamp's (node 7 on Home Assistant's Matter server, 4 Matrix
+modules, rotation 0): see docs/CUBE_MATRIX.md.
 """
 
 import asyncio
 import base64
 import dataclasses
-import runpy
 import sys
 import time
 import types
@@ -59,7 +58,7 @@ class PayloadTests(unittest.TestCase):
                          EFFECTS.preset_payload("Waves", None, None, None))
         # Spectrum takes no speed, Ribbon no colour and no direction,
         # Hacking only up and down.
-        # Spectrum takes a direction (filmed 2026-11-12), though the app offers none.
+        # Spectrum takes a direction, though the app offers none.
         self.assertEqual({"apply": 0, "effectId": 17, "color": [0x0000FF, 0, 0, 0], "direction": 0},
                          EFFECTS.preset_payload("Spectrum", 90, (0, 0, 255), "Up", EFFECTS.APPLY_SHOW))
         self.assertEqual({"apply": 1, "effectId": 3, "rate": 1},
@@ -219,7 +218,7 @@ class PayloadTests(unittest.TestCase):
 
 class RotationTests(unittest.TestCase):
     """The lamp never turns frames; its rotation names how it is mounted, the
-    light's Device Orientation (filmed 2026-11-09: 0 lying base-left, 3
+    light's Device Orientation (0 lying base-left, 3
     standing on the base)."""
 
     def test_frames_are_never_turned(self):
@@ -235,10 +234,13 @@ class RotationTests(unittest.TestCase):
         # Each lamp's own numbering: a Cube Matrix's rotation is the mounting
         # it is for (MATRIX_ROTATION_ORIENTATIONS), a Cube Lite's its arrows.
         light = FakeLight()
-        for rotation, orientation in PROFILE.MATRIX_ROTATION_ORIENTATIONS.items():
+        mounts = import_pure_module("mount_profile")
+        self.assertEqual({0: "right", 1: "down", 2: "left", 3: "up"}, mounts.MATRIX_ROTATION_ORIENTATIONS)
+        for rotation, orientation in mounts.MATRIX_ROTATION_ORIENTATIONS.items():
             self.assertEqual(rotation, LIGHT_CLASS._rotation_for(light, orientation), orientation)
         lite = make_light()
-        for orientation, rotation in module("light_matter").ORIENTATION_ROTATIONS.items():
+        self.assertEqual({"left": 0, "up": 1, "right": 2, "down": 3}, mounts.LITE_ORIENTATION_ROTATIONS)
+        for orientation, rotation in mounts.LITE_ORIENTATION_ROTATIONS.items():
             self.assertEqual(rotation, lite._rotation_for(orientation), orientation)
         # Both ways it is written use it (the Device Orientation, and the
         # mount profile's check); at setup the lamp's own rotation is read.
@@ -259,8 +261,8 @@ class RotationTests(unittest.TestCase):
 
 
 class RawColourTests(unittest.TestCase):
-    """The Cube Matrix converts every streamed pixel itself (filmed: the
-    Cube Lite's LED drive turned white orange)."""
+    """The Cube Matrix converts every streamed pixel itself (the
+    Cube Lite's LED drive would turn white orange)."""
 
     def test_the_renderers_draw_raw_colours_inside_raw_colours(self):
         settings = RENDERERS.lamp_settings("Waterfall", "Up", 128)
@@ -286,7 +288,7 @@ class RawColourTests(unittest.TestCase):
 
 class DirectRefreshTests(unittest.TestCase):
     """Direct mode again every DIRECT_REFRESH seconds while frames go: sent
-    once, a stream froze after 10 to 20 s (filmed)."""
+    once, a stream froze after 10 to 20 s."""
 
     def setUp(self):
         self._address, self._refresh = MUSIC.local_address_for, MUSIC.DIRECT_REFRESH
@@ -462,10 +464,10 @@ class FakeLight(LIGHT_CLASS):
                     raise COMMANDS.MatterCommandsUnavailable("refused")
                 log.append(("matter", cluster, name, payload))
 
-        super().__init__(Lamp(), "192.168.4.189", FakeEntry())
+        super().__init__(Lamp(), "192.168.1.189", FakeEntry())
         self._matter = types.SimpleNamespace(linked=True, values={"effect": 0})
         self._matter_commands = Channel()
-        self._ip, self.hass = "192.168.4.189", None
+        self._ip, self.hass = "192.168.1.189", None
         self._music_flow_enabled = False
         self._mode = "Native Effect"
         self._native_effect, self._native_effect_color_mode = "Rainbow", "normal"
@@ -566,7 +568,7 @@ class NativeTests(unittest.TestCase):
         self.assertEqual(("setEffect", 10, 10, 200, [0xFFFFFF, 0, 0, 0]),
                          (name, payload["effect"]["effectId"], params["mode"], params["speed"],
                           params["color"]))
-        # "Down" on Particle path, lying (rotation 0): 2 (filmed 2026-11-10 and 12).
+        # "Down" on Particle path, lying (rotation 0): 2.
         light._native_effect = "Particle path"
         self.assertEqual(2, light.matrix_native_command()[1]["effect"]["effectParams"][0]["direction"])
         light._native_effect = "Fireworks"
@@ -590,8 +592,8 @@ class NativeTests(unittest.TestCase):
         self.assertEqual([0x00FF00, 0, 0, 0], light.matrix_native_command()[1]["effect"]["effectParams"][0]["color"])
 
     def test_a_built_in_effect_draws_what_a_cube_lite_draws(self):
-        # Both models lay a renderer's strip on the panel the same way
-        # (filmed 2026-11-12): for the same Device Orientation the Cube Matrix
+        # Both models lay a renderer's strip on the panel the same way:
+        # for the same Device Orientation the Cube Matrix
         # is sent the value that draws what a Cube Lite (and the preview)
         # draws. Every effect confirmed on both lamps already did.
         import dataclasses
@@ -797,7 +799,7 @@ class MatterChangeTests(unittest.TestCase):
 
 
 class ModuleListTests(unittest.TestCase):
-    """2026-11-14: the owner fitted a Spot module third (the Yeelight app's
+    """A Spot module fitted third (the Yeelight app's
     module splicing wrote 2,2,3,2). The modules can be set from Home
     Assistant too (set_matrix_modules: FC02 updateTopology over Matter, as
     the app's own Save), and the layout follows."""
@@ -815,7 +817,7 @@ class ModuleListTests(unittest.TestCase):
         self.assertEqual({"type": "spot", "column": 10}, profile.layout[2])
 
     def test_blocks_taken_off_the_list_are_left_black(self):
-        # Filmed 2026-11-20: a block the lamp no longer lists keeps its last
+        # A block the lamp no longer lists keeps its last
         # picture. Switched off while still listed, then the shorter list:
         # black. Switched on again afterwards, its content drawn again.
         light = FakeLight()
@@ -839,6 +841,28 @@ class ModuleListTests(unittest.TestCase):
             run(light.async_set_matrix_modules(["matrix"]))
         matter = [entry[1:3] for entry in light.log if entry and entry[0] == "matter"]
         self.assertEqual([(6, "Off"), (COMMANDS.CUBE_CONTROL_CLUSTER, "updateTopology")], matter)
+
+    def test_a_list_the_lamp_does_not_take_leaves_the_matrix_on(self):
+        # Switched off before the list: when the list is not written (no
+        # answer), the lamp is switched on again and the error still told.
+        light = FakeLight()
+        light._is_on = True
+        with mock.patch.object(MATRIX_SETTINGS, "MODULES_BLANK_SETTLE", 0):
+            run(light.async_set_matrix_modules(["matrix", "matrix", "spot", "matrix"]))
+            light.log.clear()
+            send = light._matter_commands.async_command
+
+            async def no_answer(cluster, name, payload, endpoint_id=None):
+                if name == "updateTopology":
+                    raise TimeoutError("no answer")
+                return await send(cluster, name, payload, endpoint_id)
+
+            light._matter_commands.async_command = no_answer
+            with self.assertRaises(TimeoutError):
+                run(light.async_set_matrix_modules(["matrix", "panel", "spot"]))
+        matter = [entry[1:3] for entry in light.log if entry and entry[0] == "matter"]
+        self.assertEqual([(6, "Off"), (6, "On")], matter)
+        self.assertEqual((2, 2, 3, 2), light.device_profile.module_types)
 
     def test_a_spot_taken_off_the_list_is_left_dark(self):
         # 2026-11-21: matrix, panel, spot -> matrix, panel left the Spot lit:
@@ -933,6 +957,33 @@ class RestartRotationTests(unittest.TestCase):
         self.assertIn(("write", "up", True), light.log)
         self.assertNotIn(("orientation", "right"), light.log)
         self.assertEqual(3, light._lamp_client.profile.rotation)
+
+    def test_a_true_report_is_no_rotation(self):
+        light = self.light()
+        MATRIX_FOLLOW.MatrixFollowMixin._matrix_rotated(light, True)
+        self.assertEqual(3, light._lamp_client.profile.rotation)
+        self.assertFalse([e for e in light.log if e[0] in ("orientation", "write")])
+
+    def test_the_restore_waits_for_a_choice_being_written(self):
+        # One direction write at a time: a restart's rewrite waits for the
+        # Device Orientation being written, and a later choice wins.
+        light = self.light()
+        tasks = []
+        light._create_tracked_task = lambda coro, name=None: tasks.append(coro)
+
+        async def scenario():
+            lock = light._rotation_lock()
+            await lock.acquire()
+            MATRIX_FOLLOW.MatrixFollowMixin._matrix_lamp_restarted(light)
+            MATRIX_FOLLOW.MatrixFollowMixin._matrix_rotated(light, 0)
+            restore = asyncio.ensure_future(tasks.pop())
+            await asyncio.sleep(0)
+            light._device_orientation = "left"  # chosen meanwhile
+            lock.release()
+            await restore
+
+        run(scenario())
+        self.assertNotIn(("write", "up", True), light.log)
 
     def test_reported_just_before_the_restart_it_is_undone(self):
         light = self.light()
@@ -1064,7 +1115,7 @@ class SetModelTests(unittest.TestCase):
         import logging
         from test_cube_transport import lamp_client as CUBE
         lamp = CUBE.LampClient.__new__(CUBE.LampClient)
-        lamp._ip, lamp._port, lamp.capabilities = "192.168.4.189", 55443, {}
+        lamp._ip, lamp._port, lamp.capabilities = "192.168.1.189", 55443, {}
         lamp.device_model, lamp.profile = "CubeMatrix", PROFILE.CUBE_LITE_PROFILE
         lamp._udp = types.SimpleNamespace(close=lambda: None)
         lamp.device = types.SimpleNamespace(send_command=lambda method, params: {
@@ -1081,15 +1132,15 @@ class SetModelTests(unittest.TestCase):
 
 class TcpSlotTests(unittest.TestCase):
     """A Cube Matrix has 3 TCP client slots; its music connection (which it
-    opens back to Home Assistant) needs one. Filmed 2026-11-09: with the
-    integration's fallback and library sockets open, the lamp dropped the
+    opens back to Home Assistant) needs one. With the integration's fallback
+    and library sockets open, the lamp dropped the
     music connection at once, streams stopped, the TCP fallback used up its
     quota and its LAN side stalled until a power cycle."""
 
     def lamp(self):
         from test_cube_transport import lamp_client as CUBE
         lamp = CUBE.LampClient.__new__(CUBE.LampClient)
-        lamp._ip, lamp._port = "192.168.4.189", 55443
+        lamp._ip, lamp._port = "192.168.1.189", 55443
         log = []
 
         class Music(CUBE.MusicChannel):
@@ -1104,7 +1155,7 @@ class TcpSlotTests(unittest.TestCase):
                 self.opened = True
                 return None
 
-        lamp._udp = Music("192.168.4.189")
+        lamp._udp = Music("192.168.1.189")
         lamp.close_fast_socket = lambda: log.append("close_fast")
         lamp._drop_library_socket = lambda abortive=False: log.append("drop_library")
         lamp._settle_frame = lambda command, params: None
@@ -1178,7 +1229,7 @@ class SetupTests(unittest.TestCase):
         self.assertIn('if not (values and str(values[0]).strip(", 0")):', self.lamp)
 
     def test_the_probe(self):
-        cube = runpy.run_path(str(ROOT / "device_profile.py"))
+        cube = vars(import_pure_module("device_profile"))
         del cube
         namespace = {}
         client = (ROOT / "lamp_client.py").read_text(encoding="utf-8")

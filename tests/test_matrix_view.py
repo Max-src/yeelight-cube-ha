@@ -230,7 +230,7 @@ class CameraOrientationTests(unittest.TestCase):
         asyncio.run(scenario())
 
     def test_a_cube_matrix_effect_is_sent_again_in_full_for_its_new_rotation(self):
-        """Filmed 2026-11-11: the lamp turns an effect for its rotation when
+        """The lamp turns an effect for its rotation when
         it starts it; Lamp mounted wrote rotation 3 and the redraw was an
         empty live change, so the running effect never turned."""
         import asyncio
@@ -436,6 +436,7 @@ class CameraRenderOnDemandTests(unittest.TestCase):
         camera._cached_image = None
         camera._cached_frame = None
         camera._next_frame_at = 0.0
+        camera._render_task = None
         camera._live_streams = 0
         camera._image_generation = 0
         camera._TRANSLATION_KEY = "matrix_preview_round"
@@ -461,6 +462,38 @@ class CameraRenderOnDemandTests(unittest.TestCase):
         camera.async_refresh_preview()
         self.run(camera.async_camera_image())
         self.assertEqual(self.renders, 2)
+
+    def test_viewers_asking_at_once_share_one_render(self):
+        import asyncio
+
+        camera = self.camera
+        test = self
+
+        class SlowHass:
+            async def async_add_executor_job(self, function, *args):
+                test.renders += 1
+                await asyncio.sleep(0.02)
+                return function(*args)
+
+        camera.hass = SlowHass()
+
+        async def viewers():
+            first = asyncio.ensure_future(camera.async_camera_image())
+            second = asyncio.ensure_future(camera.async_camera_image())
+            third = asyncio.ensure_future(camera.async_camera_image())
+            await asyncio.sleep(0.005)
+            first.cancel()  # one viewer leaving cancels no other
+            return await second, await third, first
+
+        second, third, first = self.run(viewers())
+        self.assertTrue(first.cancelled())
+        self.assertTrue(second.startswith(b"\x89PNG"))
+        self.assertIs(second, third)
+        self.assertEqual(1, self.renders)
+        # Done: the next frame is a render of its own.
+        camera.async_refresh_preview()
+        self.run(camera.async_camera_image())
+        self.assertEqual(2, self.renders)
 
     def test_the_screen_shows_the_leds_and_the_power_keeps_their_drive(self):
         camera = self.camera
@@ -726,7 +759,7 @@ class WideMatrixCameraTests(unittest.TestCase):
                 max(rect[2] for rect in area), max(rect[3] for rect in area))
 
     def test_a_spot_is_a_lens_in_its_bezel(self):
-        # Matrix x3, a spot, a panel (the owner's, filmed 2026-11-21): the
+        # Matrix x3, a spot, a panel (a real lamp's chain): the
         # spot's 25 cells one face, its lens lit in their colour.
         light = self.wide_light("2,2,2,3,1", _mode="Solid Color")
         frame = [(0, 0, 0)] * 125

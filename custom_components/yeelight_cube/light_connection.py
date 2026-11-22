@@ -86,6 +86,9 @@ class ConnectionMixin:
         self._outage_since = None
         # Whether this outage's "stuck, power-cycle it" was logged (probe).
         self._silence_logged = False
+        # Whether the health check's restart of Music Flow failed and was
+        # logged (a warning once, then debug until it works).
+        self._music_recovery_failed = False
         # The last change this lamp failed to apply (a refusal or an error,
         # not "not reached"), for the cards (note_command_result).
         self._last_command_error = None
@@ -274,8 +277,11 @@ class ConnectionMixin:
             # Only reset display retry state on display op success
             if is_display_op:
                 self._display_retry_count = 0
-                if self._retry_display_task and not self._retry_display_task.done():
-                    self._retry_display_task.cancel()
+                retry = self._retry_display_task
+                # Not when this is the retry itself (its redraw worked): a
+                # cancel would stop it at its next await.
+                if retry and not retry.done() and retry is not asyncio.current_task():
+                    retry.cancel()
             # A redraw shows the lamp's whole requested state, so a change it
             # refused before is no longer missing; another operation clears
             # only its own (command_errors).
@@ -451,10 +457,13 @@ class ConnectionMixin:
             )
             return
         
-        # Cancel any existing retry task (avoid stacking retries)
-        if self._retry_display_task and not self._retry_display_task.done():
+        # Cancel any existing retry task (avoid stacking retries), unless it
+        # is this one: its redraw failed and schedules the next retry, and it
+        # ends on its own.
+        retry = self._retry_display_task
+        if retry and not retry.done() and retry is not asyncio.current_task():
             _LOGGER.debug("[RETRY] [%s] Cancelling existing display retry task", self._ip)
-            self._retry_display_task.cancel()
+            retry.cancel()
         
         # Calculate delay: the first retry is quick to catch transient network
         # hiccups before engaging exponential backoff.  Subsequent retries use
@@ -784,7 +793,22 @@ class ConnectionMixin:
                         "the requested Music Flow renderer",
                         self._ip,
                     )
-                    await self.async_set_music_flow(True)
+                    try:
+                        await self.async_set_music_flow(True)
+                    except HomeAssistantError as err:
+                        # Its operation failed (errors.failed, already logged
+                        # by the lamp's queue): tried again at the next
+                        # recovery. Logged once until it works, then at
+                        # debug level.
+                        log = _LOGGER.debug if self._music_recovery_failed else _LOGGER.warning
+                        self._music_recovery_failed = True
+                        log(
+                            "[HEALTH] [%s] Music Flow not restarted: %s -- tried "
+                            "again at the next recovery; further failures are logged "
+                            "at debug level", self._ip, err,
+                        )
+                        continue
+                    self._music_recovery_failed = False
                 else:
                     # Trigger a full display update (turn_on type so it isn't blocked)
                     _LOGGER.debug(

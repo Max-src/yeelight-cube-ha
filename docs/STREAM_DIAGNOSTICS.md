@@ -41,8 +41,8 @@ Counters are cumulative for that stream loop:
 
 `route=Matter` identifies a Cube Matrix's drawing updates over Matter (see
 [How streamed effects reach the lamps](STREAMING.md)); their `submitted`
-frames were acknowledged by the lamp's network part, which still does not
-prove they were shown. A Cube Lite always streams with `route=LAN`.
+frames were acknowledged by the lamp, which still does not prove they were
+shown. A Cube Lite always streams with `route=LAN`.
 `route=LAN transport=tcp` means streaming is held while the ordinary TCP
 fallback is active. `channel=UdpSession` is actual UDP;
 `channel=MusicChannel` is the Cube Matrix's TCP music connection, which the
@@ -63,10 +63,11 @@ When a Cube Lite's LAN check goes unanswered, it is asked over Matter
 (`matter_controller_check`), and the log says which case it is:
 
 - `The streamed lamp stopped answering ...; over Matter its network part
-  says the LED part does not answer` (Matter answered "Failure"): only a
-  power cycle brings it back.
+  says the LED part does not answer` (Matter answered "Failure"): the lamp
+  still answers on the network but its display is stuck; only a power cycle
+  brings it back.
 - `...; its network part does not answer over Matter either (restarting?)`:
-  the network part is restarting or off the network.
+  the lamp is restarting its network connection or is off the network.
 
 A Matter frame waits at most 2 s for its acknowledgement (5 s to start the
 drawing); one that times out counts in `errors`, and three in a row move the

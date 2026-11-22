@@ -140,7 +140,9 @@ export class ColorModeController {
    * One of the card's commands, rotation-aware (mode controller send). In
    * the Palette color mode (sent, or the lamp's) every lamp first gets the
    * palette the card shows (shareShownPalette): each lamp otherwise draws
-   * its own. The command is sent even when that fails.
+   * its own. It goes through the card's command queue, so it stays in order
+   * with the card's other commands and an unanswered call times out. The
+   * command is sent even when that fails.
    */
   async send(service, data, { domain = "yeelight_cube", managed = false, ...options } = {}) {
     const card = this.card;
@@ -149,7 +151,12 @@ export class ColorModeController {
       (data.color_mode ?? card._attrs()[this.kind.attribute]) === "palette"
     ) {
       try {
-        await shareShownPalette(card._hass, card.config, card._primaryEntity());
+        await shareShownPalette(
+          card._hass,
+          card.config,
+          card._primaryEntity(),
+          (domain, name, payload) => card._commands.call(card._hass, domain, name, payload),
+        );
       } catch (error) {
         console.error(`[${this.kind.label}] Could not share the palette:`, error);
       }

@@ -68,8 +68,8 @@ class ChangedFrameTests(unittest.TestCase):
 
     def test_matter_sends_every_frame_unchanged_ones_too(self):
         # The lamp fades its drawing in again at each new data: skipped
-        # (unchanged) frames left pauses that made the picture pulse
-        # (filmed 2026-11-17). Over Matter the cadence stays steady.
+        # (unchanged) frames left pauses that made the picture pulse.
+        # Over Matter the cadence stays steady.
         async def scenario():
             light = streaming_light()
             skip_unchanged(light)

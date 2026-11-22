@@ -29,7 +29,7 @@ this lamp, and refuses what is known to crash it. No Home Assistant import.
   (``mixer``: 0 plain, 17, 39, 42, 54, 57, 58, 59) and 4 data bytes:
   content (1 time, 2 time then date, 3 date), the UTC offset in whole hours
   (a signed byte: the lamp has no DST, so it is sent again when the offset
-  changes), 1 for 12-hour, 0 for a blinking colon. Filmed 2026-11-09.
+  changes), 1 for 12-hour, 0 for a blinking colon.
 - **Drawing** (effect 36): ``setEffect`` with 4 bytes a pixel [0xFF, R, G,
   B] in the order of the lamp's LAN frames (device_profile.drawing_pixels:
   module by module from the base, each column by column from the bottom; a
@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import base64
 
+from .device_profile import BLOCK_LEDS, TOPOLOGY_SLOTS
 from .effect_catalog import lamp_rate
 
 # setEffect / setPresetsEffect apply: show only, show and save as the
@@ -55,7 +56,7 @@ APPLY_SAVE = 1
 APPLY_PRIORITY = 2
 
 CLOCK_EFFECT = 40
-DRAWING_EFFECT = 36
+MATRIX_DRAWING_EFFECT = 36
 # The clock's backgrounds (its mixer): 0 is the plain colour.
 CLOCK_BACKGROUNDS = frozenset({0, 17, 39, 42, 54, 57, 58, 59})
 MAX_COLOURS = 4
@@ -65,16 +66,16 @@ FORBIDDEN_MODES = frozenset({53, 64, 67})
 DEFAULT_SPEED = 128
 # The direction value of each label, as the light's Device Orientation shows
 # the lamp (it follows the lamp's rotation, and the lamp turns its own
-# effects for its rotation: no turn here). Filmed 2026-11-10 at rotation 0,
-# lying with the base on the left: Left = toward the base, Right = away.
+# effects for its rotation: no turn here). At rotation 0, lying with the
+# base on the left: Left = toward the base, Right = away.
 # The Yeelight app's 13 effects (its arrows: up 0, down 1, left 2, right 3):
 DIRECTION_VALUES = {"Up": 0, "Down": 1, "Left": 2, "Right": 3}
 # The other built-in effects are sent the value that draws what a Cube Lite
 # draws (light_matrix._matrix_direction), except those below.
-# Filmed 2026-11-11 (standing, every rotation): Flicker sweep (60) takes the
+# At every rotation: Flicker sweep (60) takes the
 # app's arrows, and Building Blocks runs each of them the other way.
 APP_DIRECTION_MODES = frozenset({60, 33})
-# 2026-11-12, every rotation: Rising wisps (33) takes the app's arrows too,
+# At every rotation: Rising wisps (33) takes the app's arrows too,
 # Waves runs each of them the other way, and Spectrum (offered no direction in
 # the app, takes one: its gradient, red where it starts) swaps left and right.
 REVERSED_APP_EFFECTS = {
@@ -85,11 +86,10 @@ REVERSED_APP_EFFECTS = {
 # Built-in effects that run along the lamp's long side only, whatever its
 # rotation, forward on the value it draws as 0, back on 1
 # (mount_profile.one_axis_direction with LOW_PAIR, as on a Cube Lite and in
-# the preview: the two models lay a strip on the panel the same way, filmed
-# 2026-11-12). Moving palette and Sine wave (effect_catalog.ONE_AXIS_LOW_PAIR_SLOTS).
+# the preview: the two models lay a strip on the panel the same way). Moving palette and Sine wave (effect_catalog.ONE_AXIS_LOW_PAIR_SLOTS).
 ONE_AXIS_MODES = frozenset({4, 11})
-# The app's effects that do the same: Hacking runs 2 and 3 as 0 (filmed
-# 2026-11-12: lying, both the values the app's arrows give ran the same way).
+# The app's effects that do the same: Hacking runs 2 and 3 as 0 (lying, both
+# the values the app's arrows give run the same way).
 ONE_AXIS_APP_EFFECTS = frozenset({"Hacking"})
 
 
@@ -121,7 +121,7 @@ MATRIX_EFFECTS: dict[str, tuple[int, bool, bool, tuple[str, ...]]] = {
     "Hacking": (46, True, False, ("Up", "Down")),
 }
 # The lamp's other built-in renderers the integration starts by id: the safe
-# ones of 0-69 (52 steady red and 63's bursts filmed as the Cube Lite's),
+# ones of 0-69 (52 steady red and 63's bursts drawn as the Cube Lite's),
 # leaving out the music ones (no microphone), 12, 13 and 29 (blank) and those
 # that are no effect (36 drawing, 40 clock, 50 frames, 53 counter, 64 and 67
 # raw data).
@@ -129,7 +129,7 @@ ENGINE_MODES = frozenset({
     1, 2, 4, 6, 7, 8, 9, 10, 11, 14, 16, 18, 19, 21, 22, 23, 24, 28, 31, 33, 35, 38,
     52, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 65, 66, 68, 69,
 })
-# Built-in effects whose speed was filmed doing nothing on a Cube Matrix
+# Built-in effects whose speed does nothing on a Cube Matrix
 # (their renderers read none): offered without a speed there.
 SPEEDLESS_MODES = frozenset({24, 33, 54, 55, 56, 57, 58, 59})
 
@@ -319,7 +319,7 @@ def live_change(shown, command) -> list | None:
             new = after["effect"]["effectParams"][0]
         except (KeyError, IndexError, TypeError):
             return None
-        if new.get("mode") in (CLOCK_EFFECT, DRAWING_EFFECT):
+        if new.get("mode") in (CLOCK_EFFECT, MATRIX_DRAWING_EFFECT):
             return None
         speed_key = "speed"
     else:
@@ -364,7 +364,7 @@ def clock_payload(
 
 
 # A drawing's pixels at most: the most modules a Cube Matrix takes, 25 each.
-MAX_DRAWING_PIXELS = 25 * 8
+MAX_DRAWING_PIXELS = BLOCK_LEDS * TOPOLOGY_SLOTS
 
 
 def drawing_data(pixels) -> bytes:
@@ -382,8 +382,8 @@ def drawing_data(pixels) -> bytes:
 def drawing_payload(pixels, apply: int = APPLY_SHOW, custom_id: int = 0) -> dict:
     """setEffect for a still drawing (mixer 0: the lamp does not animate
     it); ``custom_id``: the id the lamp reports for it."""
-    return _effect(DRAWING_EFFECT, custom_id, apply, {
-        "mode": DRAWING_EFFECT,
+    return _effect(MATRIX_DRAWING_EFFECT, custom_id, apply, {
+        "mode": MATRIX_DRAWING_EFFECT,
         "color": None,  # the app sends none
         "speed": DEFAULT_SPEED,
         "mixer": 0,
@@ -402,7 +402,7 @@ def set_data_payload(pixels) -> dict:
 # factory reset ends: every 30 s it shows (and saves) its next effect, so
 # anything else shown lasts until the next tick. Over Matter, the effect it
 # runs (FC03) changes every 30 s while FC05's, which echoes requests, stays
-# 0. A LAN stream is not interrupted by the ticks (filmed 2026-11-09).
+# 0. A LAN stream is not interrupted by the ticks.
 DEMO_TICK = 30.0
 DEMO_TOLERANCE = 2.5
 # Consecutive tick intervals seen before the loop is taken as on.

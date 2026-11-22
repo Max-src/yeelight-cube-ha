@@ -32,7 +32,7 @@ class DrawingRestoreTests(unittest.TestCase):
 
     def light(self, **state):
         light = SimpleNamespace(**{
-            "hass": object(), "_ip": "192.168.4.105", "_custom_pixels": None,
+            "hass": object(), "_ip": "192.168.1.105", "_custom_pixels": None,
             "_custom_draw_active": False, "_active_pixel_art_name": None,
             "_device_store": lambda name: self.domain_data.setdefault(name, {}),
             "_music_flow_runtime_storage_key": lambda: "entry-1",

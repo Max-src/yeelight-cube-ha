@@ -14,6 +14,7 @@ import unittest.mock
 
 import fakes
 from fakes import FakeCube, FakeEntry, FakeHass, make_light, module, run
+from virtual_clock import run_on_virtual_clock
 
 fakes.install_stubs()
 CONST = module("const")
@@ -191,6 +192,9 @@ def stamped_frames(light):
 
 
 class LanPaceTests(unittest.TestCase):
+    """The streams on a virtual clock (virtual_clock.py): the pacing on the
+    loop's time as on the real clock, exactly and without waiting."""
+
     def test_a_lite_s_lan_frames_are_never_closer_than_the_gap(self):
         async def scenario():
             light = lite("Lava Lamp")
@@ -209,7 +213,7 @@ class LanPaceTests(unittest.TestCase):
             self.assertGreaterEqual(min(gaps), 0.1 - 0.01 - 0.005)
             self.assertTrue(light._lamp_client.stream_changes_only or not light.studio_streaming())
 
-        run(scenario())
+        run_on_virtual_clock(scenario())
 
     @staticmethod
     def _stream_at(fps, resend, skip_unchanged=False):
@@ -232,7 +236,7 @@ class LanPaceTests(unittest.TestCase):
                 await asyncio.sleep(0.05)
             return sent
 
-        sent = run(scenario())
+        sent = run_on_virtual_clock(scenario())
         times = [at for at, _ in sent]
         new = [at for i, (at, frame) in enumerate(sent) if i and frame != sent[i - 1][1]]
         return times, new
@@ -248,9 +252,9 @@ class LanPaceTests(unittest.TestCase):
         self.assertLess(max(gaps), 0.25 + 0.03)
 
     def test_a_lamp_left_at_its_default_gets_a_rate_tested_safe(self):
-        # 2026-11-20 night: 5 a second hung both Cube Lites within 100 min;
-        # 2 and 3 a second never in 12 lamp-hours. A new lamp gets 2: one
-        # frame every 0.5 s, and the setting shows the same default.
+        # 5 a second hung both Cube Lites within 100 minutes; 2 and 3 a
+        # second ran for hours without a hang. A new lamp gets 2: one frame
+        # every 0.5 s, and the setting shows the same default.
         light = lite()
         self.assertEqual(2, CONST.LITE_STREAM_FPS_DEFAULT)
         self.assertEqual(CONST.LITE_STREAM_FPS_DEFAULT, light._lite_stream_fps)

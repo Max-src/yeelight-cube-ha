@@ -58,12 +58,14 @@ class YcWheel extends LitElement {
       },
       passive: false,
     };
+    // A touch is not cancelled where it starts: a tap stays a click (a
+    // gallery that only browses picks on click); a move turns the wheel
+    // instead of scrolling the page.
     this._onTouchStart = {
       handleEvent: (event) => {
-        event.preventDefault();
         this._startDrag(event.touches[0].clientY);
       },
-      passive: false,
+      passive: true,
     };
     this._onTouchMove = {
       handleEvent: (event) => {
@@ -167,6 +169,7 @@ class YcWheel extends LitElement {
           @touchstart=${this._onTouchStart}
           @touchmove=${this._onTouchMove}
           @touchend=${() => this._endDrag()}
+          @touchcancel=${() => this._endDrag()}
           @mousedown=${(event) => {
             event.preventDefault();
             this._startDrag(event.clientY);

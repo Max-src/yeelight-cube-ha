@@ -82,8 +82,8 @@ NATIVE_EFFECT_DIRECTION_VALUES = {
 # label to the value actually sent to the lamp, so the physical animation
 # matches the on-screen arrow / preview. Verified on real hardware.
 _SWAP_UP_DOWN = {"Up": "Down", "Down": "Up"}
-# Filmed 2026-11-11 (both lamps standing, every Device Orientation, the lamp's
-# rotation written for each): Rainbow, Waterfall and Meteor run each way
+# On both lamps (standing, every Device Orientation, the lamp's rotation
+# written for each): Rainbow, Waterfall and Meteor run each way
 # reversed; Particle path, Rotating colour bands, Palette trails, Aqua-lime
 # trails and Scrolling bands a quarter turn on; Stacking blocks and
 # Kaleidoscope the other quarter turn.
@@ -92,12 +92,12 @@ _QUARTER_TURN = {"Up": "Left", "Down": "Right", "Left": "Down", "Right": "Up"}
 _QUARTER_TURN_BACK = {"Up": "Right", "Down": "Left", "Left": "Up", "Right": "Down"}
 _EXTENDED_DIRECTION_REMAPS = {6: _QUARTER_TURN, 8: _QUARTER_TURN, 14: _QUARTER_TURN, 23: _QUARTER_TURN,
                               28: _QUARTER_TURN, 21: _QUARTER_TURN_BACK,
-                              # 2026-11-12 (the renderers, and the lamp where filmed):
+                              # The renderers, and the lamp where checked:
                               19: _QUARTER_TURN, 33: _REVERSED, 56: _QUARTER_TURN_BACK, 7: _QUARTER_TURN_BACK,
                               # The fill-ins grew from the far side (the wipe-outs clear as named).
                               65: _REVERSED, 68: _REVERSED,
                               # Flicker sweep: its sweeps run as a Cube Matrix runs them for the
-                              # same direction (2026-11-12), a 2-D effect, not one along the lamp.
+                              # same direction, a 2-D effect, not one along the lamp.
                               60: _REVERSED}
 # Slots that run along the lamp's long side only, whatever its rotation
 # (mount_profile.one_axis_direction): the side's way for value 0 and 3.
@@ -107,7 +107,7 @@ ONE_AXIS_SLOTS = frozenset({4, 11})
 # wave lay their pattern along the strip: on 0 and 1 it fills the lamp across
 # first, so bands across the lamp travel along it at any intensity; on 3 and
 # 2 it fills the long side first and, depending on the intensity, it seems to
-# roll across the lamp instead (filmed 2026-11-12 on both models, same as the
+# roll across the lamp instead (on both models, as in the
 # renderers). The lamp and the preview get the same pair, so they draw the
 # same picture.
 ONE_AXIS_LOW_PAIR_SLOTS = frozenset({4, 11})
@@ -132,7 +132,7 @@ NATIVE_EFFECTS = {
     "Building Blocks": {"effect_id": 49, "mode": 49, "speed": True, "intensity": True, "directions": NATIVE_EFFECT_DIRECTIONS, "color": 16777471},
     # Falls along the lamp's long side whatever its rotation, forward on the
     # value it draws as 0, back on 1 (2 and 3 run as 0: lamp_core
-    # effective_direction; filmed 2026-11-12 on both models).
+    # effective_direction; the same on both models).
     "Hacking": {"effect_id": 46, "mode": 46, "speed": True, "directions": ("Up", "Down"),
                 "one_axis": True, "one_axis_low_pair": True},
     "Flower Sea": {"effect_id": 91, "mode": 55, "speed": True, "directions": NATIVE_EFFECT_DIRECTIONS},

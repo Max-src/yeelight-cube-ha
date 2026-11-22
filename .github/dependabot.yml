@@ -1,0 +1,15 @@
+# Update PRs for the pinned versions, weekly: the workflows' actions (pinned
+# to a commit) and the Python test and lint packages (tests/requirements.txt,
+# tests/ha/requirements.txt).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directories:
+      - /tests
+      - /tests/ha
+    schedule:
+      interval: weekly

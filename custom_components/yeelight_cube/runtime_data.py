@@ -23,6 +23,13 @@ class CubeRuntimeData:
     # The lamp's light entity, set by the light platform (set up before the
     # others, which use it: lamp_of).
     light: YeelightCubeLight | None = None
+    # Why the light platform did not set up (light.async_setup_entry): Home
+    # Assistant only logs a platform's error, async_setup_entry decides from
+    # it whether the entry is retried.
+    light_error: Exception | None = None
+    # The entry gave up on its light platform (it failed or took too long):
+    # a light setup still running then adds nothing.
+    light_abandoned: bool = False
 
 
 type CubeConfigEntry = ConfigEntry[CubeRuntimeData]

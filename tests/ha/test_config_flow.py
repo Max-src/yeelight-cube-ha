@@ -1,5 +1,9 @@
 """The config flow (config_flow.py) through Home Assistant: every step and
 branch (quality scale: config-flow-test-coverage, 100% of the module)."""
+import json
+import re
+from pathlib import Path
+
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
@@ -20,6 +24,17 @@ async def oriented(hass, result, choice="2"):
     return await hass.config_entries.flow.async_configure(result["flow_id"], {"mount_profile": choice})
 
 
+def config_strings():
+    path = Path(__file__).resolve().parents[2] / "custom_components" / DOMAIN / "strings.json"
+    return json.loads(path.read_text(encoding="utf-8"))["config"]
+
+
+def placeholders_of(step):
+    """The placeholders a step's text uses (strings.json)."""
+    text = config_strings()["step"][step]
+    return set(re.findall(r"{(\w+)}", text.get("title", "") + text.get("description", "")))
+
+
 def entry(hass, **kwargs):
     item = MockConfigEntry(domain=DOMAIN, **kwargs)
     item.add_to_hass(hass)
@@ -31,16 +46,16 @@ def entry(hass, **kwargs):
 async def test_manual_setup_adds_a_lamp_that_answers(hass, lamp_answers):
     result = await start(hass)
     assert (result["type"], result["step_id"]) == (FlowResultType.FORM, "user")
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: " 192.168.4.139 "})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: " 192.168.1.139 "})
     result = await oriented(hass, result)
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Yeelight Cube (192.168.4.139)"
+    assert result["title"] == "Yeelight Cube (192.168.1.139)"
     # No get_prop answer: no model stored (a Cube Matrix can answer late;
     # the light asks again, LampClient.probe_model).
-    assert result["data"] == {CONF_IP: "192.168.4.139"}
+    assert result["data"] == {CONF_IP: "192.168.1.139"}
     assert result["options"] == {"mount_profile": 2, "mount_profile_source": "user"}
-    assert result["result"].unique_id == "192.168.4.139"
-    lamp_answers.assert_awaited_once_with("192.168.4.139", 55443, 3.0)
+    assert result["result"].unique_id == "192.168.1.139"
+    lamp_answers.assert_awaited_once_with("192.168.1.139", 55443, 3.0)
 
 
 async def test_manual_setup_refuses_an_invalid_address(hass, lamp_answers):
@@ -54,90 +69,102 @@ async def test_manual_setup_refuses_an_invalid_address(hass, lamp_answers):
 async def test_manual_setup_keeps_the_form_while_no_lamp_answers(hass, lamp_answers):
     lamp_answers.side_effect = OSError("timed out")
     result = await start(hass)
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.4.139"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.1.139"})
     assert (result["type"], result["errors"]) == (FlowResultType.FORM, {"base": "cannot_connect"})
     lamp_answers.side_effect = None  # switched on: the same form adds it
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.4.139"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.1.139"})
     result = await oriented(hass, result)
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 async def test_manual_setup_of_a_lamp_already_set_up(hass, lamp_answers):
     # By its address, or by its unique id (an older entry at another IP).
-    entry(hass, unique_id="0xabc", data={CONF_IP: "192.168.4.139"})
-    entry(hass, unique_id="192.168.4.140", data={CONF_IP: "192.168.4.99"})
-    for ip in ("192.168.4.139", "192.168.4.140"):
+    entry(hass, unique_id="0xabc", data={CONF_IP: "192.168.1.139"})
+    entry(hass, unique_id="192.168.1.140", data={CONF_IP: "192.168.1.99"})
+    for ip in ("192.168.1.139", "192.168.1.140"):
         result = await start(hass)
         result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: ip})
         assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "already_configured")
     lamp_answers.assert_not_awaited()
 
 
+async def test_manual_setup_of_a_lamp_being_discovered(hass, lamp_answers):
+    # Offered by a discovery not confirmed yet (its unique id is the IP):
+    # the manual setup says so, with its own text.
+    await start(hass, DISCOVERY, {"ip": "192.168.1.139"})
+    result = await start(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.1.139"})
+    assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "already_in_progress")
+    assert "already_in_progress" in config_strings()["abort"]
+    lamp_answers.assert_not_awaited()
+
+
 # ── Discovery (our own scan) and its confirmation ───────────────────────────
 
 async def test_a_discovered_lamp_is_added_once_confirmed(hass):
-    result = await start(hass, DISCOVERY, {"ip": "192.168.4.150", "model": "CubeLite",
+    result = await start(hass, DISCOVERY, {"ip": "192.168.1.150", "model": "CubeLite",
                                            "device_id": "0x00000000001234ab", "name": "Desk"})
     assert (result["type"], result["step_id"]) == (FlowResultType.FORM, "discovery_confirm")
-    assert result["description_placeholders"] == {"name": "Desk", "host": "192.168.4.150"}
+    assert result["description_placeholders"] == {"name": "Desk", "host": "192.168.1.150"}
+    assert placeholders_of("discovery_confirm") == set(result["description_placeholders"])
     flow = hass.config_entries.flow.async_get(result["flow_id"])
-    assert flow["context"]["title_placeholders"]["name"] == "CubeLite 0x1234ab (192.168.4.150)"
+    assert flow["context"]["title_placeholders"]["name"] == "CubeLite 0x1234ab (192.168.1.150)"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     result = await oriented(hass, result)
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"] == {CONF_IP: "192.168.4.150", CONF_DEVICE_ID: "1234ab", CONF_MODEL: "CubeLite"}
+    assert result["data"] == {CONF_IP: "192.168.1.150", CONF_DEVICE_ID: "1234ab", CONF_MODEL: "CubeLite"}
     assert result["result"].unique_id == "1234ab"
 
 
 async def test_a_discovered_lamp_without_an_id(hass):
-    result = await start(hass, DISCOVERY, {"ip": "192.168.4.151"})
+    result = await start(hass, DISCOVERY, {"ip": "192.168.1.151"})
     flow = hass.config_entries.flow.async_get(result["flow_id"])
-    assert flow["context"]["title_placeholders"]["name"] == "CubeLite (192.168.4.151)"
+    assert flow["context"]["title_placeholders"]["name"] == "CubeLite (192.168.1.151)"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     result = await oriented(hass, result)
-    assert result["data"] == {CONF_IP: "192.168.4.151"}
-    assert result["result"].unique_id == "192.168.4.151"
+    assert result["data"] == {CONF_IP: "192.168.1.151"}
+    assert result["result"].unique_id == "192.168.1.151"
 
 
 async def test_a_known_lamp_at_a_new_address_is_updated(hass):
-    known = entry(hass, unique_id="1234ab", data={CONF_IP: "192.168.4.10", CONF_DEVICE_ID: "1234ab"})
-    result = await start(hass, DISCOVERY, {"ip": "192.168.4.11", "device_id": "0x1234ab"})
+    known = entry(hass, unique_id="1234ab", data={CONF_IP: "192.168.1.10", CONF_DEVICE_ID: "1234ab"})
+    result = await start(hass, DISCOVERY, {"ip": "192.168.1.11", "device_id": "0x1234ab"})
     assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "already_configured")
-    assert known.data[CONF_IP] == "192.168.4.11"
+    assert known.data[CONF_IP] == "192.168.1.11"
 
 
 async def test_a_manually_added_lamp_is_remapped_by_its_hardware_id(hass):
     # Added by IP (its unique id is the IP), with its id stored since: a
     # discovery at a new IP moves it instead of offering a new lamp.
-    manual = entry(hass, unique_id="192.168.4.20", data={CONF_IP: "192.168.4.20", CONF_DEVICE_ID: "0x0000beef"})
-    entry(hass, unique_id=None, data={CONF_IP: "192.168.4.99"})  # no id to compare: skipped
-    result = await start(hass, DISCOVERY, {"ip": "192.168.4.21", "device_id": "0xbeef"})
+    manual = entry(hass, unique_id="192.168.1.20", data={CONF_IP: "192.168.1.20", CONF_DEVICE_ID: "0x0000beef"})
+    entry(hass, unique_id=None, data={CONF_IP: "192.168.1.99"})  # no id to compare: skipped
+    result = await start(hass, DISCOVERY, {"ip": "192.168.1.21", "device_id": "0xbeef"})
     assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "already_configured")
-    assert manual.data[CONF_IP] == "192.168.4.21"
+    assert manual.data[CONF_IP] == "192.168.1.21"
     assert manual.unique_id == "beef"
     # Discovered again where it now is: nothing to change.
-    result = await start(hass, DISCOVERY, {"ip": "192.168.4.21", "device_id": "beef"})
+    result = await start(hass, DISCOVERY, {"ip": "192.168.1.21", "device_id": "beef"})
     assert result["reason"] == "already_configured"
-    assert manual.data[CONF_IP] == "192.168.4.21"
+    assert manual.data[CONF_IP] == "192.168.1.21"
 
 
 async def test_a_lamp_at_an_address_already_set_up(hass):
     # The entry at that IP has no id yet: it adopts the discovered one.
-    old = entry(hass, unique_id="192.168.4.30", data={CONF_IP: "192.168.4.30"})
-    result = await start(hass, DISCOVERY, {"ip": "192.168.4.30", "device_id": "0xcafe"})
+    old = entry(hass, unique_id="192.168.1.30", data={CONF_IP: "192.168.1.30"})
+    result = await start(hass, DISCOVERY, {"ip": "192.168.1.30", "device_id": "0xcafe"})
     assert result["reason"] == "already_configured"
     assert (old.data[CONF_DEVICE_ID], old.unique_id) == ("cafe", "cafe")
     # Discovered without an id at an address already set up: nothing new.
-    entry(hass, unique_id="lamp-31", data={CONF_IP: "192.168.4.31"})
-    result = await start(hass, DISCOVERY, {"ip": "192.168.4.31"})
+    entry(hass, unique_id="lamp-31", data={CONF_IP: "192.168.1.31"})
+    result = await start(hass, DISCOVERY, {"ip": "192.168.1.31"})
     assert result["reason"] == "already_configured"
 
 
 async def test_another_lamp_now_at_a_known_address_is_offered(hass):
     # The entry at that IP belongs to another lamp (another id): the new lamp
     # is offered, the entry is left alone (its lamp moved elsewhere).
-    entry(hass, unique_id="aaaa", data={CONF_IP: "192.168.4.40", CONF_DEVICE_ID: "aaaa"})
-    result = await start(hass, DISCOVERY, {"ip": "192.168.4.40", "device_id": "bbbb"})
+    entry(hass, unique_id="aaaa", data={CONF_IP: "192.168.1.40", CONF_DEVICE_ID: "aaaa"})
+    result = await start(hass, DISCOVERY, {"ip": "192.168.1.40", "device_id": "bbbb"})
     assert (result["type"], result["step_id"]) == (FlowResultType.FORM, "discovery_confirm")
 
 
@@ -145,8 +172,8 @@ async def test_another_lamp_now_at_a_known_address_is_offered(hass):
 
 def zeroconf(name, properties):
     return ZeroconfServiceInfo(
-        ip_address=__import__("ipaddress").ip_address("192.168.4.60"),
-        ip_addresses=[__import__("ipaddress").ip_address("192.168.4.60")],
+        ip_address=__import__("ipaddress").ip_address("192.168.1.60"),
+        ip_addresses=[__import__("ipaddress").ip_address("192.168.1.60")],
         hostname="lamp.local.", name=name, port=54321, properties=properties, type="_miio._udp.local.",
     )
 
@@ -154,15 +181,17 @@ def zeroconf(name, properties):
 # ── A lamp found in Home Assistant's Matter integration ──────────────────────
 
 MATTER = config_entries.SOURCE_INTEGRATION_DISCOVERY
-MATTER_LAMP = {CONF_IP: "192.168.4.139", CONF_MATTER_MAC: "cc:ba:97:44:38:98", CONF_MODEL: "CubeLite"}
+MATTER_LAMP = {CONF_IP: "192.168.1.139", CONF_MATTER_MAC: "cc:ba:97:44:38:98", CONF_MODEL: "CubeLite"}
 
 
 async def test_a_lamp_found_in_matter_is_added_once_it_answers_over_lan(hass, lamp_answers):
     result = await start(hass, MATTER, dict(MATTER_LAMP))
     assert (result["type"], result["step_id"]) == (FlowResultType.FORM, "matter_confirm")
-    assert result["description_placeholders"] == {"host": "192.168.4.139"}
+    # Every placeholder its text uses (strings.json), the model named.
+    assert result["description_placeholders"] == {"name": "Cube Lite", "host": "192.168.1.139"}
+    assert placeholders_of("matter_confirm") == set(result["description_placeholders"])
     flow = hass.config_entries.flow.async_get(result["flow_id"])
-    assert flow["context"]["title_placeholders"]["name"] == "CubeLite (192.168.4.139)"
+    assert flow["context"]["title_placeholders"]["name"] == "CubeLite (192.168.1.139)"
     # LAN Control off in the Yeelight app: the form says so and stays.
     lamp_answers.side_effect = OSError("refused")
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
@@ -172,26 +201,26 @@ async def test_a_lamp_found_in_matter_is_added_once_it_answers_over_lan(hass, la
     # Read over Matter: nothing kept, the lamp's own value is used.
     result = await oriented(hass, result, "matter")
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Yeelight Cube (192.168.4.139)"
+    assert result["title"] == "Yeelight Cube (192.168.1.139)"
     assert result["data"] == MATTER_LAMP
     assert result["options"] == {}
-    assert result["result"].unique_id == "192.168.4.139"
+    assert result["result"].unique_id == "192.168.1.139"
 
 
 async def test_a_lamp_found_in_matter_without_a_mac(hass, lamp_answers):
-    result = await start(hass, MATTER, {CONF_IP: "192.168.4.139"})
+    result = await start(hass, MATTER, {CONF_IP: "192.168.1.139"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     result = await oriented(hass, result, "3")  # arrow down, or never set
-    assert result["data"] == {CONF_IP: "192.168.4.139", CONF_MODEL: "CubeLite"}
+    assert result["data"] == {CONF_IP: "192.168.1.139", CONF_MODEL: "CubeLite"}
     assert result["options"] == {"mount_profile": 3, "mount_profile_source": "user"}
 
 
 async def test_a_lamp_found_in_matter_that_is_already_set_up(hass, lamp_answers):
     # By its unique id, its address, or its remembered MAC.
     for data in (
-        {"unique_id": "192.168.4.139", "data": {CONF_IP: "192.168.4.10"}},
-        {"unique_id": "1234ab", "data": {CONF_IP: "192.168.4.139"}},
-        {"unique_id": "5678cd", "data": {CONF_IP: "192.168.4.20", CONF_MATTER_MAC: "cc:ba:97:44:38:98"}},
+        {"unique_id": "192.168.1.139", "data": {CONF_IP: "192.168.1.10"}},
+        {"unique_id": "1234ab", "data": {CONF_IP: "192.168.1.139"}},
+        {"unique_id": "5678cd", "data": {CONF_IP: "192.168.1.20", CONF_MATTER_MAC: "cc:ba:97:44:38:98"}},
     ):
         known = entry(hass, **data)
         result = await start(hass, MATTER, dict(MATTER_LAMP))
@@ -204,11 +233,11 @@ async def test_a_lamp_found_in_matter_that_is_already_set_up(hass, lamp_answers)
 
 async def test_a_lamp_found_in_matter_on_a_new_address_is_followed(hass, lamp_answers):
     # Its remembered MAC, silent at its address, answering at the new one.
-    known = entry(hass, unique_id="5678cd", data={CONF_IP: "192.168.4.20", CONF_MATTER_MAC: "cc:ba:97:44:38:98"})
-    lamp_answers.side_effect = lambda ip, *args: (_ for _ in ()).throw(OSError()) if ip == "192.168.4.20" else None
+    known = entry(hass, unique_id="5678cd", data={CONF_IP: "192.168.1.20", CONF_MATTER_MAC: "cc:ba:97:44:38:98"})
+    lamp_answers.side_effect = lambda ip, *args: (_ for _ in ()).throw(OSError()) if ip == "192.168.1.20" else None
     result = await start(hass, MATTER, dict(MATTER_LAMP))
     assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "already_configured")
-    assert known.data[CONF_IP] == "192.168.4.139"
+    assert known.data[CONF_IP] == "192.168.1.139"
     # Never to an address no lamp can be reached at.
     result = await start(hass, MATTER, {**MATTER_LAMP, CONF_IP: "0.0.0.0"})
     assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "no_address")
@@ -226,33 +255,33 @@ async def test_zeroconf_offers_a_cube_and_ignores_other_lamps(hass):
 # ── Reconfigure ─────────────────────────────────────────────────────────────
 
 async def test_reconfigure_moves_a_lamp_to_an_address_that_answers(hass, lamp_answers):
-    manual = entry(hass, unique_id="192.168.4.70", data={CONF_IP: "192.168.4.70"})
-    entry(hass, unique_id="other", data={CONF_IP: "192.168.4.71"})
+    manual = entry(hass, unique_id="192.168.1.70", data={CONF_IP: "192.168.1.70"})
+    entry(hass, unique_id="other", data={CONF_IP: "192.168.1.71"})
     result = await manual.start_reconfigure_flow(hass)
     assert (result["type"], result["step_id"]) == (FlowResultType.FORM, "reconfigure")
     configure = hass.config_entries.flow.async_configure
     result = await configure(result["flow_id"], {CONF_IP: "nope"})
     assert result["errors"] == {CONF_IP: "invalid_ip"}
     lamp_answers.side_effect = OSError("timed out")
-    result = await configure(result["flow_id"], {CONF_IP: "192.168.4.72"})
+    result = await configure(result["flow_id"], {CONF_IP: "192.168.1.72"})
     assert result["errors"] == {"base": "cannot_connect"}
     lamp_answers.side_effect = None
-    result = await configure(result["flow_id"], {CONF_IP: "192.168.4.72"})
+    result = await configure(result["flow_id"], {CONF_IP: "192.168.1.72"})
     assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "reconfigure_successful")
     # Identified by its IP until discovered: the unique id follows.
-    assert (manual.data[CONF_IP], manual.unique_id) == ("192.168.4.72", "192.168.4.72")
+    assert (manual.data[CONF_IP], manual.unique_id) == ("192.168.1.72", "192.168.1.72")
 
 
 async def test_reconfigure_refuses_another_lamp_s_address_and_keeps_a_hardware_id(hass, lamp_answers):
-    discovered = entry(hass, unique_id="d00d", data={CONF_IP: "192.168.4.80", CONF_DEVICE_ID: "d00d"})
-    entry(hass, unique_id="other", data={CONF_IP: "192.168.4.81"})
+    discovered = entry(hass, unique_id="d00d", data={CONF_IP: "192.168.1.80", CONF_DEVICE_ID: "d00d"})
+    entry(hass, unique_id="other", data={CONF_IP: "192.168.1.81"})
     result = await discovered.start_reconfigure_flow(hass)
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.4.81"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.1.81"})
     assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "already_configured")
     result = await discovered.start_reconfigure_flow(hass)
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.4.82"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.1.82"})
     assert result["reason"] == "reconfigure_successful"
-    assert (discovered.data[CONF_IP], discovered.unique_id) == ("192.168.4.82", "d00d")
+    assert (discovered.data[CONF_IP], discovered.unique_id) == ("192.168.1.82", "d00d")
 
 
 # ── Options: how the lamp is mounted (its saved mount profile) ─────────────
@@ -273,7 +302,7 @@ def loaded(item, profile=(None, "unknown"), check=True):
 
 
 async def test_options_keep_the_orientation_of_a_lamp_not_loaded(hass):
-    item = entry(hass, data={CONF_IP: "192.168.4.90"}, options={"auto_turn_on": False})
+    item = entry(hass, data={CONF_IP: "192.168.1.90"}, options={"auto_turn_on": False})
     result = await hass.config_entries.options.async_init(item.entry_id)
     assert (result["type"], result["step_id"]) == (FlowResultType.FORM, "init")
     assert result["description_placeholders"] == {"now": "not set (270° in use)"}
@@ -289,7 +318,7 @@ async def test_options_keep_the_orientation_of_a_lamp_not_loaded(hass):
 
 
 async def test_options_set_the_orientation_through_the_lamp(hass):
-    item = entry(hass, data={CONF_IP: "192.168.4.91"})
+    item = entry(hass, data={CONF_IP: "192.168.1.91"})
     lamp = loaded(item, profile=(2, "matter"))
     result = await hass.config_entries.options.async_init(item.entry_id)
     assert result["description_placeholders"] == {"now": "180°, read from the lamp over Matter"}
@@ -299,7 +328,7 @@ async def test_options_set_the_orientation_through_the_lamp(hass):
 
 
 async def test_the_star_check_finds_the_arrow(hass):
-    item = entry(hass, data={CONF_IP: "192.168.4.92"})
+    item = entry(hass, data={CONF_IP: "192.168.1.92"})
     lamp = loaded(item, check=False)
     lamp.device_orientation = "right"
     result = await hass.config_entries.options.async_init(item.entry_id)
@@ -327,7 +356,7 @@ async def test_the_star_check_finds_the_arrow(hass):
 
 
 async def test_the_star_check_follows_the_mount(hass):
-    item = entry(hass, data={CONF_IP: "192.168.4.97"})
+    item = entry(hass, data={CONF_IP: "192.168.1.97"})
     lamp = loaded(item)
     lamp.device_orientation = "down"  # standing: the lamp's left end on top
     result = await hass.config_entries.options.async_init(item.entry_id)
@@ -338,7 +367,7 @@ async def test_the_star_check_follows_the_mount(hass):
 
 
 async def test_closing_the_options_during_the_check_brings_the_content_back(hass):
-    item = entry(hass, data={CONF_IP: "192.168.4.93"})
+    item = entry(hass, data={CONF_IP: "192.168.1.93"})
     lamp = loaded(item)
     result = await hass.config_entries.options.async_init(item.entry_id)
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"mount_profile": "check"})
@@ -352,7 +381,7 @@ async def test_setup_checks_the_orientation_on_the_lamp(hass, lamp_answers):
     from unittest.mock import AsyncMock, patch
 
     result = await start(hass)
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.4.95"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.1.95"})
     configure = hass.config_entries.flow.async_configure
     with patch(
         "custom_components.yeelight_cube.config_flow.send_once",
@@ -364,7 +393,7 @@ async def test_setup_checks_the_orientation_on_the_lamp(hass, lamp_answers):
         result = await configure(result["flow_id"], {"mount_profile": "check"})
         assert (result["type"], result["step_id"]) == (FlowResultType.FORM, "orientation_check")
         # The check's shooting stars, sent as is to the lamp being added.
-        assert send.await_args.args[:3] == ("192.168.4.95", 55443, "set_fx_effect")
+        assert send.await_args.args[:3] == ("192.168.1.95", 55443, "set_fx_effect")
         assert send.await_args.args[3][3]["mode"] == 47
         # Can't tell: asked again.
         result = await configure(result["flow_id"], {"stars": "unclear"})
@@ -380,7 +409,7 @@ async def test_setup_checks_the_orientation_on_the_lamp(hass, lamp_answers):
 
 
 
-# ── The Cube Matrix (the original Yeelight Cube, classic firmware) ──────────
+# ── The Cube Matrix (the original Yeelight Cube) ────────────────────────────
 
 CUBE_MATRIX_LAYOUT = {"cube_topology": "1,1,1,1,3,3,0,0,", "rotation_angle": "3", "strip_lenth": "110"}
 
@@ -390,24 +419,24 @@ async def test_a_cube_matrix_added_by_hand_is_added_at_once(hass, lamp_answers, 
     # mounted as it reports.
     cube_matrix_layout.return_value = dict(CUBE_MATRIX_LAYOUT)
     result = await start(hass)
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.4.189"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.1.189"})
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Yeelight Cube Matrix (192.168.4.189)"
-    assert result["data"] == {CONF_IP: "192.168.4.189", CONF_MODEL: "CubeMatrix"}
+    assert result["title"] == "Yeelight Cube Matrix (192.168.1.189)"
+    assert result["data"] == {CONF_IP: "192.168.1.189", CONF_MODEL: "CubeMatrix"}
     assert result["options"] == {"mount_profile": 3, "mount_profile_source": "user"}
-    cube_matrix_layout.assert_awaited_once_with("192.168.4.189")
+    cube_matrix_layout.assert_awaited_once_with("192.168.1.189")
 
 
 async def test_a_discovered_cube_matrix(hass, cube_matrix_layout):
     # Its model said so; a rotation it does not report: the lamp default.
     cube_matrix_layout.return_value = {**CUBE_MATRIX_LAYOUT, "rotation_angle": ""}
-    result = await start(hass, DISCOVERY, {"ip": "192.168.4.189", "model": "CubeMatrix",
+    result = await start(hass, DISCOVERY, {"ip": "192.168.1.189", "model": "CubeMatrix",
                                            "device_id": "84fce6001234", "name": "CubeMatrix"})
     flow = hass.config_entries.flow.async_get(result["flow_id"])
-    assert flow["context"]["title_placeholders"]["name"] == "Cube Matrix 0x84fce6001234 (192.168.4.189)"
+    assert flow["context"]["title_placeholders"]["name"] == "Cube Matrix 0x84fce6001234 (192.168.1.189)"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"] == {CONF_IP: "192.168.4.189", CONF_DEVICE_ID: "84fce6001234", CONF_MODEL: "CubeMatrix"}
+    assert result["data"] == {CONF_IP: "192.168.1.189", CONF_DEVICE_ID: "84fce6001234", CONF_MODEL: "CubeMatrix"}
     assert result["options"] == {"mount_profile": 3, "mount_profile_source": "user"}
 
 
@@ -416,20 +445,21 @@ async def test_a_cube_matrix_found_in_matter(hass, lamp_answers, cube_matrix_lay
     # as a Cube Matrix, added at once like one found over the LAN.
     cube_matrix_layout.return_value = {**CUBE_MATRIX_LAYOUT, "cube_topology": "2,2,2,2,0,0,0,0,",
                                        "rotation_angle": "0", "strip_lenth": "100"}
-    lamp = {CONF_IP: "192.168.4.189", CONF_MATTER_MAC: "84:fc:e6:00:12:34", CONF_MODEL: "CubeMatrix"}
+    lamp = {CONF_IP: "192.168.1.189", CONF_MATTER_MAC: "84:fc:e6:00:12:34", CONF_MODEL: "CubeMatrix"}
     result = await start(hass, MATTER, dict(lamp))
+    assert result["description_placeholders"] == {"name": "Cube Matrix", "host": "192.168.1.189"}
     flow = hass.config_entries.flow.async_get(result["flow_id"])
-    assert flow["context"]["title_placeholders"]["name"] == "Cube Matrix (192.168.4.189)"
+    assert flow["context"]["title_placeholders"]["name"] == "Cube Matrix (192.168.1.189)"
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Yeelight Cube Matrix (192.168.4.189)"
+    assert result["title"] == "Yeelight Cube Matrix (192.168.1.189)"
     assert result["data"] == lamp
     assert result["options"] == {"mount_profile": 0, "mount_profile_source": "user"}
 
 
 async def test_a_discovered_cube_matrix_that_does_not_answer_get_prop(hass, cube_matrix_layout):
     # The model alone makes it one.
-    result = await start(hass, DISCOVERY, {"ip": "192.168.4.189", "model": "CubeMatrix"})
+    result = await start(hass, DISCOVERY, {"ip": "192.168.1.189", "model": "CubeMatrix"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_MODEL] == "CubeMatrix"
@@ -448,7 +478,7 @@ async def test_the_model_probe_reads_the_layout(cube_matrix_layout):
     for name, (reply, expected) in answers.items():
         mock = AsyncMock(side_effect=reply) if isinstance(reply, Exception) else AsyncMock(return_value=reply)
         with patch("custom_components.yeelight_cube.config_flow.send_once", new=mock):
-            assert await probe("192.168.4.189") == expected, name
+            assert await probe("192.168.1.189") == expected, name
         mock.assert_awaited_once_with(
-            "192.168.4.189", 55443, "get_prop", ["cube_topology", "rotation_angle", "strip_lenth"], 1.5,
+            "192.168.1.189", 55443, "get_prop", ["cube_topology", "rotation_angle", "strip_lenth"], 1.5,
         )

@@ -35,11 +35,10 @@ class LanPacer:
     again (unless unchanged frames are skipped): the lamp gets one steady
     rhythm of exactly the limit, never two frames closer together, so a
     limit of 1 is one frame a second, skipped or not. (The last picture
-    again every 0.2 s between new ones made any limit 5 frames a second on
-    the lamp: a Cube Lite at "1 a second" hung three times on 2026-11-20,
-    none in 19 lamp-hours at a true 1 a second.) A new picture right after
-    a repeat (120 ms apart at 3 a second) hung a Cube Lite within minutes,
-    four times in a row (2026-11-19)."""
+    again every 0.2 s between new ones would make any limit 5 frames a
+    second on the lamp, which can hang a Cube Lite set to "1 a second"; a
+    true 1 a second runs for many hours.) A new picture right after a
+    repeat (120 ms apart at 3 a second) hangs a Cube Lite within minutes."""
 
     # Render timing jitter: a frame due ``resend`` after the last one still
     # goes at the render that comes a few milliseconds early.

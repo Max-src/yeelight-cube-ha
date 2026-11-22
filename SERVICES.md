@@ -237,8 +237,6 @@ window.yeelightCubeDiagnostics.stop();
 window.yeelightCubeDiagnostics.clear();
 ```
 
-Regression check: set `STARTUP_ONLY=1` when running `node tests/card-ui-parity.cjs` with the usual Playwright environment. It injects a shared-module 503, verifies all seven main cards fail while a standalone card with no shared imports still loads, then verifies reload recovery and diagnostic retention. The standalone control it uses is the internal Font Editor card, which is not shipped in the public repository, so this check only runs from a development checkout. It reproduces a possible failure mechanism, not proof of any particular production outage.
-
 ---
 
 ## 📝 Text Services
@@ -260,7 +258,7 @@ While the lamp shows its **clock or a native effect**, the text is kept for when
 action: yeelight_cube.set_custom_text
 data:
   text: "HELLO"
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 <table>
@@ -285,7 +283,7 @@ Set individual RGB colors for each character in the displayed text.
 action: yeelight_cube.set_text_colors
 data:
   text_colors: [[255, 0, 0], [0, 255, 0], [0, 0, 255]]
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 <table>
@@ -309,7 +307,7 @@ Change the text font.
 action: yeelight_cube.set_font
 data:
   font: "fat"
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 <table>
@@ -333,7 +331,7 @@ Set text alignment.
 action: yeelight_cube.set_alignment
 data:
   alignment: "right"
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 <table>
@@ -360,7 +358,7 @@ Control display orientation.
 action: yeelight_cube.set_orientation
 data:
   orientation: "flipped"
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 <table>
@@ -413,7 +411,7 @@ Display a pixel art frame on the lamp. A Cube Lite has 100 pixels arranged in a 
 ```yaml
 action: yeelight_cube.apply_custom_pixels
 data:
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
   pixels:
     - { "position": 49, "color": [255, 255, 0] }
     - { "position": 50, "color": [255, 255, 0] }
@@ -426,7 +424,7 @@ data:
 ```yaml
 action: yeelight_cube.apply_custom_pixels
 data:
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
   pixels:
     - { "position": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19], "color": [255,0,0] }
     - { "position": [20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39], "color": [255,128,0] }
@@ -446,7 +444,7 @@ data:
 ```yaml
 action: yeelight_cube.apply_custom_pixels
 data:
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
   pixels:
     - { "position": 0, "color": [255, 0, 0] }
     - { "position": 1, "color": [0, 255, 0] }
@@ -518,14 +516,14 @@ Display a pixel art on the lamp: a saved one by index, or a saved or official
 action: yeelight_cube.apply_pixel_art
 data:
   idx: 0
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ```yaml
 action: yeelight_cube.apply_pixel_art
 data:
   name: "Built-in: Horizontal 01"
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -712,7 +710,7 @@ The call fails with an error when the data is too large, not base64, or not an i
 action: yeelight_cube.display_image
 data:
   image_b64: "<base64-encoded image string>"
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -753,7 +751,7 @@ Switch to the native Clock or Native Effect content, or change the Matrix displa
 action: yeelight_cube.set_mode
 data:
   mode: "Angle Gradient"
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 `Clock` uses the Cube Lite private LAN command and has no device state readback.
@@ -777,7 +775,7 @@ Set a single solid RGB color on the lamp (shortcut for Solid Color mode).
 action: yeelight_cube.set_solid_color
 data:
   rgb_color: [255, 128, 0]
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -795,7 +793,7 @@ Set the gradient angle (for Angle Gradient mode).
 action: yeelight_cube.set_angle
 data:
   angle: 45.0
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -813,7 +811,7 @@ Control whether gradients fill the entire 20×5 pixel grid or only the text pixe
 action: yeelight_cube.set_full_panel
 data:
   full_panel: true
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -829,7 +827,7 @@ Generate preview matrix data for the ten text/gradient modes (every Matrix mode 
 ```yaml
 action: yeelight_cube.preview_gradient_modes
 data:
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 > [!NOTE]
@@ -865,7 +863,7 @@ action: yeelight_cube.save_palette
 data:
   palette: [[255, 0, 0], [0, 255, 0], [0, 0, 255]]
   name: "RGB Rainbow"
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -884,7 +882,7 @@ Load a saved palette by index.
 action: yeelight_cube.load_palette
 data:
   idx: 0
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -1446,48 +1444,17 @@ protocol-command dispatch with a simulated transport, not physical lamp output.
 After installing changed Python code, restart Home Assistant and refresh the
 dashboard. Re-registering services on entry reload does not reimport Python code.
 
-#### Rotation Diagnostics and Regression Checks
+#### Troubleshooting a rotation
 
-The observer cancellation and discarded hardware result were reproduced in
-local tests. They are **not proof of the cause on a particular installation**.
-Earlier service-registration and stale-state explanations were hypotheses, not
-verified causes of the reported physical-lamp failure.
-
-When investigating a repeat report:
-
-1. Record the target entities, rotation kind, submitted items and interval,
-  service response, and `effect_rotation` attributes before and after Start.
-  Check item availability, including skipped items.
-2. Trace the same request through the card adapter, service handler, entity loop,
-  display dispatcher, hardware wrapper and `set_fx_effect` transport. Look for
-  unsolicited Stop calls from other cards and correlate `[ROTATION]`, `[DISPLAY]`,
-  `[OP ...]` and `[RAW]` logs for that target. These are log prefixes, not a
-  shared request ID; some require debug logging.
-3. Write and run a regression that fails at the implicated boundary before
-  changing behaviour. Do not hide failed state with an optimistic timeout or
-  treat selected preview/attribute changes as evidence of physical output.
-4. Report separately what was reproduced, what changed, which checks ran, whether
-  anything was deployed, and whether the user confirmed physical lamp output.
-  If the user still reports failure, the hardware issue remains open. Do not
-  re-label an unverified explanation as the root cause or blame caching without
-  evidence. Reuse existing evidence and request only the missing runtime facts.
-
-Existing regression checks (run from the repository root):
-
-```powershell
-.\.venv\Scripts\python.exe -m unittest tests.test_effect_rotation
-node --test tests/mode-controls.test.mjs
-node tests/card-ui-parity.cjs
-```
-
-The browser check needs Playwright and its configured browser (Edge by default);
-`PLAYWRIGHT_MODULE` can point to an installed Playwright module. Python tests
-execute selected production methods outside Home Assistant with a simulated
-transport. Browser tests use real card classes with simulated Home Assistant
-state and services. They cover failure propagation, loop replacement, protocol
-dispatch, and passive observers, but **not a live Home Assistant lifecycle or
-what a physical lamp shows**. The raw send path does not read a device reply, so
-even a successful socket send is not an acknowledgement from the lamp.
+If a rotation does not change what the lamp shows, look at the light's
+`effect_rotation` attributes after Start: `error` gives the reason a lamp
+stopped, `retry_attempt` and `retry_at` show a retry in progress, and
+`waiting_for_reconnect` a lamp that is offline. Check that the items are
+available (unknown names and missing clock presets are skipped) and that no
+other card or automation sends Stop. For more detail, turn on debug logging
+for `custom_components.yeelight_cube` and look for the `[ROTATION]`,
+`[DISPLAY]` and `[OP ...]` lines for that lamp. A command sent successfully
+is not proof of what the lamp shows: the lamp does not confirm the picture.
 
 ---
 
@@ -1534,7 +1501,7 @@ Set lamp brightness as a percentage. Turns the lamp on if it is off.
 action: yeelight_cube.set_brightness
 data:
   brightness: 75
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -1573,7 +1540,7 @@ data:
   invert: 0
   tint_hue: 0
   tint_strength: 0
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -1591,7 +1558,7 @@ Toggle hardware color accuracy correction (per-channel gain).
 action: yeelight_cube.set_color_accuracy
 data:
   enabled: true
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -1607,7 +1574,7 @@ Force the lamp to reconnect and re-send the current display state using a fresh 
 ```yaml
 action: yeelight_cube.force_refresh
 data:
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 > [!TIP]
@@ -1632,7 +1599,7 @@ Only **one** snapshot is kept per lamp — calling `save_state` again overwrites
 ```yaml
 action: yeelight_cube.save_state
 data:
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 > [!NOTE]
@@ -1653,7 +1620,7 @@ A rotation that was running when the state was saved starts again (what is shown
 ```yaml
 action: yeelight_cube.restore_state
 data:
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 **Typical use — show something temporarily, then return to normal:**
@@ -1662,20 +1629,20 @@ data:
 # 1. Remember what the lamp is currently showing
 - action: yeelight_cube.save_state
   data:
-    entity_id: light.cubelite_192_168_4_102
+    entity_id: light.cubelite_192_168_1_102
 
 # 2. Display a temporary alert
 - action: yeelight_cube.set_custom_text
   data:
     text: "DOORBELL"
-    entity_id: light.cubelite_192_168_4_102
+    entity_id: light.cubelite_192_168_1_102
 
 - delay: "00:00:10"
 
 # 3. Put back whatever was showing before
 - action: yeelight_cube.restore_state
   data:
-    entity_id: light.cubelite_192_168_4_102
+    entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -1729,66 +1696,6 @@ slots; it does not guarantee that older trailing slots are removed.
 
 Manage device discovery, connection, and integration-level settings.
 
-### `add_managed_device`
-
-Add a device to the managed list.
-
-| Field | Required | Description |
-| :-- | :-- | :-- |
-| `ip_address` | Yes | Device IP address |
-
-```yaml
-action: yeelight_cube.add_managed_device
-data:
-  ip_address: "192.168.1.100"
-```
-
----
-
-### `remove_managed_device`
-
-Remove a device from the managed list.
-
-| Field | Required | Description |
-| :-- | :-- | :-- |
-| `ip_address` | Yes | Device IP address |
-
-```yaml
-action: yeelight_cube.remove_managed_device
-data:
-  ip_address: "192.168.1.100"
-```
-
----
-
-### `is_device_managed`
-
-Check if a device is managed. The result is fired as a
-`yeelight_cube_device_check_result` event (`ip_address`, `is_managed`).
-
-| Field | Required | Description |
-| :-- | :-- | :-- |
-| `ip_address` | Yes | Device IP address |
-
-```yaml
-action: yeelight_cube.is_device_managed
-data:
-  ip_address: "192.168.1.100"
-```
-
----
-
-### `list_managed_devices`
-
-List all managed devices. No parameters required. The list is fired as a
-`yeelight_cube_managed_devices_list` event (`devices`).
-
-```yaml
-action: yeelight_cube.list_managed_devices
-```
-
----
-
 ### `test_device_detection`
 
 Test device detection logic. The result is fired as a
@@ -1821,14 +1728,18 @@ Ignore an IP in the built-in Yeelight integration.
 ```yaml
 action: yeelight_cube.ignore_yeelight_discovery
 data:
-  ip_address: "192.168.4.139"
+  ip_address: "192.168.1.139"
 ```
 
 ---
 
 ### `ignore_specific_yeelight`
 
-Ignore a specific device in the built-in Yeelight integration.
+Ignore a specific device in the built-in Yeelight integration, as its
+**Ignore** button does: the device it discovered at this address moves to its
+ignored entries (Settings → Devices & services), its other devices stay.
+When it has no discovered device at this address, the action fails (and its
+event says `success: false`).
 
 | Field | Required | Description |
 | :-- | :-- | :-- |
@@ -1837,24 +1748,27 @@ Ignore a specific device in the built-in Yeelight integration.
 ```yaml
 action: yeelight_cube.ignore_specific_yeelight
 data:
-  ip_address: "192.168.4.139"
+  ip_address: "192.168.1.139"
 ```
 
 ---
 
 ### `create_cube_discovery`
 
-Create a discovery flow for a cube.
+Offer the lamp at this address as discovered (Settings → Devices & services),
+as the network scan does; confirm it there to add it. The action fails (and
+its event says `success: false`) when the address is invalid or the lamp is
+not offered (already set up, or already being set up).
 
 | Field | Required | Description |
 | :-- | :-- | :-- |
 | `ip_address` | Yes | Device IP address |
-| `device_name` | No | Device name; defaults to `Yeelight Cube Lite <ip>` |
+| `device_name` | No | Device name; defaults to `Yeelight Cube (<ip>)` |
 
 ```yaml
 action: yeelight_cube.create_cube_discovery
 data:
-  ip_address: "192.168.4.139"
+  ip_address: "192.168.1.139"
   device_name: "My CubeLite"
 ```
 
@@ -1873,7 +1787,7 @@ connection status at debug level.
 ```yaml
 action: yeelight_cube.test_display
 data:
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
 ```
 
 ---
@@ -1936,9 +1850,9 @@ action: yeelight_cube.apply_pixel_art
 data:
   idx: 0
   entity_id:
-    - light.cubelite_192_168_4_102
-    - light.cubelite_192_168_4_145
-    - light.cubelite_192_168_4_139
+    - light.cubelite_192_168_1_102
+    - light.cubelite_192_168_1_145
+    - light.cubelite_192_168_1_139
 ```
 
 **Same text on all lamps:**
@@ -1948,8 +1862,8 @@ action: yeelight_cube.set_custom_text
 data:
   text: "SYNC"
   entity_id:
-    - light.cubelite_192_168_4_102
-    - light.cubelite_192_168_4_145
+    - light.cubelite_192_168_1_102
+    - light.cubelite_192_168_1_145
 ```
 
 **Different content per lamp:**
@@ -1958,11 +1872,11 @@ data:
 - action: yeelight_cube.set_custom_text
   data:
     text: "CUBE 1"
-    entity_id: light.cubelite_192_168_4_102
+    entity_id: light.cubelite_192_168_1_102
 - action: yeelight_cube.set_custom_text
   data:
     text: "CUBE 2"
-    entity_id: light.cubelite_192_168_4_145
+    entity_id: light.cubelite_192_168_1_145
 ```
 
 </details>
@@ -1978,7 +1892,7 @@ All services are fully compatible with Node-RED with parameter descriptions, ent
 ```yaml
 action: yeelight_cube.set_custom_text
 data:
-  entity_id: light.cubelite_192_168_4_102
+  entity_id: light.cubelite_192_168_1_102
   text: "HELLO"
 ```
 
@@ -1991,7 +1905,7 @@ data:
 **Node-RED** - use an Action node:
 
 - **Action**: `yeelight_cube.set_custom_text`
-- **Data**: `{"text": msg.payload, "entity_id": "light.cubelite_192_168_4_102"}`
+- **Data**: `{"text": msg.payload, "entity_id": "light.cubelite_192_168_1_102"}`
 
 <details>
 <summary>View Node-RED example</summary>
@@ -2007,7 +1921,7 @@ data:
     "service": "set_custom_text",
     "data": {
       "text": "{{payload.message}}",
-      "entity_id": "light.cubelite_192_168_4_102"
+      "entity_id": "light.cubelite_192_168_1_102"
     }
   }
 ]
@@ -2032,8 +1946,6 @@ result through an event on the HA event bus.
 | :-- | :-- |
 | `get_pixel_art` | Response data (required: call it with `response_variable`): `{ name, orientation, pixels }` in flat or grouped format (see [get_pixel_art](#get_pixel_art)) |
 | `preview_gradient_modes` | Event `yeelight_cube_gradient_preview_response` with 20×5 pixel matrices per mode |
-| `list_managed_devices` | Event `yeelight_cube_managed_devices_list` with `devices` (list of IP addresses) |
-| `is_device_managed` | Event `yeelight_cube_device_check_result` with `ip_address` and `is_managed` |
 | `test_device_detection` | Event `yeelight_cube_detection_test_result` with `would_be_detected` |
 | `create_cube_discovery`, `ignore_yeelight_discovery`, `ignore_specific_yeelight` | Events `yeelight_cube_cube_discovery_created`, `yeelight_cube_yeelight_discovery_ignored`, `yeelight_cube_yeelight_device_ignored` |
 | `query_raw`, `get_capabilities`, `bulb_call`, `send_fx_effect`, `set_default`, `force_tcp` | Optional response data (debug services; `force_tcp` returns each lamp's transport) |

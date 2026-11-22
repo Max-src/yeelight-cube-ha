@@ -20,7 +20,7 @@ test("cube lamps are found by the integration's marker, renamed or not", () => {
     states: {
       "light.kitchen": { attributes: {} },
       "light.desk_cube": { attributes: { _yeelight_cube_component: "v1" } },
-      "light.cubelite_192_168_4_105": { attributes: {} }, // older state
+      "light.cubelite_192_168_1_105": { attributes: {} }, // older state
       "sensor.yeelight_cube_saved_pixel_arts": {
         attributes: { _yeelight_cube_component: "v1" },
       },
@@ -28,7 +28,7 @@ test("cube lamps are found by the integration's marker, renamed or not", () => {
   };
   assert.deepEqual(cubeLampEntities(hass), [
     "light.desk_cube",
-    "light.cubelite_192_168_4_105",
+    "light.cubelite_192_168_1_105",
   ]);
   assert.deepEqual(cubeLampEntities(undefined), []);
   // The entity registry knows this integration's lamps even renamed and

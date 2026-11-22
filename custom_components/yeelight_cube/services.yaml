@@ -1,35 +1,3 @@
-add_managed_device:
-  name: Add Managed Device
-  description: Add a device IP to the managed devices list to prevent discovery conflicts
-  fields:
-    ip_address:
-      description: IP address of the device to manage
-      example: "192.168.1.100"
-      required: true
-
-remove_managed_device:
-  name: Remove Managed Device
-  description: Remove a device IP from the managed devices list
-  fields:
-    ip_address:
-      description: IP address of the device to remove
-      example: "192.168.1.100"
-      required: true
-
-is_device_managed:
-  name: Check Device Managed
-  description: Check if a device IP is managed by this component
-  fields:
-    ip_address:
-      description: IP address to check
-      example: "192.168.1.100"
-      required: true
-
-list_managed_devices:
-  name: List Managed Devices
-  description: List all devices managed by this component to prevent discovery conflicts. Returns a list of IP addresses.
-  fields: {}
-
 test_device_detection:
   name: Test Device Detection
   description: Test if a device would be detected as a cube device based on its properties
@@ -53,16 +21,16 @@ ignore_yeelight_discovery:
   fields:
     ip_address:
       description: IP address to ignore in Yeelight integration
-      example: "192.168.4.139"
+      example: "192.168.1.139"
       required: true
 
 create_cube_discovery:
   name: Create Cube Discovery
-  description: Create a discovery flow specifically for the Yeelight Cube Lite component
+  description: Create a discovery flow specifically for the Yeelight Cube integration
   fields:
     ip_address:
       description: IP address of your CubeLite device
-      example: "192.168.4.139"
+      example: "192.168.1.139"
       required: true
     device_name:
       description: Friendly name for the device
@@ -75,7 +43,7 @@ ignore_specific_yeelight:
   fields:
     ip_address:
       description: IP address to ignore in Yeelight integration
-      example: "192.168.4.139"
+      example: "192.168.1.139"
       required: true
 
 load_palette:
@@ -100,7 +68,7 @@ load_palette:
           min: 0
           mode: box
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -170,7 +138,7 @@ set_clock_style:
     entity_id:
       description: Target lamp entity ID.
       required: true
-      example: "light.cubelite_192_168_4_139"
+      example: "light.cubelite_192_168_1_139"
       selector:
         entity:
           domain: light
@@ -258,7 +226,7 @@ preview_gradient_modes:
   description: Generate full 20x5 preview matrices for the text/gradient display modes using the entity's current text, colors, and angle. Does not change the lamp; results are fired as a yeelight_cube_gradient_preview_response event.
   fields:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -279,8 +247,8 @@ set_custom_text:
       selector:
         text:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_4_139"
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -297,8 +265,8 @@ set_text_colors:
       selector:
         object:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_4_247"
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
+      example: "light.cubelite_192_168_1_247"
       required: true
       selector:
         entity:
@@ -337,8 +305,8 @@ apply_custom_pixels:
       selector:
         text:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_4_139"
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -353,7 +321,7 @@ send_fx_effect:
   fields:
     entity_id:
       description: Target lamp entity ID.
-      example: "light.cubelite_192_168_4_139"
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -450,7 +418,7 @@ query_raw:
   fields:
     entity_id:
       description: Target lamp entity ID.
-      example: "light.cubelite_192_168_4_139"
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -478,7 +446,7 @@ get_capabilities:
   fields:
     entity_id:
       description: Target lamp entity ID.
-      example: "light.cubelite_192_168_4_139"
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -494,7 +462,7 @@ bulb_call:
   fields:
     entity_id:
       description: Target lamp entity ID.
-      example: "light.cubelite_192_168_4_139"
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -559,7 +527,7 @@ force_tcp:
   fields:
     entity_id:
       description: Target lamp entity ID(s).
-      example: "light.cubelite_192_168_4_139"
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -584,7 +552,7 @@ set_default:
   fields:
     entity_id:
       description: Target lamp entity ID.
-      example: "light.cubelite_192_168_4_139"
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -701,8 +669,8 @@ set_mode:
       selector:
         boolean:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_4_247"
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
+      example: "light.cubelite_192_168_1_247"
       required: true
       selector:
         entity:
@@ -723,8 +691,8 @@ set_angle:
           step: 1
           mode: slider
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_4_139"
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -741,8 +709,8 @@ set_full_panel:
       selector:
         boolean:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_4_247"
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
+      example: "light.cubelite_192_168_1_247"
       required: true
       selector:
         entity:
@@ -757,8 +725,8 @@ set_solid_color:
       example: [255, 0, 0]
       required: true
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_4_139"
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -779,8 +747,8 @@ set_brightness:
           step: 1
           mode: slider
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_4_139"
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -858,7 +826,7 @@ apply_pixel_art:
           min: 0
           mode: box
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       required: true
       selector:
         entity:
@@ -999,8 +967,8 @@ save_palette:
       selector:
         text:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_4_139"
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -1121,7 +1089,7 @@ set_orientation:
             - "normal"
             - "flipped"
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       required: true
       selector:
         entity:
@@ -1148,7 +1116,7 @@ set_device_orientation:
             - "left"
             - "up"
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       required: true
       selector:
         entity:
@@ -1170,7 +1138,7 @@ set_font:
             - "italic"
             - "native"
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       required: true
       selector:
         entity:
@@ -1191,7 +1159,7 @@ set_alignment:
             - "center"
             - "right"
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       required: true
       selector:
         entity:
@@ -1211,7 +1179,7 @@ display_image:
         text:
           multiline: true
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       required: true
       selector:
         entity:
@@ -1224,8 +1192,8 @@ test_display:
   description: Test service to manually trigger display mode application for debugging. Forces the lamp on, re-establishes the FX handshake and re-applies the current display.
   fields:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_4_139"
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
+      example: "light.cubelite_192_168_1_139"
       required: true
       selector:
         entity:
@@ -1340,7 +1308,7 @@ set_preview_adjustments:
           max: 100
           mode: slider
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1356,7 +1324,7 @@ force_refresh:
     normal display updates are not reaching it.
   fields:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1373,7 +1341,7 @@ freeze_display:
     the last command).
   fields:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1391,7 +1359,7 @@ start_effect_rotation:
     turned off stops its own rotation.
   fields:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1451,7 +1419,7 @@ set_favourites:
       selector:
         object:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1485,7 +1453,7 @@ set_rotation_interval:
           unit_of_measurement: s
           mode: box
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1523,7 +1491,7 @@ stop_effect_rotation:
   description: Stop the server-side effect rotation on the target lamps.
   fields:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1536,7 +1504,7 @@ skip_effect_rotation:
   description: Advance a running server-side effect rotation to its next mode immediately.
   fields:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1556,7 +1524,7 @@ save_state:
     memory and does not survive a Home Assistant restart.
   fields:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1572,7 +1540,7 @@ restore_state:
     lamp on or off. Does nothing if no state was saved.
   fields:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1595,7 +1563,7 @@ set_color_accuracy:
       selector:
         boolean:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1618,7 +1586,7 @@ set_calibration_lock:
       selector:
         boolean:
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102).
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102).
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:
@@ -1723,7 +1691,7 @@ set_color_calibration:
           step: 0.05
           mode: slider
     entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_4_102). Must be provided for direct service calls.
+      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
       example: "light.yeelight_cube_192_168_1_100"
       required: true
       selector:

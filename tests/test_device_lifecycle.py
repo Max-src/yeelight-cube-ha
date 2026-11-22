@@ -3,9 +3,9 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
-import runpy
 from tests.fakes import make_light as build_light, module
 from tests.fakes import light_state
+from tests.ha_stubs import import_pure_module
 from tests.test_native_features import ROOT, CONSTANTS, LIGHT_SOURCE, _load_standalone_functions, SERVICES_SOURCE
 
 
@@ -96,8 +96,8 @@ class DeviceLifecycleTests(unittest.IsolatedAsyncioTestCase):
         flow = SimpleNamespace(_async_abort_entries_match=Mock(side_effect=ValueError("already_configured")),
                                async_set_unique_id=AsyncMock(), async_create_entry=Mock())
         with self.assertRaisesRegex(ValueError, "already_configured"):
-            await step(flow, {CONSTANTS["CONF_IP"]: "192.168.4.102"})
-        flow._async_abort_entries_match.assert_called_once_with({CONSTANTS["CONF_IP"]: "192.168.4.102"})
+            await step(flow, {CONSTANTS["CONF_IP"]: "192.168.1.102"})
+        flow._async_abort_entries_match.assert_called_once_with({CONSTANTS["CONF_IP"]: "192.168.1.102"})
         flow.async_create_entry.assert_not_called()
 
     async def test_zeroconf_delegates_to_same_identity_path(self):
@@ -120,7 +120,7 @@ class DeviceLifecycleTests(unittest.IsolatedAsyncioTestCase):
             (ROOT / "config_flow.py").read_text(encoding="utf-8"),
             {"async_step_discovery"},
             {**CONSTANTS, **namespace, "_LOGGER": Mock(),
-             "model_key": runpy.run_path(ROOT / "device_profile.py")["model_key"],
+             "model_key": import_pure_module("device_profile").model_key,
              "CUBEMATRIX": "cubematrix",
              "config_entries": SimpleNamespace(ConfigEntryState=SimpleNamespace(
                  SETUP_ERROR="error", SETUP_RETRY="retry"))},
@@ -137,9 +137,9 @@ class DeviceLifecycleTests(unittest.IsolatedAsyncioTestCase):
     async def test_discovery_does_not_guess_identity_of_legacy_entries(self):
         entries = [SimpleNamespace(entry_id=name, unique_id=ip,
                     data={CONSTANTS["CONF_IP"]: ip}, state="retry")
-                   for name, ip in (("bottom", "192.168.4.102"), ("top", "192.168.4.145"))]
+                   for name, ip in (("bottom", "192.168.1.102"), ("top", "192.168.1.145"))]
         flow, discover = self.make_flow(entries)
-        result = await discover(flow, {"ip": "192.168.4.200", "model": "cubelite",
+        result = await discover(flow, {"ip": "192.168.1.200", "model": "cubelite",
                                        "device_id": "0x4217ae4bfc02"})
         self.assertEqual(result, {"type": "form"})
         flow.hass.config_entries.async_update_entry.assert_not_called()
@@ -149,10 +149,10 @@ class DeviceLifecycleTests(unittest.IsolatedAsyncioTestCase):
                     data={CONSTANTS["CONF_IP"]: ip, CONSTANTS["CONF_DEVICE_ID"]: device_id},
                     options={"extended_effects_enabled": True}, title=name)
                    for name, ip, device_id in (
-                       ("bottom", "192.168.4.102", "0x00004217AE4BFC02"),
-                       ("top", "192.168.4.145", "0x0000c34c87917e78"))]
+                       ("bottom", "192.168.1.102", "0x00004217AE4BFC02"),
+                       ("top", "192.168.1.145", "0x0000c34c87917e78"))]
         flow, discover = self.make_flow(entries)
-        for entry, new_ip in zip(reversed(entries), ("192.168.4.201", "192.168.4.202")):
+        for entry, new_ip in zip(reversed(entries), ("192.168.1.201", "192.168.1.202")):
             result = await discover(flow, {"ip": new_ip, "device_id": entry.data[CONSTANTS["CONF_DEVICE_ID"]]})
             self.assertEqual(result, {"reason": "already_configured"})
             changed_entry, = flow.hass.config_entries.async_update_entry.call_args.args
@@ -188,13 +188,13 @@ class DeviceLifecycleTests(unittest.IsolatedAsyncioTestCase):
         check_tcp = AsyncMock(side_effect=OSError("timed out"))
         step, flow = self.manual_step(check_tcp), self.manual_flow()
         ip_key = CONSTANTS["CONF_IP"]
-        result = await step(flow, {ip_key: "192.168.4.139"})
+        result = await step(flow, {ip_key: "192.168.1.139"})
         self.assertEqual(("form", {"base": "cannot_connect"}), (result["type"], result["errors"]))
         check_tcp.assert_awaited_once_with(
-            "192.168.4.139", CONSTANTS["LAN_PORT"], CONSTANTS["PROBE_TIMEOUT"]
+            "192.168.1.139", CONSTANTS["LAN_PORT"], CONSTANTS["PROBE_TIMEOUT"]
         )
         check_tcp.side_effect = None
-        result = await step(flow, {ip_key: "192.168.4.139"})
+        result = await step(flow, {ip_key: "192.168.1.139"})
         self.assertEqual("entry", result["type"])
 
     def test_no_empty_options_dialog(self):
@@ -212,16 +212,6 @@ class DeviceLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({"init", "mount_check", "mount_result"}, set(options["step"]))
         self.assertEqual({"mount_profile"}, set(options["step"]["init"]["data"]))
         self.assertEqual({"stars"}, set(options["step"]["mount_check"]["data"]))
-
-    def test_only_a_network_or_lamp_error_retries_the_setup(self):
-        # A bug fails the setup visibly instead of looking like an
-        # unreachable lamp retried forever.
-        import ast
-
-        tree = ast.parse((ROOT / "__init__.py").read_text(encoding="utf-8"))
-        setup = next(n for n in tree.body if getattr(n, "name", "") == "async_setup_entry")
-        source = ast.unparse(setup)
-        self.assertRegex(source, r"if not isinstance\(exc, \(OSError, BulbException\)\):\s+raise\b")
 
     async def test_reconfigure_moves_a_lamp_to_an_ip_that_answers(self):
         # The same checks as adding a lamp; the entry update reloads it once
@@ -268,10 +258,10 @@ class DeviceLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result["type"], "form")
                 self.assertEqual(result["errors"], {ip_key: "invalid_ip"})
         flow.async_set_unique_id.assert_not_awaited()
-        result = await step(flow, {ip_key: " 192.168.4.139 "})
+        result = await step(flow, {ip_key: " 192.168.1.139 "})
         self.assertEqual(result["type"], "entry")
-        self.assertEqual(result["data"], {ip_key: "192.168.4.139"})
-        flow.async_set_unique_id.assert_awaited_once_with("192.168.4.139")
+        self.assertEqual(result["data"], {ip_key: "192.168.1.139"})
+        flow.async_set_unique_id.assert_awaited_once_with("192.168.1.139")
 
     def init_helpers(self, names, **namespace):
         source = (ROOT / "__init__.py").read_text(encoding="utf-8")

@@ -1264,3 +1264,31 @@ test("a new effect or clock card starts on the Original grid, 10 items a page", 
     assert.match(stub, /items_per_page: 10\b/, file);
   }
 });
+
+// Smooth tiles tick every display refresh (due = false between the interval's
+// frames): one painting the current render must not make the next due frame
+// skip the other tiles.
+test("a smooth tile's in-between paint never costs the other tiles their due frame", () => {
+  const source = readFileSync(
+    new URL("../custom_components/yeelight_cube/www/yeelight-cube-native-effects-card.js", import.meta.url),
+    "utf8",
+  );
+  const match = source.match(/  _animationFrame\(due\) \{([\s\S]*?)\n  \}/);
+  assert.ok(match, "_animationFrame method not found");
+  const frame = new Function("RENDER_SECONDS", `return function(due) {${match[1]}}`)(0.04);
+  const paints = [];
+  let seconds = 0;
+  const card = {
+    _controls: {},
+    _clock: { advance: () => seconds },
+    _paint: (due) => paints.push(due),
+  };
+  frame.call(card, true);
+  seconds = 0.096; // render 2, between due frames
+  frame.call(card, false);
+  seconds = 0.1; // render 2 again, due
+  frame.call(card, true);
+  seconds = 0.104; // the same render, not due: nothing
+  frame.call(card, false);
+  assert.deepEqual(paints, [true, false, true]);
+});

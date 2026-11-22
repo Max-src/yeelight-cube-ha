@@ -1,4 +1,4 @@
-// Palette management helpers for Yeelight Cube Lite Draw Card
+// Palette management helpers for Yeelight Cube Draw Card
 import { hexToRgbOrBlack } from "./draw_utils.js";
 
 /**

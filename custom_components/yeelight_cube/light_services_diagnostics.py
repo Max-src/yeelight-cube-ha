@@ -621,7 +621,7 @@ def async_register_diagnostics_services(hass: HomeAssistant) -> None:
         "test_display",
         handle_test_display,
         schema=vol.Schema({
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_4_102)"): _entity_id_or_list,
+            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
         }),
         supports_response=False
     )

@@ -10,13 +10,15 @@ import {
   getTargetEntities,
 } from "./service-call-utils.js";
 import { rgbToHex } from "./color-utils.js";
+import { CALL_TIMEOUT_MS, withCallTimeout } from "./card-command-controller.js";
 
 const ANGLE_UPDATE_DEBOUNCE_MS = 150;
 
 export class AngleCommandController {
-  constructor(onApplied = () => {}, onError = () => {}) {
+  constructor(onApplied = () => {}, onError = () => {}, timeoutMs = CALL_TIMEOUT_MS) {
     this.onApplied = onApplied;
     this.onError = onError;
+    this.timeoutMs = timeoutMs;
     this.context = 0;
     this.timer = null;
     this.pending = null;
@@ -51,11 +53,17 @@ export class AngleCommandController {
         this.pending = null;
         if (command.context !== this.context) continue;
         try {
-          await callServiceOnTargetEntities(
-            command.hass,
-            command.config,
+          // One unanswered call must not keep `sending` set and drop
+          // every later angle.
+          await withCallTimeout(
+            callServiceOnTargetEntities(
+              command.hass,
+              command.config,
+              "set_angle",
+              { angle: command.angle },
+            ),
             "set_angle",
-            { angle: command.angle },
+            this.timeoutMs,
           );
           if (command.context === this.context) this.onApplied(command.angle);
         } catch (error) {

@@ -11,7 +11,7 @@ import {
   APPEARANCE_PRESETS,
 } from "./preview-appearance.js";
 // ============================================================================
-//  Yeelight Cube Lite — Clock Card
+//  Yeelight Cube — Clock Card
 // ============================================================================
 //
 // Select, configure and visualise the lamp's clock: pick a clock style from
@@ -270,16 +270,6 @@ class YeelightCubeClockCard extends ClockPreviewMixin(YeelightCardMixin(LitEleme
       show_active_label: true,
       ...resolveClockAppearance(cfg),
     };
-    // Custom color moved from its own section into the color-mode selector;
-    // surface it for configs that only enabled the old override control.
-    if (this.config.show_color_override) this.config.show_color_modes = true;
-    delete this.config.show_color_override;
-    // One save button split into per-kind toggles; keep old "hidden" intent.
-    if (this.config.show_save_preset_button === false) {
-      this.config.show_save_color_mode_button ??= false;
-      this.config.show_save_clock_style_button ??= false;
-    }
-    delete this.config.show_save_preset_button;
     this._controls ||= new ModeControlsController(createClockCardAdapter(this));
     // The gallery shows the favourites' stars (it follows _controls).
     this._controls.configure(this.config, this._targets);
@@ -1378,7 +1368,7 @@ registerCustomCard({
   type: "yeelight-cube-clock-card",
   name: "Yeelight Cube Clock Card",
   description:
-    "Select, configure and visualise the Cube Lite's built-in clock: styles, content, format and color.",
+    "Select, configure and visualise the lamp's built-in clock: styles, content, format and color.",
   preview: true,
   documentationURL: "https://github.com/Max-src/yeelight-cube-ha",
 });

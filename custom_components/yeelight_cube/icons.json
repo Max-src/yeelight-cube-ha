@@ -201,18 +201,6 @@
         }
     },
     "services": {
-        "add_managed_device": {
-            "service": "mdi:plus-network"
-        },
-        "remove_managed_device": {
-            "service": "mdi:minus-network"
-        },
-        "is_device_managed": {
-            "service": "mdi:help-network"
-        },
-        "list_managed_devices": {
-            "service": "mdi:format-list-bulleted"
-        },
         "test_device_detection": {
             "service": "mdi:radar"
         },

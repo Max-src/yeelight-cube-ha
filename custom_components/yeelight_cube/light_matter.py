@@ -38,7 +38,7 @@ from .matter_commands import (
     MatterCommands,
 )
 from .matter_discovery import async_offer_matter_lamps
-from .matter_link import MATRIX_REPORTED, ROTATION_ORIENTATIONS, MatterLink
+from .matter_link import MATRIX_REPORTED, MatterLink
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ async def lamp_answers(ip: str) -> bool:
 MATTER_ECHO_WINDOW = 5.0
 # The effect the lamp reports while this integration draws on it (its direct
 # mode: text, gradients, drawings), seen on a Cube Lite.
-DRAWING_EFFECT = 50
+LITE_DIRECT_MODE_EFFECT = 50
 
 # The effect the lamp reports (the Yeelight app's effect id: its button
 # playlist and effect list) -> the official native effect it is. The
@@ -73,8 +73,9 @@ NATIVE_EFFECT_IDS: dict[int, str] = {
 # Right as Remote, with Matter settings: every slot of the lamp's playlist
 # (the right button steps through it) is an all-black drawing, custom ids
 # REMOTE_SLOT_BASE + slot, so a press shows black, not an effect, and is told
-# apart from the Yeelight app by its custom id (verified on a Cube Lite:
-# the lamp reports the slot's custom id on every press).
+# apart from the Yeelight app by its custom id (a Cube Lite reports the
+# slot's custom id on every press). 36 is the lamp's drawing effect, the
+# same id a Cube Matrix draws with (matrix_effects.MATRIX_DRAWING_EFFECT).
 REMOTE_DRAWING_EFFECT = 36
 REMOTE_SLOT_BASE = 1000
 REMOTE_SLOTS = range(REMOTE_SLOT_BASE, REMOTE_SLOT_BASE + 8)
@@ -91,8 +92,8 @@ EXTERNAL_DRAWING_WAIT = 0.25
 # (_app_content_command), told by its custom id or its
 # colour: its clock (the style, the integration's styles
 # 1-14), its animations (the app's tile; the lamp plays the GIF it stores),
-# its built-in pixel art, and its plain colour (effect 0, live test
-# 2026-10-27: the colour is Color Control's hue and saturation). Its own
+# its built-in pixel art, and its plain colour (effect 0: the colour is
+# Color Control's hue and saturation). Its own
 # drawings carry a Yeelight cloud id: their pixels cannot be read back.
 APP_COLOUR_EFFECT = 0
 APP_GIF_EFFECT = 71
@@ -121,11 +122,6 @@ LAMP_START_DEFAULTS_SECONDS = 10.0
 # Seconds a direction write may take before the orientation change goes on
 # without it (the lamp keeps its direction).
 ROTATION_WRITE_TIMEOUT = 10.0
-
-# The lamp's own direction setting for a Device Orientation (same arrows).
-ORIENTATION_ROTATIONS: dict[str, int] = {
-    orientation: rotation for rotation, orientation in ROTATION_ORIENTATIONS.items()
-}
 
 
 class MatterMixin:
@@ -209,7 +205,7 @@ class MatterMixin:
         else:
             self._matter = MatterLink(self.hass, self._on_matter_report)
         self.async_on_remove(self._matter.release)
-        self._matter_commands = MatterCommands(self.hass, self._matter, lambda: self._ip)
+        self._matter_commands = MatterCommands(self._matter)
         self._refresh_matter_link()
 
     @callback
@@ -240,8 +236,8 @@ class MatterMixin:
         self._matter_status_changed()
 
     def _follow_matter_address(self, entry, remembered: str | None) -> bool:
-        """The lamp may have a new address (DHCP, no reservation: seen on a
-        Cube Matrix overnight): its node, found by the remembered MAC,
+        """The lamp may have a new address (DHCP, no reservation, as a
+        Cube Matrix can get): its node, found by the remembered MAC,
         reports another usable one (matter_link.usable_address). The entry
         takes it only once checked (_async_follow_address): a server's cached
         address can be stale, and a node reports 0.0.0.0 after a power-on.
@@ -394,13 +390,13 @@ class MatterMixin:
 
     def _expected_effect(self) -> int | None:
         """The effect a Cube Lite reports for the light's state: Music Flow's,
-        the native effect's, the clock command's outer id, or DRAWING_EFFECT
+        the native effect's, the clock command's outer id, or LITE_DIRECT_MODE_EFFECT
         when this integration draws (a streamed palette effect or clock too); the Yeelight app's content's when it is
-        shown again (_replay_app_content); while off, DRAWING_EFFECT (the
+        shown again (_replay_app_content); while off, LITE_DIRECT_MODE_EFFECT (the
         black picture that keeps a lamp powered, light._internal_turn_off);
         None when unknown."""
         # What this integration draws goes in direct mode (over the LAN).
-        drawn = DRAWING_EFFECT
+        drawn = LITE_DIRECT_MODE_EFFECT
         if not self._is_on:
             return drawn
         if self._external_display:
@@ -496,12 +492,12 @@ class MatterMixin:
 
     def _shows_own_drawing_report(self, effect_id: int) -> bool:
         """Whether a reported effect is the drawing this integration keeps
-        the lamp in (DRAWING_EFFECT: a stream, a picture, the black picture
+        the lamp in (LITE_DIRECT_MODE_EFFECT: a stream, a picture, the black picture
         of an "off"), whenever it is reported: frames are no commands, so a
         stream opens no echo window, and the Matter server reports every
         value again when it subscribes anew (a lamp it lost for a while).
         Such a report is the lamp still showing it, never another app."""
-        return effect_id == DRAWING_EFFECT and self._expected_effect() == DRAWING_EFFECT
+        return effect_id == LITE_DIRECT_MODE_EFFECT and self._expected_effect() == LITE_DIRECT_MODE_EFFECT
 
     def _lamp_restarted(self) -> None:
         """The lamp's network chip started again (Matter RebootCount up): a
@@ -682,7 +678,7 @@ class MatterMixin:
         """The lamp switched to effect ``effect_id`` by itself (a button, the
         app): an event, then followed, or put back (Right as Remote)."""
         music = MUSIC_FLOW_EFFECT_IDS.get(effect_id)
-        if effect_id != DRAWING_EFFECT:
+        if effect_id != LITE_DIRECT_MODE_EFFECT:
             if music is not None:
                 self._lamp_event("music_mode_changed", {"mode": music})
             else:

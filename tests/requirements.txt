@@ -1,0 +1,7 @@
+# The packages of the Python tests and lint in CI (.github/workflows/tests.yaml).
+# ruff pinned so lint does not change under us (Dependabot proposes updates:
+# .github/dependabot.yml). Pillow renders the camera previews; PyYAML reads
+# services.yaml in the tests.
+pillow
+pyyaml
+ruff==0.17.1

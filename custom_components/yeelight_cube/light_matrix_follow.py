@@ -300,11 +300,11 @@ class MatrixFollowMixin:
     def _matrix_rotated(self, rotation, *, start: bool = False) -> None:
         """The lamp's rotation_angle (the Yeelight app's direction), reported
         or read at setup (``start``): the mounting it names is the light's
-        Device Orientation (device_profile.MATRIX_ROTATION_ORIENTATIONS), so
+        Device Orientation (mount_profile.MATRIX_ROTATION_ORIENTATIONS), so
         pictures, text and the previews are laid out for it as the lamp's own
         effects are."""
         profile = self._lamp_client.profile
-        if not isinstance(rotation, int) or not 0 <= rotation <= 3:
+        if not isinstance(rotation, int) or isinstance(rotation, bool) or not 0 <= rotation <= 3:
             return
         self.matrix_note_rotation(rotation)
         if rotation == profile.rotation and not start:
@@ -351,7 +351,12 @@ class MatrixFollowMixin:
         async def restore() -> None:
             if orientation != self._device_orientation:
                 await self.set_device_orientation(orientation)
-            elif await self._sync_lamp_rotation(orientation, force=True):
+                return
+            async with self._rotation_lock():
+                if orientation != self._device_orientation:
+                    return  # another choice came meanwhile (it writes its own)
+                written = await self._sync_lamp_rotation(orientation, force=True)
+            if written:
                 self._lamp_client.profile = dataclasses.replace(self._lamp_client.profile, rotation=rotation)
 
         self._create_tracked_task(restore(), name=f"yeelight_cube_matrix_rotation_restore_{self._ip}")

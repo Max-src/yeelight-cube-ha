@@ -684,6 +684,10 @@ function frameOrder(length) {
 const FRAME_ORDER = frameOrder(LENGTH);
 const pixelMaps = new Map();
 const placements = new Map();
+// The most maps (pixelMaps) and tables (blends, towards) kept: past it they
+// start again (as colourMemo), each drawn again the same when next asked for.
+const MAPS_LIMIT = 256;
+const TABLES_LIMIT = 4096;
 
 /** Logical pixel -> panel index, for every pixel of a segment of `length`. */
 export function pixelMap(direction, profile = REFERENCE_PROFILE, length = LENGTH) {
@@ -693,6 +697,7 @@ export function pixelMap(direction, profile = REFERENCE_PROFILE, length = LENGTH
     out = Uint16Array.from({ length }, (_, pixel) =>
       mapperIndex(pixel, length, direction, profile),
     );
+    if (pixelMaps.size >= MAPS_LIMIT) pixelMaps.clear();
     pixelMaps.set(key, out);
   }
   return out;
@@ -846,6 +851,7 @@ function blendTable(amount, target) {
     table = Uint8Array.from({ length: 256 }, (_, value) =>
       amount === 255 ? target : (value * (255 - amount) + target * amount) >> 8,
     );
+    if (blends.size >= TABLES_LIMIT) blends.clear();
     blends.set(key, table);
   }
   return table;
@@ -965,6 +971,7 @@ function towardsTable(amount, target) {
       const gap = target - value;
       return (value + Math.sign(gap) + Math.trunc(f32(f32(gap) / divisor))) & 255;
     });
+    if (towards.size >= TABLES_LIMIT) towards.clear();
     towards.set(key, table);
   }
   return table;

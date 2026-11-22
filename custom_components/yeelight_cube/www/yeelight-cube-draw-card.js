@@ -376,6 +376,19 @@ class YeelightCubeDrawCard extends PixelArtActionsMixin(
   disconnectedCallback() {
     super.disconnectedCallback();
     this._pixelArtStore.reset();
+    // Late results of this connection are dropped (as the other cards).
+    this._commands.reset();
+    // A stroke in progress ends with the card (Home Assistant moves cards in
+    // the page, edit mode): its batched repaint is done now instead, and the
+    // drawing is written at once.
+    if (this._pendingDrawUpdate) {
+      cancelAnimationFrame(this._pendingDrawUpdate);
+      this._pendingDrawUpdate = null;
+      this.requestUpdate();
+    }
+    this._drawingActive = false;
+    this.isDrawing = false;
+    StorageUtils.flushMatrix();
 
     // Clear pending timers
     if (this._applyPixelArtTimer) {
@@ -994,6 +1007,6 @@ registerCustomCard({
     type: "yeelight-cube-draw-card",
     name: "Yeelight Draw Card",
     description:
-      "Draw pixel art and control your Yeelight Cube Lite matrix display.",
+      "Draw pixel art and control your Yeelight Cube matrix display.",
     preview: true,
   });

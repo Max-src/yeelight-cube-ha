@@ -10,6 +10,7 @@ import unittest
 
 import fakes
 from fakes import FakeEntry, FakeHass, make_light, module, run
+from virtual_clock import run_on_virtual_clock
 from tests.test_matter_link import CUBE_ATTRIBUTES, LAMP_IP, LINK, FakeClient, hass_with, node
 
 fakes.install_stubs()
@@ -91,7 +92,9 @@ class StreamThroughResubscribeTests(unittest.TestCase):
             self.assertGreater(frames(light), before)
             await stop(light)
 
-        run(scenario())
+        # 1.5 s on a virtual clock (virtual_clock.py): well past any wait
+        # before a take-over (EXTERNAL_DRAWING_WAIT), without waiting.
+        run_on_virtual_clock(scenario())
 
     def test_the_lamp_s_own_effect_still_takes_over(self):
         # A button or the app starting an effect of its own is followed:

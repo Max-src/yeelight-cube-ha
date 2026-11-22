@@ -64,16 +64,16 @@ export function createYeelightCubeEntityPicker(
   const selected = single ? selectedList.slice(0, 1) : selectedList;
   const unlisted = selected.filter((id) => !entities.includes(id));
   const header = html`<div class="yc-lamp-header">
-    Yeelight Cube Lite Entities (${entities.length})
+    Yeelight Cube Entities (${entities.length})
   </div>`;
 
   if (!entities.length && !unlisted.length)
     return html`<div class="yc-lamp-picker">
       ${header}
       <div class="yc-lamp-empty">
-        <div>No Yeelight Cube Lite entities found</div>
+        <div>No Yeelight Cube entities found</div>
         <div class="yc-lamp-empty-hint">
-          Make sure you have Yeelight Cube Lite devices configured in this
+          Make sure you have Yeelight Cube devices configured in this
           integration
         </div>
       </div>

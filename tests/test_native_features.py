@@ -583,7 +583,7 @@ class NativeFeatureTests(unittest.TestCase):
         init = module("__init__")
         hass = FakeHass()
         with patch.object(LIGHT_MODULE, "async_setup_light_services") as services, \
-                patch.object(init, "get_conflict_prevention"), \
+\
                 patch.object(init, "_schedule_dismiss_yeelight_discoveries"), \
                 patch.object(init, "async_setup_services"), \
                 patch.object(init, "_async_serve_card_files", AsyncMock()), \

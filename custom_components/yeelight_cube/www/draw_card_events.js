@@ -1,4 +1,4 @@
-// Event handler functions for Yeelight Cube Lite Draw Card
+// Event handler functions for Yeelight Cube Draw Card
 // Each function should be exported and receive the card instance as first argument if needed
 
 export function drawPixel(card, e, idx) {

@@ -16,7 +16,7 @@ shows these itself, smoothly, instead of a 5-frames-a-second LAN stream:
   drawing effect, the pixels changed in place.
 
 Everything else is still streamed (light_studio): over Matter too, as the
-drawing's pixels changed for every frame (filmed 2026-11-11: about 45 setData
+drawing's pixels changed for every frame (about 45 setData
 a second answered and nearly all shown, where the LAN shows at most ~6
 frames a second), so an effect in a color mode the lamp lacks runs as
 smoothly as its own. Everything is streamed over the LAN while Matter is not
@@ -53,7 +53,7 @@ from .effect_catalog import (
     PALETTE_COLOR_MODE,
     effect_direction_value,
 )
-from .device_profile import CUBEMATRIX, TOPOLOGY_SLOTS
+from .device_profile import CUBEMATRIX, TOPOLOGY_MATRIX, TOPOLOGY_SLOTS
 from .lamp_core import drawn_in_full, raw_colours
 from .lamp_renderers import palette_fits, palette_words
 from .lamp_studio import studio_render
@@ -68,7 +68,7 @@ from .matrix_effects import (
     CLOCK_BACKGROUNDS,
     CLOCK_STYLE_COLOURS,
     CLOCK_EFFECT,
-    DRAWING_EFFECT,
+    MATRIX_DRAWING_EFFECT,
     ENGINE_MODES,
     MATRIX_EFFECTS,
     ONE_AXIS_APP_EFFECTS,
@@ -113,7 +113,7 @@ MATTER_STREAM_FAILURES = 3
 # The longest a stream's frame waits for the lamp's acknowledgement over Matter
 # (s): its new pixels, and the drawing started (setEffect). A lamp whose
 # network part restarts mid-stream left one setData unanswered for 38 s
-# (2026-11-16 night, filmed: the picture held 20 s); meanwhile the frame held
+# (the picture held 20 s); meanwhile the frame held
 # the lamp's lock, so every other command waited. A frame that takes longer
 # counts as failed (MATTER_STREAM_FAILURES).
 MATTER_FRAME_TIMEOUT = 2.0
@@ -129,13 +129,12 @@ MATTER_RETRY_MOST = 30 * 60.0
 MATTER_RETRY_LEAST = 10.0
 # The wait for a Cube Lite's answer to getPersistEffectList over Matter
 # (matter_controller_check): a healthy lamp answers within ~0.25 s, a stuck one
-# "Failure" within ~0.6 s (2026-11-16 night, both lamps, 10 stuck episodes).
+# "Failure" within ~0.6 s.
 CONTROLLER_CHECK_TIMEOUT = 3.0
 # How often the demo mode is read again over the LAN (s).
 DEMO_READ_INTERVAL = 30 * 60
-# The clock needs this many Matrix modules (topology type 2).
+# The clock needs this many Matrix modules (topology type 2, TOPOLOGY_MATRIX).
 CLOCK_MODULES = 4
-MATRIX_MODULE = 2
 
 
 def _sent_effect_id(name: str, payload: dict) -> int | None:
@@ -311,13 +310,12 @@ class MatrixMixin:
         """The direction value an effect is sent: the chosen one (or the
         effect's first). Not turned for the mounting: the Device Orientation
         follows the lamp's rotation, and the lamp turns its own effects for
-        it. The Yeelight app's effects take the values filmed for them
+        it. The Yeelight app's effects take their own values
         (matrix_effects.matrix_direction). The other built-in effects run a
         Cube Lite's renderers on the same panel layout: they are sent the
         value that draws what a Cube Lite draws for the same Device
-        Orientation (and the preview shows), at the lamp's rotation (filmed
-        2026-11-12: every effect confirmed on both lamps draws the same value
-        on both). The effects that run along one line of the lamp whatever
+        Orientation (and the preview shows), at the lamp's rotation (every
+        effect checked on both lamps draws the same value on both). The effects that run along one line of the lamp whatever
         its rotation (ONE_AXIS_MODES, ONE_AXIS_APP_EFFECTS) get that line's
         value, as on a Cube Lite. None: the effect takes none."""
         spec = ALL_NATIVE_EFFECTS.get(effect) or {}
@@ -372,7 +370,7 @@ class MatrixMixin:
 
     def _matrix_clock_command(self) -> tuple[str, dict] | None:
         types = self.device_profile.module_types
-        if sum(1 for kind in types if kind == MATRIX_MODULE) < CLOCK_MODULES:
+        if sum(1 for kind in types if kind == TOPOLOGY_MATRIX) < CLOCK_MODULES:
             return None  # the lamp draws its digits on Matrix modules only
         style_id = int(self._native_clock_style)
         style = self._clock_style()
@@ -463,9 +461,9 @@ class MatrixMixin:
         """A Cube Matrix's brightness (``level``: set_bright's 1-100 %): over
         Matter when a server delivers its commands (Level Control, as the
         Yeelight app's slider: the lamp's own effects, clock and drawings
-        dim alike, filmed 2026-11-12), so it never depends on the lamp's LAN,
-        which can stop reading commands while Matter goes on (2026-11-11 and
-        12: every TCP connection reset, the slider did nothing). Else, or
+        dim alike), so it never depends on the lamp's LAN, which can stop
+        reading commands while Matter goes on (every TCP connection reset,
+        the slider doing nothing). Else, or
         when that fails, set_bright over the LAN (TCP, ``udp`` False: on the
         music connection it would open it again)."""
         channel = self._matter_commands
@@ -582,7 +580,7 @@ class MatrixMixin:
     def _matrix_drawing_shown(self) -> bool:
         """The lamp shows this integration's drawing (always still)."""
         shown = self._matrix_shown
-        return shown is not None and shown[1].get("effect", {}).get("effectId") == DRAWING_EFFECT
+        return shown is not None and shown[1].get("effect", {}).get("effectId") == MATRIX_DRAWING_EFFECT
 
     def draws_over_matter(self) -> bool:
         """Whether what Home Assistant draws (light_display.apply's pictures,
@@ -606,7 +604,7 @@ class MatrixMixin:
             await self._leave_matrix_clock(name, payload)
         await self._set_matrix_brightness()
         self._matrix_command_at = time.monotonic()
-        self._matrix_sent_id = DRAWING_EFFECT
+        self._matrix_sent_id = MATRIX_DRAWING_EFFECT
         try:
             await asyncio.wait_for(
                 self._matter_commands.async_command(EFFECTS_CLUSTER, name, payload), limit,
@@ -635,9 +633,8 @@ class MatrixMixin:
         the LEDs, and answers "Failure" when it does not). "answers",
         "stuck" (the network part answers, the LED part does not: a power
         cycle helps), "no answer" (the network part does not answer: it
-        restarts, or is off the network); None without Matter. Filmed and
-        logged 2026-11-16 night: every stuck lamp answered "Failure" in
-        ~0.6 s, every working one answered in ~0.1-0.25 s. Only after a LAN
+        restarts, or is off the network); None without Matter. A stuck lamp
+        answers "Failure" in ~0.6 s, a working one answers in ~0.1-0.25 s. Only after a LAN
         check went unanswered: it is not polled."""
         if self.is_cube_matrix or not self.device_profile.matter:
             return None
@@ -696,7 +693,7 @@ class MatrixMixin:
                 payload = drawing_payload(pixels, APPLY_SHOW)
                 await self._leave_matrix_clock("setEffect", payload)
                 await self._set_matrix_brightness()
-                self._matrix_sent_id = DRAWING_EFFECT
+                self._matrix_sent_id = MATRIX_DRAWING_EFFECT
                 self._matrix_command_at = time.monotonic()
                 await asyncio.wait_for(
                     self._matter_commands.async_command(EFFECTS_CLUSTER, "setEffect", payload),
