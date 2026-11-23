@@ -21,6 +21,8 @@ import {
 } from "./lamp-renderers.js";
 import { ANIMATION_EFFECTS, animationFrame, isAnimation } from "./lamp-animation-frames.js";
 import { frameWidthFor } from "./lamp-core.js";
+import { hsvToRgb } from "./color-adjustments.js";
+import { clampByte } from "./color-utils.js";
 import {
   effectOffersColorMode,
   studioPalette,
@@ -43,63 +45,23 @@ export const PREVIEW_COLS = 20;
 export const PREVIEW_ROWS = 5;
 const TAU = Math.PI * 2;
 
-function clamp(value) {
-  return Math.max(0, Math.min(255, Math.round(value)));
-}
-
 function rgb(red, green, blue, level = 1.0) {
-  return [clamp(red * level), clamp(green * level), clamp(blue * level)];
+  return [clampByte(red * level), clampByte(green * level), clampByte(blue * level)];
 }
 
-// HSV (0..1 hue/sat/val) -> [r,g,b] 0..255. Matches Python colorsys.hsv_to_rgb.
+// HSV (0..1 hue/sat/val, the hue wrapped) -> [r,g,b] 0..255, as
+// native_effect_preview.py _hsv.
 function hsv(hue, saturation = 1.0, value = 1.0) {
-  hue = ((hue % 1) + 1) % 1;
-  const i = Math.floor(hue * 6);
-  const f = hue * 6 - i;
-  const p = value * (1 - saturation);
-  const q = value * (1 - f * saturation);
-  const t = value * (1 - (1 - f) * saturation);
-  let r;
-  let g;
-  let b;
-  switch (i % 6) {
-    case 0:
-      r = value;
-      g = t;
-      b = p;
-      break;
-    case 1:
-      r = q;
-      g = value;
-      b = p;
-      break;
-    case 2:
-      r = p;
-      g = value;
-      b = t;
-      break;
-    case 3:
-      r = p;
-      g = q;
-      b = value;
-      break;
-    case 4:
-      r = t;
-      g = p;
-      b = value;
-      break;
-    default:
-      r = value;
-      g = p;
-      b = q;
-      break;
-  }
+  const [r, g, b] = hsvToRgb(((hue % 1) + 1) % 1, saturation, value);
   return rgb(r * 255, g * 255, b * 255);
 }
 
-// The preview speed: phase advances 0.25 + speed / 55 per second (camera.py,
-// the cards); the lamp's default when a caller gives none.
+// The preview speed: the lamp's default when a caller gives none.
 export const DEFAULT_PREVIEW_SPEED = DEFAULT_EFFECT_SPEED;
+
+/** The phase units a preview advances per second at `speed`: its phase is
+ * seconds x this (native_effect_preview.py preview_rate). */
+export const previewRate = (speed) => 0.25 + speed / 55;
 
 // Effects (and clock-style backgrounds of the same name) whose renderer on
 // the lamp honours the freeze-frame command (mode 64 for native effects, the
@@ -158,7 +120,7 @@ export function renderNativeEffect(
   columns = null,
 ) {
   const rate = speed ?? DEFAULT_PREVIEW_SPEED;
-  const seconds = phase / (0.25 + rate / 55);
+  const seconds = phase / previewRate(rate);
   // Palette beyond what the lamp takes: drawn by Home Assistant in the whole
   // palette and streamed; what the lamp shows of it (lamp-studio.js).
   if (studioRuns(effect, colorMode, palette))

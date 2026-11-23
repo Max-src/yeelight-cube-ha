@@ -53,8 +53,8 @@ class _ClosedIsAnError:
     only an error for the end: on a connection closed cleanly every read
     returns nothing at once, and it read forever, a thread spinning and the
     lamp's commands waiting on it for good (a Cube Matrix whose LAN is stuck
-    accepts every connection and closes it, issues matrix_lan_stuck; on
-    2026-11-14 its setup never finished)."""
+    accepts every connection and closes it, issues matrix_lan_stuck: its
+    setup would never finish)."""
 
     __slots__ = ("_sock",)
 
@@ -79,6 +79,17 @@ if isinstance(_LIBRARY_SOCKET, property):
 
         @property
         def _socket(self):
+            if library_socket(self) is None:
+                # Connected here, within the component's time (_timeout,
+                # CONNECT_TIMEOUT): the library connects with 5 s whatever
+                # it is given. Kept before connecting, as the library does:
+                # on a failure it closes and forgets it (a BulbException).
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(getattr(self, "_timeout", None) or 5)
+                guarded = _ClosedIsAnError(sock)
+                set_library_socket(self, guarded)
+                sock.connect((self._ip, self._port))
+                return guarded
             sock = _LIBRARY_SOCKET.fget(self)
             if not isinstance(sock, _ClosedIsAnError):
                 # The answer is waited for as long as the component asks

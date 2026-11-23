@@ -84,50 +84,6 @@ export class AngleCommandController {
 }
 
 /**
- * Create SVG pie-slice segments for a color wheel.
- * @param {Array<Array<number>>} colors - Array of [r,g,b] arrays
- * @param {number} radius - Radius of the wheel
- * @returns {string} SVG markup string
- */
-export function createColorWheelSegments(colors, radius) {
-  if (!colors || colors.length === 0) {
-    return `<circle cx="50" cy="50" r="${radius}" fill="#ff0000"/>`;
-  }
-
-  if (colors.length === 1) {
-    const hex = rgbToHex(colors[0]);
-    return `<circle cx="50" cy="50" r="${radius}" fill="${hex}"/>`;
-  }
-
-  const segments = [];
-  const anglePerSegment = 360 / colors.length;
-
-  for (let i = 0; i < colors.length; i++) {
-    const startAngle = (i * anglePerSegment - 90) * (Math.PI / 180);
-    const endAngle = ((i + 1) * anglePerSegment - 90) * (Math.PI / 180);
-
-    const x1 = 50 + radius * Math.cos(startAngle);
-    const y1 = 50 + radius * Math.sin(startAngle);
-    const x2 = 50 + radius * Math.cos(endAngle);
-    const y2 = 50 + radius * Math.sin(endAngle);
-
-    const largeArcFlag = anglePerSegment > 180 ? 1 : 0;
-    const hex = rgbToHex(colors[i]);
-
-    const pathData = [
-      `M 50 50`,
-      `L ${x1} ${y1}`,
-      `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
-      `Z`,
-    ].join(" ");
-
-    segments.push(`<path d="${pathData}" fill="${hex}"/>`);
-  }
-
-  return segments.join("\n                ");
-}
-
-/**
  * Create SVG linear gradient stops for a wheel-style display.
  * @param {Array<Array<number>>} colors - Array of [r,g,b] arrays
  * @returns {string} SVG stop elements markup

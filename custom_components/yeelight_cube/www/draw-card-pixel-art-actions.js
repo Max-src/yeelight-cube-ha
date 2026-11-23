@@ -9,8 +9,26 @@ import { pixelArtCells } from "./pixel-art-utils.js";
 import { rgbToHex } from "./color-utils.js";
 import { isVerticalArt } from "./matrix-view.js";
 import { StorageUtils } from "./draw_card_storage.js";
+import {
+  ImportStatus,
+  JsonFileTooLargeError,
+  downloadJson,
+  pickJsonFile,
+  readJsonFile,
+} from "./json-file-transfer.js";
+
+// The largest pixel-art file imported. An export is about 11 KB per 20 x 5
+// art and 23 KB per 40 x 5 one: a full collection (500, the backend's limit)
+// of the longest is about 11.5 MB.
+export const MAX_PIXEL_ART_IMPORT_BYTES = 16 * 1024 * 1024;
 
 export const PixelArtActionsMixin = (Base) => class extends Base {
+  constructor(...args) {
+    super(...args);
+    // The import button's status (renderExportImportRow).
+    this._importStatus = new ImportStatus(this);
+  }
+
   // A saved pixel art picked in the gallery: loaded, and sent to the lamp
   // with "Apply to lamp automatically" (named, so the lamp's Pixel Art
   // select shows it).
@@ -86,7 +104,6 @@ export const PixelArtActionsMixin = (Base) => class extends Base {
     await store.fetch(this.hass, sensor, (items) =>
       items.some((art) => JSON.stringify(art) === expected),
     );
-    window.dispatchEvent(new Event("pixelart-saved"));
     return true;
   }
 
@@ -189,7 +206,7 @@ export const PixelArtActionsMixin = (Base) => class extends Base {
     );
   }
 
-  async _exportPixelArts() {
+  _exportPixelArts() {
     const cfg = this.config || {};
     const pixelartSensor = cfg.pixelart_sensor;
 
@@ -198,34 +215,14 @@ export const PixelArtActionsMixin = (Base) => class extends Base {
       return;
     }
 
-    const pixelArts = this._pixelArts();
-
-    const json = JSON.stringify(pixelArts, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "yeelight_pixel_arts.json";
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
+    downloadJson(this._pixelArts(), "yeelight_pixel_arts.json");
   }
 
   _triggerImportFile() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json,application/json";
-    input.addEventListener("change", (e) => this._importPixelArts(e));
-    input.click();
+    pickJsonFile((file) => this._importPixelArts(file));
   }
 
-  async _importPixelArts(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-
+  async _importPixelArts(file) {
     const cfg = this.config || {};
     const pixelartSensor = cfg.pixelart_sensor;
 
@@ -235,8 +232,7 @@ export const PixelArtActionsMixin = (Base) => class extends Base {
     }
 
     try {
-      const text = await file.text();
-      const imported = JSON.parse(text);
+      const imported = await readJsonFile(file, MAX_PIXEL_ART_IMPORT_BYTES);
 
       if (!Array.isArray(imported)) {
         throw new Error("Invalid format: Expected an array of pixel arts");
@@ -259,41 +255,20 @@ export const PixelArtActionsMixin = (Base) => class extends Base {
 
       await this._refreshEntity(pixelartSensor);
 
-      window.dispatchEvent(new Event("pixelart-saved"));
       this._showImportStatus("success");
     } catch (err) {
       console.error("[draw-card] Import failed:", err);
       this._showImportStatus("error");
       // Invalid files and collection conflicts are not reported by HA.
-      notifyUnreported(
-        this,
-        err,
-        err instanceof SyntaxError ? "Invalid pixel art file." : undefined,
-      );
-    }
-
-    // Clear the file input safely
-    try {
-      if (e.target) {
-        e.target.value = "";
-      }
-    } catch (clearErr) {
-      console.warn("[draw-card] Could not clear file input:", clearErr);
+      let message;
+      if (err instanceof SyntaxError) message = "Invalid pixel art file.";
+      else if (err instanceof JsonFileTooLargeError)
+        message = "This pixel art file is too large to import.";
+      notifyUnreported(this, err, message);
     }
   }
 
   _showImportStatus(type) {
-    // Set import status for button display
-    this._importStatus = { showing: true, type };
-    this.requestUpdate();
-
-    // Clear status after delay
-    setTimeout(
-      () => {
-        this._importStatus = { showing: false, type: null };
-        this.requestUpdate();
-      },
-      type === "success" ? 2000 : 4000,
-    );
+    this._importStatus.set(type, type === "success" ? 2000 : 4000);
   }
 };

@@ -37,6 +37,7 @@ from .effect_catalog import (
     DEFAULT_ANIMATION_LAYOUT,
 )
 from .runtime_data import lamp_of
+from .storage import COLLECTION_EVENTS
 from .entity import CubeControlEntity, remove_retired_entities
 from .builtin_pixel_art import find_pixel_art, get_builtin_pixel_art_map
 from .layout import FONT_MAPS
@@ -48,14 +49,16 @@ _LOGGER = logging.getLogger(__name__)
 # previous one (the device lock, light_connection._execute_hardware_op).
 PARALLEL_UPDATES = 0
 
+# The palette dropdown's only option while no palette is saved.
+NO_PALETTES = "No palettes available"
+
 
 class CubeSelect(CubeControlEntity, SelectEntity):
-    """A dropdown of one lamp. It listens to the light's ``_topic`` (light_state):
-    every change made elsewhere comes through async_update_from_light, so it never
-    polls. Named by its translation key, after the lamp's name."""
+    """A dropdown of one lamp. It listens to the light's ``_topic``
+    (CubeControlEntity), so it never polls. Named by its translation key,
+    after the lamp's name."""
 
     _attr_should_poll = False
-    _topic = None
 
     def __init__(self, light_entity, config_entry: ConfigEntry, unique_suffix: str, translation_key: str | None = None):
         self._light_entity = light_entity
@@ -63,30 +66,6 @@ class CubeSelect(CubeControlEntity, SelectEntity):
         self._attr_unique_id = f"{light_entity.unique_id}_{unique_suffix}"
         if translation_key:
             self._attr_translation_key = translation_key
-
-    @callback
-    def async_update_from_light(self):
-        if self.hass is not None:
-            self.async_write_ha_state()
-
-    def _write_states(self):
-        """Publish this dropdown and the lamp."""
-        if self.hass is not None:
-            self.async_write_ha_state()
-        if self._light_entity.hass is not None:
-            self._light_entity.async_write_ha_state()
-
-    async def async_added_to_hass(self):
-        await super().async_added_to_hass()
-        if self._topic:
-            self._listen_to_light(self._topic)
-        self.async_update_from_light()
-
-    @callback
-    def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
-        super().async_entity_id_changed(old_entity_id)
 
 
 @dataclass(frozen=True)
@@ -178,7 +157,7 @@ class CubeSettingSelect(CubeSelect):
     async def async_select_option(self, option: str) -> None:
         value = self._values.get(option)
         if value is None:
-            raise ValueError(f"Unknown option: {option}")
+            raise invalid("unknown_option", option=option)
         if self._spec.setter:
             await getattr(self._light_entity, self._spec.setter)(value)
         else:
@@ -254,71 +233,87 @@ async def async_setup_entry(
     return True
 
 
-class YeelightCubePaletteSelect(CubeSelect):
-    """Select entity for choosing a palette to apply to the Yeelight Cube Lite."""
+class _CollectionSelect(CubeSelect):
+    """A dropdown of a saved collection (palettes, pixel arts): its names
+    (``_default_name`` and its position for one without), rebuilt on the
+    collection's event; a choice no longer listed is cleared."""
 
-    def __init__(self, light_entity, ip: str, config_entry: ConfigEntry, hass: HomeAssistant):
-        """Initialize the palette selector entity."""
-        super().__init__(light_entity, config_entry, "palette_select", "palette")
+    # Subclasses: the hass.data[DOMAIN] key (its event: COLLECTION_EVENTS)
+    # and the name of an item saved without one ("Palette 2"); their
+    # _update_options sets the options.
+    _collection_key: str
+    _default_name: str
+
+    def __init__(self, light_entity, ip: str, config_entry: ConfigEntry, hass: HomeAssistant,
+                 unique_suffix: str, translation_key: str):
+        super().__init__(light_entity, config_entry, unique_suffix, translation_key)
         self._ip = ip
         self._hass = hass
         self._attr_current_option = None
-
-        # Initialize options from current palettes
         self._update_options()
 
+    def _items(self) -> list:
+        return self._hass.data.get(DOMAIN, {}).get(self._collection_key, [])
+
+    def _names(self) -> list:
+        return [item.get("name", f"{self._default_name} {idx + 1}") for idx, item in enumerate(self._items())]
+
+    @callback
+    def async_update_from_collection(self) -> None:
+        """Rebuild the options (saved, deleted, renamed or imported items)."""
+        old_options = list(getattr(self, "_attr_options", []))
+        self._update_options()
+        if old_options != self._attr_options:
+            _LOGGER.debug("[%s SELECT] Options updated: %s -> %s",
+                          self._collection_key, len(old_options), len(self._attr_options))
+            # A selection no longer listed is cleared.
+            if self._attr_current_option and self._attr_current_option not in self._attr_options:
+                self._attr_current_option = None
+            if self.hass is not None:
+                self.async_write_ha_state()
+
+    async def async_added_to_hass(self):
+        """Registered with the light and synced by the base; follows the
+        collection's event (unsubscribed on removal)."""
+        await super().async_added_to_hass()
+        self.async_on_remove(self.hass.bus.async_listen(
+            f"{DOMAIN}_{COLLECTION_EVENTS[self._collection_key]}", self._handle_collection_update,
+        ))
+
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        super().async_entity_id_changed(old_entity_id)
+
+    async def _handle_collection_update(self, event):
+        self.async_update_from_collection()
+
+
+class YeelightCubePaletteSelect(_CollectionSelect):
+    """Select entity for choosing a palette to apply to the Yeelight Cube Lite."""
+
+    _collection_key = "palettes_v2"
+    _default_name = "Palette"
+
+    def __init__(self, light_entity, ip: str, config_entry: ConfigEntry, hass: HomeAssistant):
+        super().__init__(light_entity, ip, config_entry, hass, "palette_select", "palette")
+
     def _update_options(self):
-        """Update the options list from the palette sensor."""
-        if DOMAIN not in self._hass.data:
-            self._attr_options = ["No palettes available"]
-            return
-
-        palettes = self._hass.data[DOMAIN].get("palettes_v2", [])
-
-        if not palettes:
-            self._attr_options = ["No palettes available"]
-            return
-
-        # Extract palette names
-        palette_names = []
-        for idx, palette in enumerate(palettes):
-            name = palette.get("name", f"Palette {idx + 1}")
-            palette_names.append(name)
-
-        self._attr_options = palette_names
-        _LOGGER.debug("[PALETTE SELECT] Updated options: %s palettes", len(palette_names))
+        self._attr_options = self._names() or [NO_PALETTES]
 
     async def async_select_option(self, option: str) -> None:
         """Handle palette selection."""
         _LOGGER.debug("[PALETTE SELECT] User selected: '%s' for entity %s", option, self.entity_id)
-
-        # Get palettes from storage
         if DOMAIN not in self._hass.data:
-            _LOGGER.error("[PALETTE SELECT] No palette data in hass.data")
-            return
-
-        palettes = self._hass.data[DOMAIN].get("palettes_v2", [])
-
-        if option == "No palettes available":
-            _LOGGER.warning("[PALETTE SELECT] No palettes to apply")
-            return
-
-        # Find the palette index by name
-        palette_idx = None
-        for idx, palette in enumerate(palettes):
-            if palette.get("name", f"Palette {idx + 1}") == option:
-                palette_idx = idx
-                break
-
-        if palette_idx is None:
-            _LOGGER.error("[PALETTE SELECT] Palette '%s' not found in storage", option)
-            return
-
-        # Apply the palette to the light entity
-        palette = palettes[palette_idx]
-        if "colors" not in palette or not isinstance(palette["colors"], list):
-            _LOGGER.error("[PALETTE SELECT] Invalid palette format")
-            return
+            raise invalid("storage_not_ready")
+        if option == NO_PALETTES:
+            raise invalid("no_palettes")
+        palette = next(
+            (item for name, item in zip(self._names(), self._items()) if name == option), None
+        )
+        if palette is None:
+            raise invalid("palette_not_found", name=option)
+        if not isinstance(palette.get("colors"), list):
+            raise invalid("palette_no_colors", name=option)
 
         # The palette's colors for the text modes (the drawing is left).
         await self._light_entity.async_apply_palette_colors(palette["colors"])
@@ -328,81 +323,30 @@ class YeelightCubePaletteSelect(CubeSelect):
         self._attr_current_option = option
         self._write_states()
 
-    @callback
-    def async_update_from_palette_sensor(self):
-        """Update options when palettes change."""
-        old_options = self._attr_options.copy() if hasattr(self, '_attr_options') else []
-        self._update_options()
 
-        # If options changed, update state
-        if old_options != self._attr_options:
-            _LOGGER.debug("[PALETTE SELECT] Options updated: %s -> %s", len(old_options), len(self._attr_options))
-
-            # If current selection is no longer valid, clear it
-            if self._attr_current_option and self._attr_current_option not in self._attr_options:
-                self._attr_current_option = None
-                _LOGGER.debug("[PALETTE SELECT] Cleared invalid selection")
-
-            if self.hass is not None:
-                self.async_write_ha_state()
-
-    async def async_added_to_hass(self):
-        """Run when entity is added to hass."""
-        await super().async_added_to_hass()
-
-        # Listen for palette update events (unsubscribed automatically on removal)
-        self.async_on_remove(
-            self.hass.bus.async_listen(f"{DOMAIN}_palettes_updated", self._handle_palette_update)
-        )
-        _LOGGER.debug("[PALETTE SELECT] Registered for palette update events")
-
-    @callback
-    def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
-        super().async_entity_id_changed(old_entity_id)
-
-    async def _handle_palette_update(self, event):
-        """Handle palette update events."""
-        _LOGGER.debug("[PALETTE SELECT] Received palette update event")
-        self.async_update_from_palette_sensor()
-
-
-class YeelightCubePixelArtSelect(CubeSelect):
+class YeelightCubePixelArtSelect(_CollectionSelect):
     """Select entity for choosing a saved pixel art to display on the Yeelight Cube Lite."""
 
     _topic = "pixel_art"
+    _collection_key = "pixel_arts"
+    _default_name = "Pixel Art"
 
     def __init__(self, light_entity, ip: str, config_entry: ConfigEntry, hass: HomeAssistant):
-        """Initialize the pixel art selector entity."""
-        super().__init__(light_entity, config_entry, "pixel_art_select", "pixel_art")
-        self._ip = ip
-        self._hass = hass
-        self._attr_current_option = None
-
-        # Initialize options from current pixel arts
-        self._update_options()
+        super().__init__(light_entity, ip, config_entry, hass, "pixel_art_select", "pixel_art")
 
     def _update_options(self):
         """Update options from user storage and the read-only app gallery."""
-        pixel_arts = self._hass.data.get(DOMAIN, {}).get("pixel_arts", [])
-
-        art_names = []
-        for idx, art in enumerate(pixel_arts):
-            name = art.get("name", f"Pixel Art {idx + 1}")
-            art_names.append(name)
-
-        self._attr_options = art_names + list(get_builtin_pixel_art_map())
-        _LOGGER.debug("[PIXEL ART SELECT] Updated options: %s pixel arts", len(art_names))
+        self._attr_options = self._names() + list(get_builtin_pixel_art_map())
 
     async def async_select_option(self, option: str) -> None:
         """Handle pixel art selection — apply the chosen pixel art to the lamp."""
         _LOGGER.debug("[PIXEL ART SELECT] User selected: '%s' for entity %s", option, self.entity_id)
 
-        art = find_pixel_art(self._hass.data.get(DOMAIN, {}).get("pixel_arts", []), option)
-        if not art or not isinstance(art.get("pixels"), list) or not art["pixels"]:
-            _LOGGER.error("[PIXEL ART SELECT] Pixel art '%s' not found or empty", option)
-            return
+        art = find_pixel_art(self._items(), option)
+        if not art:
+            raise invalid("pixel_art_not_found", name=option)
+        if not isinstance(art.get("pixels"), list) or not art["pixels"]:
+            raise invalid("pixel_art_empty", name=option)
         await self._light_entity.show_pixel_art(option, art["pixels"], width=pixel_art_width(art))
         _LOGGER.debug("[PIXEL ART SELECT] Applied pixel art '%s' to %s", option, self._ip)
 
@@ -425,45 +369,6 @@ class YeelightCubePixelArtSelect(CubeSelect):
         if self.hass is not None:
             self.async_write_ha_state()
 
-    @callback
-    def async_update_from_pixel_art_sensor(self):
-        """Update options when pixel arts change (add/delete/rename)."""
-        old_options = self._attr_options.copy() if hasattr(self, '_attr_options') else []
-        self._update_options()
-
-        if old_options != self._attr_options:
-            _LOGGER.debug("[PIXEL ART SELECT] Options updated: %s -> %s", len(old_options), len(self._attr_options))
-
-            # If current selection is no longer valid, clear it
-            if self._attr_current_option and self._attr_current_option not in self._attr_options:
-                self._attr_current_option = None
-                _LOGGER.debug("[PIXEL ART SELECT] Cleared invalid selection")
-
-            if self.hass is not None:
-                self.async_write_ha_state()
-
-    async def async_added_to_hass(self):
-        """Run when entity is added to hass (registered with the light and
-        synced by the base)."""
-        await super().async_added_to_hass()
-
-        # Listen for pixel art update events (unsubscribed automatically on removal)
-        self.async_on_remove(
-            self.hass.bus.async_listen(f"{DOMAIN}_pixel_arts_updated", self._handle_pixel_arts_update)
-        )
-        _LOGGER.debug("[PIXEL ART SELECT] Registered for pixel art update events, linked to %s", self._ip)
-
-    @callback
-    def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
-        super().async_entity_id_changed(old_entity_id)
-
-    async def _handle_pixel_arts_update(self, event):
-        """Handle pixel art update events (fired when arts are saved/deleted/imported)."""
-        _LOGGER.debug("[PIXEL ART SELECT] Received pixel arts update event")
-        self.async_update_from_pixel_art_sensor()
-
 
 class YeelightCubeContentModeSelect(CubeSelect):
     """Select the active content source: matrix or clock."""
@@ -481,8 +386,7 @@ class YeelightCubeContentModeSelect(CubeSelect):
 
     async def async_select_option(self, option: str) -> None:
         if option not in CONTENT_MODES:
-            _LOGGER.error("[CONTENT MODE] Invalid mode: %s", option)
-            return
+            raise invalid("unknown_option", option=option)
         await self._light_entity.async_select_content_mode(option)
 
 
@@ -509,8 +413,7 @@ class YeelightCubeDisplayModeSelect(CubeSelect):
         _LOGGER.debug("[MODE SELECT] User selected: '%s' for %s", option, self._light_entity.ip)
 
         if option not in MATRIX_DISPLAY_MODES:
-            _LOGGER.error("[MODE SELECT] Invalid mode: '%s'", option)
-            return
+            raise invalid("unknown_option", option=option)
         await self._light_entity.async_select_display_mode(option)
         self._write_states()
 
@@ -571,8 +474,7 @@ class YeelightCubeClockStyleSelect(CubeSelect):
         option = canonical_clock_style_name(option)
         style_id = _CLOCK_STYLE_TO_ID.get(option)
         if style_id is None:
-            _LOGGER.error("[CLOCK STYLE] Unknown option: '%s'", option)
-            return
+            raise invalid("unknown_clock_style", style=option)
 
         await self._light_entity.async_select_clock_style(style_id)
         self._write_states()
@@ -628,7 +530,7 @@ class YeelightCubeNativeEffectSelect(CubeSelect):
         # A former name (e.g. "Ocean Waves") is today's.
         option = canonical_effect_name(option)
         if option not in ALL_NATIVE_EFFECTS:
-            raise ValueError(f"Unknown native effect: {option}")
+            raise invalid("unknown_effect", effect=option)
         if ALL_NATIVE_EFFECTS[option].get("animation") and not getattr(
             self._light_entity, "animations_available", False
         ):
@@ -663,7 +565,7 @@ class YeelightCubeNativeEffectDirectionSelect(CubeSelect):
 
     async def async_select_option(self, option: str) -> None:
         if option not in NATIVE_EFFECT_DIRECTIONS:
-            raise ValueError(f"Unknown native effect direction: {option}")
+            raise invalid("unknown_option", option=option)
         await self._light_entity.async_select_native_effect_direction(option)
         self._write_states()
 

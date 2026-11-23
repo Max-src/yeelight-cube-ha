@@ -13,9 +13,11 @@ import unittest
 
 from tests.test_native_features import ROOT
 
-# Module attributes Python sets itself.
+# Module attributes Python sets itself (__conditional_annotations__: the
+# compiler's own, from Python 3.14, for annotations inside an if or a try).
 _MODULE_NAMES = {"__file__", "__name__", "__doc__", "__package__", "__spec__", "__loader__",
-                 "__path__", "__builtins__", "__annotations__", "__dict__"}
+                 "__path__", "__builtins__", "__annotations__", "__dict__",
+                 "__conditional_annotations__"}
 
 
 def _top_level(table) -> set[str]:

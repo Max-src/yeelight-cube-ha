@@ -2,7 +2,7 @@
 // effect animations, painting the dots and the oriented matrix geometry.
 // Mixed into YeelightCubeLampPreviewCard.
 import { BLACK_THRESHOLD } from "./matrix-const.js";
-import { rgbToCss } from "./color-utils.js";
+import { rgbToCss, scalePixel } from "./color-utils.js";
 import { AnimatedPreview, PreviewClock } from "./preview-animation.js";
 import { LAMP_EFFECTS, isLampRendered } from "./lamp-renderers.js";
 import {
@@ -63,6 +63,60 @@ function lampEffectItem(hass, entityId, name) {
   return listed ?? { name, directions: LAMP_EFFECTS[name]?.directions ?? [] };
 }
 
+// Painted every animation frame: the CSS color of each 0-255 [r, g, b]
+// (rgbToCss) and whether a CSS color counts as black (cssIsBlack), each
+// worked out once per color.
+const CACHE_LIMIT = 4096;
+const CSS_BY_RGB = new Map();
+const BLACK_BY_CSS = new Map();
+
+const isByte = (value) => Number.isInteger(value) && value >= 0 && value <= 255;
+
+function cachedCss(rgb) {
+  const [r, g, b] = rgb;
+  if (!(isByte(r) && isByte(g) && isByte(b))) return rgbToCss(rgb);
+  const key = (r << 16) | (g << 8) | b;
+  let css = CSS_BY_RGB.get(key);
+  if (css === undefined) {
+    if (CSS_BY_RGB.size >= CACHE_LIMIT) CSS_BY_RGB.clear();
+    css = rgbToCss(rgb);
+    CSS_BY_RGB.set(key, css);
+  }
+  return css;
+}
+
+// Black detection (shared BLACK_THRESHOLD from matrix-const.js) for one CSS
+// color: "#rrggbb" or "rgb(r, g, b)".
+function parseIsBlack(color) {
+  if (color.startsWith("#")) {
+    const hex = color.replace(/^#/, "");
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return r <= BLACK_THRESHOLD && g <= BLACK_THRESHOLD && b <= BLACK_THRESHOLD;
+  }
+  if (color.startsWith("rgb")) {
+    const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (match) {
+      const r = parseInt(match[1]);
+      const g = parseInt(match[2]);
+      const b = parseInt(match[3]);
+      return r <= BLACK_THRESHOLD && g <= BLACK_THRESHOLD && b <= BLACK_THRESHOLD;
+    }
+  }
+  return false;
+}
+
+function cssIsBlack(color) {
+  let black = BLACK_BY_CSS.get(color);
+  if (black === undefined) {
+    if (BLACK_BY_CSS.size >= CACHE_LIMIT) BLACK_BY_CSS.clear();
+    black = parseIsBlack(color);
+    BLACK_BY_CSS.set(color, black);
+  }
+  return black;
+}
+
 export const MatrixPreviewMixin = (Base) => class extends Base {
   // Convert a matrix_colors array (RGB tuples, lamp order) to CSS colors using
   // the same brightness-boost pipeline as the static preview. Extracted so the
@@ -80,10 +134,8 @@ export const MatrixPreviewMixin = (Base) => class extends Base {
     return fitted.map((c) => {
       let px = c;
       if (!Array.isArray(px) || px.length !== 3) px = [0, 0, 0];
-      if (px[0] === 0 && px[1] === 0 && px[2] === 0) return rgbToCss([0, 0, 0]);
-      return rgbToCss(
-        px.map((v) => Math.min(255, Math.round(v * previewBoost))),
-      );
+      if (px[0] === 0 && px[1] === 0 && px[2] === 0) return cachedCss([0, 0, 0]);
+      return cachedCss(scalePixel(px, previewBoost));
     });
   }
 
@@ -451,31 +503,10 @@ export const MatrixPreviewMixin = (Base) => class extends Base {
     return hass?.states?.[this._primaryEntity?.(hass)]?.attributes;
   }
 
-  // Black detection (shared BLACK_THRESHOLD from matrix-const.js) and the
-  // hide_black_dots display rule for one CSS color.
+  // Black detection (cssIsBlack) and the hide_black_dots display rule for
+  // one CSS color.
   _dotAppearance(color) {
-    let isBlack = false;
-    if (color.startsWith("#")) {
-      // Hex color format
-      const hex = color.replace(/^#/, "");
-      const r = parseInt(hex.substring(0, 2), 16);
-      const g = parseInt(hex.substring(2, 4), 16);
-      const b = parseInt(hex.substring(4, 6), 16);
-      isBlack =
-        r <= BLACK_THRESHOLD && g <= BLACK_THRESHOLD && b <= BLACK_THRESHOLD;
-    } else if (color.startsWith("rgb")) {
-      // RGB color format
-      const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-      if (match) {
-        const r = parseInt(match[1]);
-        const g = parseInt(match[2]);
-        const b = parseInt(match[3]);
-        isBlack =
-          r <= BLACK_THRESHOLD &&
-          g <= BLACK_THRESHOLD &&
-          b <= BLACK_THRESHOLD;
-      }
-    }
+    const isBlack = cssIsBlack(color);
     const isEmpty = this.config.hide_black_dots ? isBlack : false;
     const displayColor =
       this.config.hide_black_dots && isBlack ? "transparent" : color;

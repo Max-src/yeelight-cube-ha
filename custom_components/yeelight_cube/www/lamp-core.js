@@ -6,6 +6,7 @@
  * lamp-effects-<family>.js.
  */
 import { RENDER_MS, RENDER_SECONDS } from "./lamp-timing.js";
+import { hexToRgb } from "./color-utils.js";
 
 export const LENGTH = 100;
 export const COLS = 20;
@@ -480,7 +481,7 @@ export function nativePalette(selector, mode) {
   if (chosen === 8) return primaryRamp(convertColour([255, 255, 255]));
   const colours = PALETTE_SOURCES[chosen === 2 ? 0 : chosen]
     .split(" ")
-    .map((text) => [0, 2, 4].map((at) => parseInt(text.slice(at, at + 2), 16)));
+    .map(hexToRgb);
   return DIRECT_PALETTES.includes(chosen) ? colours : colours.map(convertColour);
 }
 

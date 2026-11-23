@@ -23,8 +23,8 @@ from .effect_catalog import (
     NATIVE_EFFECTS,
 )
 from .fx_guard import command_refusal, running_after
-from .light import _entity_id_or_list
 from .light_services_common import (
+    LAMP_TARGET_FIELDS,
     _resolve_entity,
     _resolve_entities,
     make_admin_only,
@@ -72,9 +72,8 @@ def _fx_params(data, target) -> list:
         except (TypeError, ValueError):
             pass
     # The first array element (command/effect id) usually equals the config
-    # mode, but some renderers only unlock their full output under a different
-    # command id (e.g. Fireworks needs 71 while the clock config keeps mode
-    # 40). Allow overriding it independently.
+    # mode, but some effects take a different command id (e.g. Fireworks: 71
+    # with a clock config of mode 40). Allow overriding it independently.
     command_id = data.get("effect_id")
     command_id = int(command_id) if command_id is not None else mode
     return [command_id, style_id, apply, config]
@@ -512,7 +511,7 @@ def async_register_diagnostics_services(hass: HomeAssistant) -> None:
         "force_tcp",
         _admin_only(handle_force_tcp),
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
             vol.Required("minutes"): vol.All(vol.Coerce(float), vol.Range(min=0, max=60)),
         }),
         supports_response=SupportsResponse.OPTIONAL,
@@ -525,7 +524,7 @@ def async_register_diagnostics_services(hass: HomeAssistant) -> None:
         "send_fx_effect",
         _admin_only(handle_send_fx_effect),
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
             vol.Optional("method"): cv.string,
             vol.Optional("params"): list,
             vol.Optional("mode"): int,
@@ -548,7 +547,7 @@ def async_register_diagnostics_services(hass: HomeAssistant) -> None:
         "query_raw",
         _admin_only(handle_query_raw),
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
             vol.Optional("method"): cv.string,
             vol.Optional("params"): list,
         }, extra=vol.ALLOW_EXTRA),
@@ -561,7 +560,7 @@ def async_register_diagnostics_services(hass: HomeAssistant) -> None:
         "get_capabilities",
         _admin_only(handle_get_capabilities),
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         }, extra=vol.ALLOW_EXTRA),
         supports_response=SupportsResponse.OPTIONAL,
     )
@@ -572,7 +571,7 @@ def async_register_diagnostics_services(hass: HomeAssistant) -> None:
         "bulb_call",
         _admin_only(handle_bulb_call),
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
             vol.Required("member"): cv.string,
             vol.Optional("args"): list,
             vol.Optional("kwargs"): dict,
@@ -580,13 +579,13 @@ def async_register_diagnostics_services(hass: HomeAssistant) -> None:
         supports_response=SupportsResponse.OPTIONAL,
     )
 
-    # DEBUG: spec-lab experiments (music mode benchmark, set_default, notify).
+    # DEBUG: save the lamp's current state as its power-on default.
     hass.services.async_register(
         DOMAIN,
         "set_default",
         _admin_only(handle_set_default),
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         }, extra=vol.ALLOW_EXTRA),
         supports_response=SupportsResponse.OPTIONAL,
     )
@@ -621,7 +620,7 @@ def async_register_diagnostics_services(hass: HomeAssistant) -> None:
         "test_display",
         handle_test_display,
         schema=vol.Schema({
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         }),
         supports_response=False
     )
@@ -652,8 +651,8 @@ def async_register_diagnostics_services(hass: HomeAssistant) -> None:
         "set_color_accuracy",
         handle_set_color_accuracy,
         schema=vol.Schema({
-            vol.Required("enabled"): vol.Coerce(bool),
-            vol.Required("entity_id"): _entity_id_or_list,
+            vol.Required("enabled"): cv.boolean,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -709,7 +708,7 @@ def async_register_diagnostics_services(hass: HomeAssistant) -> None:
             vol.Optional("gain_r"): vol.Coerce(float),
             vol.Optional("gain_g"): vol.Coerce(float),
             vol.Optional("gain_b"): vol.Coerce(float),
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -731,7 +730,7 @@ def async_register_diagnostics_services(hass: HomeAssistant) -> None:
         "set_calibration_lock",
         _admin_only(handle_set_calibration_lock),
         schema=vol.Schema({
-            vol.Required("enabled"): vol.Coerce(bool),
-            vol.Required("entity_id"): _entity_id_or_list,
+            vol.Required("enabled"): cv.boolean,
+            **LAMP_TARGET_FIELDS,
         })
     )

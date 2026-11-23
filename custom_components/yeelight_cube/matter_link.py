@@ -37,6 +37,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from .const import CONF_IP
 from .device_profile import CUBE_LITE_PRODUCT, CUBE_MATRIX_PRODUCT
 
 _LOGGER = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ SATURATION = _path(1, 768, 1)
 BASIC_VENDOR_ID = _path(0, 40, 2)
 NETWORK_INTERFACES = _path(0, 51, 0)
 # General Diagnostics RebootCount: one more each time the lamp starts (a
-# power cut too short for the LAN probe to see, 2026-11-11).
+# power cut too short for the LAN probe to see).
 REBOOT_COUNT = _path(0, 51, 1)
 # What the light follows, by name (light_matter.py MATTER_REPORTS).
 REPORTED = {
@@ -130,10 +131,24 @@ def _octets(value: Any) -> bytes | None:
     return None
 
 
+def entry_moved_to(entry, ip: str, entries) -> dict:
+    """async_update_entry's arguments moving ``entry`` to the address ``ip``.
+    An entry identified by its address (added from Matter or by hand) takes
+    the new one as its unique_id, so a lamp that gets the old address later
+    is not "already configured"; unless another of ``entries`` (the
+    domain's) already has it."""
+    changes = {"data": {**entry.data, CONF_IP: ip}}
+    if entry.unique_id == entry.data.get(CONF_IP) and not any(
+        other is not entry and other.unique_id == ip for other in entries
+    ):
+        changes["unique_id"] = ip
+    return changes
+
+
 def usable_address(address: str) -> bool:
     """An IPv4 address a lamp can be reached at: not 0.0.0.0 (a Cube Matrix's
     node reports its Wi-Fi interface so after a power-on: an entry moved
-    there lost its lamp, 2026-11-10), nor link-local, loopback, multicast or
+    there would lose its lamp), nor link-local, loopback, multicast or
     broadcast."""
     try:
         octets = [int(part) for part in address.split(".")]
@@ -187,13 +202,19 @@ def node_matches(
     attributes: dict, ip: str | None, mac: str | None, products=(CUBE_LITE_PRODUCT,),
 ) -> str | None:
     """The MAC of the node's interface with the lamp's IP (or remembered
-    MAC), or None when the node is not this lamp (or not one of
-    ``products``)."""
+    MAC; "" for an interface without one), or None when the node is not
+    this lamp (or not one of ``products``). With a remembered MAC, an
+    interface with another MAC is another lamp even at the lamp's IP (two
+    lamps that swapped their addresses, or a node's stale address)."""
     if yeelight_product(attributes) not in products:
         return None
     for interface_mac, addresses in node_interfaces(attributes):
-        if (mac and interface_mac == mac) or (ip and ip in addresses):
-            return interface_mac or mac or ""
+        if mac and interface_mac:
+            if interface_mac == mac:
+                return interface_mac
+            continue
+        if ip and ip in addresses:
+            return interface_mac or ""
     return None
 
 
@@ -309,8 +330,8 @@ class MatterLink:
             )
         # The node read anew (node_updated): after the lamp was away a while
         # the server interviews it again and reports no attribute changes,
-        # so its restart went unseen (2026-11-20: 31 min unplugged, reboot
-        # count 60 kept while the lamp reported 61).
+        # so its restart would go unseen (its old reboot count kept while
+        # the lamp reports the next one).
         self._unsubscribe.append(
             client.subscribe_events(self._node_callback(), node_filter=node.node_id)
         )
@@ -404,6 +425,10 @@ class MatterLink:
             _LOGGER.debug("Matter read of %s failed: %s", name, error)
             return None
         value = answer.get(path) if isinstance(answer, dict) else answer
+        if self._client is not client or self.node_id != node_id:
+            # Linked to another node (or released) while it was read: the
+            # value is the old node's, not kept in this link's values.
+            return None
         if value is not None:
             self.values[name] = value
         return value

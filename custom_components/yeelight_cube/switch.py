@@ -189,7 +189,9 @@ class YeelightCubeSkipUnchangedFramesSwitch(_YeelightCubeOptionSwitch):
 
 
 class _YeelightCubeClockOptionSwitch(CubeControlEntity, SwitchEntity):
-    """Base switch for a native clock option."""
+    """Base switch for a native clock option: the light's ``option_attr``,
+    listened to on its ``option_key`` topic (also its translation key and
+    unique id suffix)."""
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_should_poll = False
@@ -200,6 +202,7 @@ class _YeelightCubeClockOptionSwitch(CubeControlEntity, SwitchEntity):
         self._config_entry = config_entry
         self._light_entity = light_entity
         self._attr_translation_key = self.option_key
+        self._topic = self.option_key
         self._attr_unique_id = (
             f"{self._light_entity.unique_id}_{self.option_key}"
         )
@@ -208,10 +211,7 @@ class _YeelightCubeClockOptionSwitch(CubeControlEntity, SwitchEntity):
     async def _set_option(self, enabled: bool) -> None:
         self._attr_is_on = enabled
         await self._light_entity.async_set_clock_option(self.option_attr, enabled)
-
-        self.async_write_ha_state()
-        if self._light_entity.hass is not None:
-            self._light_entity.async_write_ha_state()
+        self._write_states()
 
     async def async_turn_on(self, **kwargs):
         await self._set_option(True)
@@ -251,34 +251,12 @@ class YeelightCubeClockShowDateSwitch(_YeelightCubeClockOptionSwitch):
         if self.hass is not None:
             self.async_write_ha_state()
 
-    async def async_added_to_hass(self):
-        await super().async_added_to_hass()
-        self._listen_to_light("clock_show_date")
-        self.async_update_from_light()
-
-    @callback
-    def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
-        super().async_entity_id_changed(old_entity_id)
-
 
 class YeelightCubeClock12HourSwitch(_YeelightCubeClockOptionSwitch):
     """Use 12-hour time in the native clock."""
 
     option_attr = "_native_clock_12_hour"
     option_key = "clock_12_hour"
-
-    async def async_added_to_hass(self):
-        await super().async_added_to_hass()
-        self._listen_to_light("clock_12_hour")
-        self.async_update_from_light()
-
-    @callback
-    def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
-        super().async_entity_id_changed(old_entity_id)
 
 
 class YeelightCubeClockColonBlinkSwitch(_YeelightCubeClockOptionSwitch):
@@ -287,17 +265,6 @@ class YeelightCubeClockColonBlinkSwitch(_YeelightCubeClockOptionSwitch):
     option_attr = "_native_clock_colon_blink"
     option_key = "clock_colon_blink"
 
-    async def async_added_to_hass(self):
-        await super().async_added_to_hass()
-        self._listen_to_light("clock_colon_blink")
-        self.async_update_from_light()
-
-    @callback
-    def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
-        super().async_entity_id_changed(old_entity_id)
-
 
 class YeelightCubeScrollSwitch(CubeControlEntity, SwitchEntity):
     """Enable automatic ping-pong scrolling for text wider than the matrix."""
@@ -305,6 +272,7 @@ class YeelightCubeScrollSwitch(CubeControlEntity, SwitchEntity):
     _attr_should_poll = False
     _attr_translation_key = "scroll_enabled"
     _attr_entity_category = EntityCategory.CONFIG
+    _topic = "scroll_enabled"
 
     def __init__(self, config_entry: ConfigEntry, light_entity):
         self._config_entry = config_entry
@@ -323,16 +291,6 @@ class YeelightCubeScrollSwitch(CubeControlEntity, SwitchEntity):
         self._attr_is_on = False
         self.async_write_ha_state()
         self._light_entity.async_write_ha_state()
-
-    async def async_added_to_hass(self):
-        await super().async_added_to_hass()
-        self._listen_to_light("scroll_enabled")
-
-    @callback
-    def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
-        super().async_entity_id_changed(old_entity_id)
 
     def async_update_from_light(self):
         self._attr_is_on = self._light_entity.scroll_enabled

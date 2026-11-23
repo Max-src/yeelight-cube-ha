@@ -45,23 +45,20 @@ class LanPacer:
     SLACK = 0.01
 
     SEND = "send"
-    REPEAT = "repeat"
     WAIT = "wait"
 
     def __init__(self, resend: float, step: float = 0.0) -> None:
         self.resend = resend
         self.step = step  # the time between renders
-        # The last LAN frame (a repeat too), and when the next new picture
+        # The last LAN frame (the same picture again too), and when the next new picture
         # may go (the stream's clock: the event loop's).
         self.sent_at = float("-inf")  # nothing sent yet
         self.next_at = 0.0
         self.gap = 0.0
 
-    def decide(self, now: float, changed: bool, gap: float, changes_only: bool, can_repeat: bool) -> str:
-        """SEND the frame now, REPEAT the last one (sent over the LAN:
-        ``can_repeat``), or WAIT for a later render. ``changed``: the frame
-        differs from the last one sent; ``changes_only``: Skip Unchanged
-        Stream Frames, no repeat."""
+    def decide(self, now: float, changed: bool, gap: float) -> str:
+        """SEND the frame now or WAIT for a later render. ``changed``: the
+        frame differs from the last one sent."""
         self.gap = gap
         since = now - self.sent_at
         if self._steady(gap):
@@ -90,9 +87,6 @@ class LanPacer:
         # exact over time; a picture later than a render (a hold, the lock)
         # counts from one render before now, so nothing bursts to catch up.
         self.next_at = max(self.next_at, now - self.step) + self.gap
-        self.sent_at = now
-
-    def repeated(self, now: float) -> None:
         self.sent_at = now
 
 
@@ -234,9 +228,9 @@ class LanStreamRoute:
     async def pace(self, candidate, last_sent, held: bool, changes_only: bool) -> str | None:
         """None: ``candidate`` goes now. Else what happened instead, as
         StreamDiag counts it: "unchanged" (the same as the last frame sent,
-        with Skip Unchanged Stream Frames), "paced" (not due yet under the
-        Stream frame rate limit) or "repeated" (the last frame sent again). Only while the lamp is known
-        to be in direct mode (a frame after a hold always goes)."""
+        with Skip Unchanged Stream Frames) or "paced" (not due yet under the
+        Stream frame rate limit). Only while the lamp is known to be in
+        direct mode (a frame after a hold always goes)."""
         light = self.light
         if held or not light._direct_mode_trusted():
             return None
@@ -244,14 +238,7 @@ class LanStreamRoute:
             return "unchanged"
         if self.pacer is None:
             return None
-        decision = self.pacer.decide(
-            self._clock(), candidate != last_sent, light._lite_lan_gap(), changes_only,
-            bool(last_sent) and last_sent[0] == self.name,
-        )
-        if decision == LanPacer.REPEAT:
-            await light._lamp_client.send_command_fast("update_leds", [last_sent[2]])
-            self.pacer.repeated(self._clock())
-            return "repeated"
+        decision = self.pacer.decide(self._clock(), candidate != last_sent, light._lite_lan_gap())
         if decision == LanPacer.WAIT:
             return "paced"
         return None

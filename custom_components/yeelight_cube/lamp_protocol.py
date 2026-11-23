@@ -2,14 +2,16 @@
 
 Owns the pieces of the LAN protocol that hold no connection state: the
 errors a command raises (CubeConnectionError, CubeFxModeLost, LAMP_ERRORS and
-the is_*_error checks), the update_leds frame encoding and the frame trace
-(the ``frames`` logger), the one-shot connections used before a lamp is set
-up (check_tcp, send_once) and the reading of a checked command's answer
+the is_*_error checks), a command's encoding (encode_command), the
+update_leds frame encoding and the frame trace (the ``frames`` logger), the
+one-shot TCP connection (one_shot) and those used before a lamp is set up
+(check_tcp, send_once), the reading of a checked command's answer
 (_raw_reply_error), plus the reconnection timings the lamp client's parts
 (lamp_client*.py) and the light share. No Home Assistant import.
 """
 import asyncio
 import base64
+import itertools
 import json
 import logging
 import re
@@ -18,6 +20,8 @@ import struct
 import time
 import zlib
 from yeelight import BulbException # type: ignore
+
+_LOGGER = logging.getLogger(__name__)
 
 # A trace of what is sent to the lamps over UDP, at debug level, on its own
 # logger so it can be turned on alone (logger.set_level
@@ -51,57 +55,74 @@ _RST_LINGER = struct.pack("ii", 1, 0)  # SO_LINGER value for an abortive close (
 _USE_TCP = object()
 
 
+def encode_command(method: str, params: list, id: int = 1) -> bytes:
+
+    """A LAN command as the lamp reads it: one compact JSON line (id,
+    method, params), ended by CRLF."""
+    return (
+        json.dumps({"id": id, "method": method, "params": params}, separators=(",", ":")) + "\r\n"
+    ).encode("utf8")
+
+
+def one_shot(ip: str, port: int, timeout: float, request: bytes | None = None,
+             exchange=None, *, abortive: bool = True, what: str = "one-shot"):
+    """Blocking (run it in a thread): one TCP connection to the lamp. Opens
+    it (``timeout`` for the connect and every read), sends ``request`` (when
+    given), then returns ``exchange(sock)`` (None without one: what is read,
+    if anything, is the caller's). Always closed at the end, abortively (RST,
+    no TIME_WAIT left on the lamp) unless ``abortive`` is False (a graceful
+    FIN). Errors of the connection, the send and ``exchange`` are raised; a
+    failed close is only logged (DEBUG, ``what`` names the socket)."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.settimeout(timeout)
+        sock.connect((ip, port))
+        if request is not None:
+            sock.sendall(request)
+        return exchange(sock) if exchange is not None else None
+    finally:
+        try:
+            if abortive:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, _RST_LINGER)
+            sock.close()
+        except OSError as exc:
+            _LOGGER.debug("[%s] Failed to close %s socket: %s", ip, what, exc)
+
+
 async def check_tcp(ip: str, port: int, timeout: float) -> None:
     """Raise OSError unless the lamp accepts a TCP connection within
     ``timeout`` (a reachability probe: setup, recovery). The socket is
     RST-closed so it leaves no TIME_WAIT behind."""
-
-    def _connect() -> None:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            sock.settimeout(timeout)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, _RST_LINGER)
-            sock.connect((ip, port))
-        finally:
-            sock.close()
-
-    await asyncio.to_thread(_connect)
+    await asyncio.to_thread(one_shot, ip, port, timeout, what="probe")
 
 
 async def send_once(ip: str, port: int, method: str, params: list, timeout: float) -> dict:
     """Send one LAN command to a lamp not set up yet (the setup's Fire
     check, the model probe) and wait for its answer, which it returns.
     Raises OSError (no answer, refused)."""
-    payload = json.dumps({"id": 1, "method": method, "params": params}, separators=(",", ":"))
 
-    def _send() -> None:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            sock.settimeout(timeout)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, _RST_LINGER)
-            sock.connect((ip, port))
-            sock.sendall(payload.encode() + b"\r\n")
-            pending = b""
-            while True:
-                chunk = sock.recv(1024)  # socket.timeout (an OSError) ends it
-                if not chunk:
-                    raise OSError(f"the lamp did not answer {method}")
-                pending += chunk
-                *lines, pending = pending.split(b"\n")
-                for line in lines:
-                    try:
-                        answer = json.loads(line)
-                    except ValueError:
-                        continue
-                    # Notifications ("props") may come first: only its answer.
-                    if isinstance(answer, dict) and answer.get("id") == 1:
-                        if "error" in answer:
-                            raise OSError(f"the lamp refused {method}: {answer['error']}")
-                        return answer
-        finally:
-            sock.close()
+    def _answer(sock: socket.socket) -> dict:
+        pending = b""
+        while True:
+            chunk = sock.recv(1024)  # socket.timeout (an OSError) ends it
+            if not chunk:
+                raise OSError(f"the lamp did not answer {method}")
+            pending += chunk
+            *lines, pending = pending.split(b"\n")
+            for line in lines:
+                try:
+                    answer = json.loads(line)
+                except ValueError:
+                    continue
+                # Notifications ("props") may come first: only its answer.
+                if isinstance(answer, dict) and answer.get("id") == 1:
+                    if "error" in answer:
+                        raise OSError(f"the lamp refused {method}: {answer['error']}")
+                    return answer
 
-    return await asyncio.to_thread(_send)
+    return await asyncio.to_thread(
+        one_shot, ip, port, timeout, encode_command(method, params), _answer, what="send_once",
+    )
 
 
 class CubeConnectionError(BulbException):
@@ -144,9 +165,7 @@ class _LazyText:
 def encode_rgb_frame(colors) -> str:
     """update_leds payload for a frame of RGB colors: base64 of the R, G, B
     bytes."""
-    return base64.b64encode(
-        bytes(channel for rgb in colors for channel in rgb)
-    ).decode("ascii")
+    return base64.b64encode(bytes(itertools.chain.from_iterable(colors))).decode("ascii")
 
 
 # What a command to the lamp raises: a socket failure or timeout (OSError,

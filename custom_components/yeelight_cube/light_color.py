@@ -9,6 +9,7 @@ Mixed into ``YeelightCubeLight``; not usable on its own.
 import logging
 
 from .color_adjustments import ADJUSTMENT_DEFAULTS, active_adjustments
+from .color_utils import clamp8, lerp_rgb, luma
 from .lamp_power import limited_frame
 
 _LOGGER = logging.getLogger(__name__)
@@ -94,9 +95,7 @@ class ColorPipelineMixin:
             factor = 0
         else:
             factor = (position - local_start) / (local_end - local_start)
-        def interpolate(start, end, f):
-            return min(255, max(0, round(start + (end - start) * f)))
-        return tuple(interpolate(s, e, factor) for s, e in zip(start_color, end_color))
+        return lerp_rgb(start_color, end_color, factor, lambda value: clamp8(round(value)))
 
     def color_adjustments(self) -> dict:
         """The color adjustments that change a color (the Lamp Preview card's:
@@ -236,8 +235,8 @@ class ColorPipelineMixin:
         #   pink  (10,3,6)  -> keeps pink character with modest blue nudge
         CHANNEL_BALANCE = self._calib_channel_balance
 
-        orig_lum = 0.299 * r + 0.587 * g + 0.114 * b
-        corr_lum = 0.299 * r_corr + 0.587 * g_corr + 0.114 * b_corr
+        orig_lum = luma(r, g, b)
+        corr_lum = luma(r_corr, g_corr, b_corr)
 
         if orig_lum <= 0:
             return rgb_color
@@ -258,9 +257,9 @@ class ColorPipelineMixin:
 
         # Blend: 0 = pure uniform, 1 = pure per-channel
         bal = max(0.0, min(1.0, CHANNEL_BALANCE))
-        r_out = min(255, max(0, round(r_uni + (r_pc - r_uni) * bal)))
-        g_out = min(255, max(0, round(g_uni + (g_pc - g_uni) * bal)))
-        b_out = min(255, max(0, round(b_uni + (b_pc - b_uni) * bal)))
+        r_out = clamp8(round(r_uni + (r_pc - r_uni) * bal))
+        g_out = clamp8(round(g_uni + (g_pc - g_uni) * bal))
+        b_out = clamp8(round(b_uni + (b_pc - b_uni) * bal))
 
         return (r_out, g_out, b_out)
 

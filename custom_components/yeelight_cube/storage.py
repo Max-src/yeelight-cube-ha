@@ -48,9 +48,11 @@ def collection(hass: HomeAssistant, key: str) -> list:
 
 async def async_collection_changed(hass: HomeAssistant, key: str) -> None:
     """Publish a change of a shared collection (its sensor and selects follow
-    the event), then write it."""
+    the event), then write it shortly after: a burst of gallery edits (a
+    drag, renames, deletes) is one write of the file, not one each.
+    Home Assistant writes a pending save when it stops."""
     hass.bus.async_fire(f"{DOMAIN}_{COLLECTION_EVENTS[key]}", {"count": len(collection(hass, key))})
-    await async_save_data(hass)
+    async_schedule_save(hass)
 
 
 def storage_data(hass: HomeAssistant) -> dict:

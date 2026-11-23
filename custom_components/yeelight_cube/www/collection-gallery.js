@@ -118,7 +118,7 @@ import {
   styleSelectorStyles,
   gallerySelectorStyle,
 } from "./style-selector-utils.js";
-import { favouriteKeys } from "./gallery-display-utils.js";
+import { favouriteKeys, manageTargetKey } from "./gallery-display-utils.js";
 import {
   textLayout,
   previewLayout,
@@ -808,12 +808,20 @@ class YcCollectionGallery extends LitElement {
     if (!manage || manage.busy) return;
     const name = manage.value.trim().replace(/\s+/g, " ");
     if (manage.action === "rename" && !name) return;
-    this._manage = { ...manage, busy: true, error: "" };
+    const key = manageTargetKey(this.items, manage.key, manage.name);
+    if (key === null) {
+      this._manage = {
+        ...manage,
+        error: `“${manage.name}” was changed on another device: pick it again.`,
+      };
+      return;
+    }
+    this._manage = { ...manage, key, busy: true, error: "" };
     try {
       const done =
         manage.action === "delete"
-          ? await this.onDelete(manage.key)
-          : await this.onRename(manage.key, name);
+          ? await this.onDelete(key)
+          : await this.onRename(key, name);
       this._manage = done === false ? { ...this._manage, busy: false } : null;
     } catch (error) {
       this._manage = {

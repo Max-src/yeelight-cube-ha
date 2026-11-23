@@ -18,7 +18,9 @@ from .pixel_art_storage import PIXEL_ART_ORIENTATIONS
 from .errors import invalid
 from .lamp_protocol import is_connection_error
 from .name_utils import normalize_display_name
-from .light import _ENTITY_REGISTRY
+from .light import _entity_id_or_list
+from .const import DOMAIN
+from .runtime_data import lamp_of
 from .light_rotation import MAX_FAVOURITE_NAME, MAX_FAVOURITES
 from .device_profile import MAX_COLS
 
@@ -107,45 +109,131 @@ def _check_collection_size(current, added, limit, kind):
         raise invalid(f"{kind}s_full", limit=limit, current=current, added=added)
 
 
-def _lamp_for(entity_id):
+# The keys of a lamp action's target. The cards, scripts and automations
+# name their lamps with entity_id (one id or a list, in the action's data);
+# Home Assistant's target (the action editor's entity, device or area
+# picker) adds the others to the data. Every lamp action's schema takes them
+# all (**LAMP_TARGET_FIELDS); a call naming none of them is refused with
+# no_target (_target_ids).
+_INDIRECT_TARGET_KEYS = ("device_id", "area_id", "floor_id", "label_id")
+_TARGET_ID_LIST = vol.Any("none", vol.All(cv.ensure_list, [cv.string]))
+LAMP_TARGET_FIELDS = {
+    vol.Optional("entity_id"): _entity_id_or_list,
+    **{vol.Optional(key): _TARGET_ID_LIST for key in _INDIRECT_TARGET_KEYS},
+}
+
+
+# The Home Assistant the actions were registered with (light_services
+# async_setup_light_services): what a call reaches its lamps through when the
+# call does not carry it (ServiceCall.hass exists from Home Assistant 2025.1;
+# the integration supports 2024.12).
+_SERVICES_HASS: list = []
+
+
+def remember_services_hass(hass) -> None:
+    """The Home Assistant the actions run in (one per session)."""
+    _SERVICES_HASS[:] = [hass]
+
+
+def _call_hass(service_call):
+    """The Home Assistant a service call runs in."""
+    hass = getattr(service_call, "hass", None)
+    if hass is None and _SERVICES_HASS:
+        hass = _SERVICES_HASS[0]
+    return hass
+
+
+def _lamps(hass):
+    """Every lamp set up: the light of each loaded entry (runtime_data)."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        lamp = lamp_of(entry)
+        if lamp is not None:
+            yield lamp
+
+
+def _lamp_for(hass, entity_id):
     """The lamp whose current entity_id is ``entity_id``, or None. Matched
     on the live id (never a stored one): a renamed lamp answers to its new
-    id only (see light._ENTITY_REGISTRY)."""
-    for lamp in _ENTITY_REGISTRY.values():
+    id only."""
+    for lamp in _lamps(hass):
         if getattr(lamp, "entity_id", None) == entity_id:
             return lamp
     return None
 
 
+def _named(value) -> list:
+    """The ids a target key names (one id or a list; "none" names none)."""
+    if value is None or value == "none":
+        return []
+    return [item for item in (value if isinstance(value, list) else [value]) if item]
+
+
+def _indirect_entity_ids(service_call) -> set:
+    """The entity ids the call's devices, areas, floors and labels reach
+    (Home Assistant's own expansion: hidden and config/diagnostic entities
+    left out)."""
+    hass = _call_hass(service_call)
+    try:
+        from homeassistant.helpers import target  # type: ignore
+    except ImportError:  # Home Assistant before its target helpers
+        target = None
+    # The selection class (TargetSelection; TargetSelectorData in some releases).
+    selection = getattr(target, "TargetSelection", None) or getattr(target, "TargetSelectorData", None)
+    if selection is not None and hasattr(target, "async_extract_referenced_entity_ids"):
+        selected = target.async_extract_referenced_entity_ids(
+            hass, selection(service_call.data), expand_group=False
+        )
+    else:
+        from homeassistant.helpers.service import (  # type: ignore
+            async_extract_referenced_entity_ids,
+        )
+
+        selected = async_extract_referenced_entity_ids(hass, service_call, expand_group=False)
+    return set(selected.indirectly_referenced)
+
+
 def _target_ids(service_call) -> list:
-    """The entity ids a service call targets; raises when it names none."""
-    entity_id = service_call.data.get("entity_id")
-    ids = [eid for eid in (entity_id if isinstance(entity_id, list) else [entity_id]) if eid]
+    """The entity ids a service call targets, in order: its entity_id (one
+    or a list, as given), then the lamps its devices, areas, floors or labels
+    reach (in entity id order; only this integration's lights). Raises when
+    it names none, or when its devices and areas reach no lamp and it names
+    no entity either."""
+    data = service_call.data
+    ids = _named(data.get("entity_id"))
+    indirect = {key: _named(data.get(key)) for key in _INDIRECT_TARGET_KEYS}
+    if any(indirect.values()):
+        lamps = {getattr(lamp, "entity_id", None) for lamp in _lamps(_call_hass(service_call))}
+        reached = _indirect_entity_ids(service_call) & lamps
+        ids += sorted(eid for eid in reached if eid not in ids)
+        if not ids:
+            named = ", ".join(
+                f"{key} {', '.join(values)}" for key, values in indirect.items() if values
+            )
+            raise invalid("lamp_not_found", entity_id=named)
     if not ids:
         raise invalid("no_target")
     return ids
 
 
 def _resolve_entity(service_call, service_name: str):
-    """The lamp a service call targets (its entity_id; the first one of a
-    list). Raises a clear error when it names no lamp that is set up: the
-    call is refused, never sent to another lamp."""
+    """The lamp a service call targets (the first one of _target_ids).
+    Raises a clear error when it names no lamp that is set up: the call is
+    refused, never sent to another lamp."""
     entity_id = _target_ids(service_call)[0]
-    target = _lamp_for(entity_id)
+    target = _lamp_for(_call_hass(service_call), entity_id)
     if target is None:
         raise invalid("lamp_not_found", entity_id=entity_id)
     return target
 
 
 def _resolve_entities(service_call, service_name: str):
-    """Every lamp a service call targets (one entity_id or a list), for the
-    handlers that update them in parallel. One that is not set up (still
-    starting, or removed) is skipped and logged; the call is refused when
-    none is."""
+    """Every lamp a service call targets (_target_ids), for the handlers
+    that update them in parallel. One that is not set up (still starting,
+    or removed) is skipped and logged; the call is refused when none is."""
     ids = _target_ids(service_call)
     results = []
     for eid in ids:
-        target = _lamp_for(eid)
+        target = _lamp_for(_call_hass(service_call), eid)
         if target is not None:
             results.append(target)
         else:
@@ -194,6 +282,24 @@ def _move_item(items, from_idx, to_idx, expected_name, kind):
     return True
 
 
+async def require_admin(hass: HomeAssistant, service_call) -> None:
+    """Refuse a call from a user who is not a Home Assistant administrator.
+    Calls without a user (automations, scripts, the system) are allowed,
+    matching Home Assistant's own admin services."""
+    user_id = service_call.context.user_id
+    if user_id:
+        user = await hass.auth.async_get_user(user_id)
+        if user is None:
+            raise UnknownUser(context=service_call.context)
+        if not user.is_admin:
+            raise Unauthorized(context=service_call.context)
+
+
+# bypass_lock: the action goes through while the lamp is held for its
+# calibration (set_calibration_lock). Administrators only.
+BYPASS_LOCK_FIELD = {vol.Optional("bypass_lock", default=False): cv.boolean}
+
+
 def make_admin_only(hass: HomeAssistant):
     """Build the ``_admin_only`` handler decorator for ``hass``."""
 
@@ -208,13 +314,7 @@ def make_admin_only(hass: HomeAssistant):
 
         @functools.wraps(handler)
         async def wrapper(service_call):
-            user_id = service_call.context.user_id
-            if user_id:
-                user = await hass.auth.async_get_user(user_id)
-                if user is None:
-                    raise UnknownUser(context=service_call.context)
-                if not user.is_admin:
-                    raise Unauthorized(context=service_call.context)
+            await require_admin(hass, service_call)
             return await handler(service_call)
 
         return wrapper

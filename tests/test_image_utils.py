@@ -52,6 +52,16 @@ class ImageToMatrixTests(unittest.TestCase):
             with self.assertRaises(ValueError, msg=label):
                 image_utils.image_to_matrix(data)
 
+    def test_a_truncated_image_is_not_supported(self):
+        # Its header reads, its pixels fail: the explained error, not OSError.
+        for fmt in ("PNG", "JPEG"):
+            buffer = io.BytesIO()
+            Image.effect_noise((200, 100), 60).convert("RGB").save(buffer, format=fmt)
+            cut = base64.b64encode(buffer.getvalue()[: len(buffer.getvalue()) // 2]).decode()
+            with self.assertRaises(image_utils.InputError, msg=fmt) as raised:
+                image_utils.image_to_matrix(cut)
+            self.assertEqual("image_not_supported", raised.exception.key, fmt)
+
 
 class DisplayImageServiceTests(unittest.IsolatedAsyncioTestCase):
     def handler(self, targets, decode):

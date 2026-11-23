@@ -66,26 +66,33 @@ class DirectModeTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ApplyOrderTests(unittest.TestCase):
-    """apply() (too entangled to run here): one set_bright, sent only when
-    the brightness changed, before the frame."""
+    """apply() (too entangled to run here) and its steps: one set_bright,
+    sent only when the brightness changed, before the frame."""
 
     def setUp(self):
         source = (ROOT / "light_display.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
-        node = next(
-            n for n in ast.walk(tree)
-            if isinstance(n, ast.AsyncFunctionDef) and n.name == "apply"
-        )
-        self.apply = ast.get_source_segment(source, node)
+        self.methods = {
+            n.name: ast.get_source_segment(source, n) for n in ast.walk(tree)
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        self.apply = self.methods["apply"]
 
     def test_one_set_bright_before_any_frame(self):
-        self.assertEqual(1, self.apply.count('"set_bright"'))
-        bright = self.apply.index('"set_bright"')
-        self.assertLess(bright, self.apply.index("self._draw_direct(raw_rgb_data)"))
-        self.assertIn(
-            "if hardware_brightness != self._last_hardware_brightness:", self.apply
+        bright = self.methods["_apply_hardware_brightness"]
+        send = self.methods["_send_frame"]
+        steps = self.apply + bright + send
+        self.assertEqual(1, steps.count('"set_bright"'))
+        self.assertEqual(1, bright.count('"set_bright"'))
+        self.assertLess(
+            self.apply.index("await self._apply_hardware_brightness(hardware_brightness)"),
+            self.apply.index("await self._send_frame("),
         )
-        self.assertNotIn("_lamp_client.draw_matrices_fast", self.apply)  # always _draw_direct
+        self.assertIn("await self._draw_direct(raw_rgb_data)", send)
+        self.assertIn(
+            "if hardware_brightness != self._last_hardware_brightness:", bright
+        )
+        self.assertNotIn("_lamp_client.draw_matrices_fast", steps)  # always _draw_direct
 
     def test_turn_offs_black_picture_keeps_the_light_off(self):
         # Live 2026-10-27: marking the light on for turn_off's black frame

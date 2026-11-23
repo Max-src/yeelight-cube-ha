@@ -486,9 +486,8 @@ class PaletteAcceptedTests(unittest.TestCase):
         handler = hass.registered[(CONSTANTS["DOMAIN"], "set_native_effect")]
         light = make_light(hass=hass, entity_id="light.cube", _is_on=True,
                            request_native_effect=Mock(return_value=()), async_send_native_effect=Mock())
-        registry = module("light")._ENTITY_REGISTRY
-        self.addCleanup(registry.pop, "test-color-mode", None)
-        registry["test-color-mode"] = light
+        # Set up, as light.async_setup_entry leaves it (its entry's runtime_data).
+        hass.entries.append(SimpleNamespace(entry_id="lamp", runtime_data=SimpleNamespace(light=light)))
         call = lambda **data: SimpleNamespace(  # noqa: E731
             data={"entity_id": "light.cube", "activate": False, **data}, hass=hass,
             context=SimpleNamespace(user_id=None))
@@ -568,7 +567,7 @@ STREAM_NAMES = {
     "_publish_stream_frame", "_preview_shows_drive", "streamed_preview_frame", "_lite_lan_gap",
     "_skips_unchanged_frames", "_drawn_payload", "_studio_routes", "_studio_resume_origin",
     "_studio_stream_ended", "_restart_studio_loop", "_stream_led_stuck", "_stream_recover_now",
-    "_lite_clock_whole_hours",
+    "_clock_whole_hours",
 }
 CLOCK_FACE = import_pure_module("clock_face")
 LAMP_ERRORS = import_pure_module("lamp_protocol").LAMP_ERRORS

@@ -1,6 +1,15 @@
 import { createPendingValue } from "./pending-value.js";
 import { withCallTimeout } from "./card-command-controller.js";
 
+// A list's JSON, once per array: while an edit waits, every Home Assistant
+// update compares the published list (up to 500 pixel arts) with it.
+const JSON_OF = new WeakMap();
+function jsonOf(items) {
+  let json = JSON_OF.get(items);
+  if (json === undefined) JSON_OF.set(items, (json = JSON.stringify(items)));
+  return json;
+}
+
 /**
  * A user collection (palettes, pixel arts, favourites) changed here: the list
  * shown until the backend publishes it (pending-value.js), and the queue of
@@ -22,7 +31,7 @@ export class CollectionState {
       timeoutMs: graceMs,
       matches: ({ items, count }, operation) =>
         items.length === count &&
-        JSON.stringify(items) === JSON.stringify(operation.items),
+        jsonOf(items) === jsonOf(operation.items),
       onExpire: () => onExpire?.(),
     });
   }

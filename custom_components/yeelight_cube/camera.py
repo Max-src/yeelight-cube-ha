@@ -56,7 +56,9 @@ from .matrix_view import (
     view_size,
     viewer_frame,
 )
+from .color_utils import clamp8, lerp_rgb
 from .native_effect_preview import (
+    preview_rate,
     render_music_flow_effect,
     render_native_effect,
 )
@@ -280,18 +282,14 @@ def _scaled(masks: dict, name: str, amount: float) -> Image.Image:
     return scaled
 
 
-def _mix(start: tuple, end: tuple, amount: float) -> tuple:
-    return tuple(round(a + (b - a) * amount) for a, b in zip(start, end))
-
-
 def _draw_spot(img: Image.Image, left: int, top: int, size: int, rgb: tuple, rounded: bool) -> None:
     """A spot's face at (left, top), ``size`` wide, lit in ``rgb``."""
     masks = _face_masks(size, rounded)
     at = (left, top)
     peak = max(rgb) / 255
     lit = max(rgb) > _LIT
-    img.paste((*(_mix(_FACE, rgb, 0.12 * peak) if lit else _FACE), 255), at, masks["face"])
-    img.paste((*(_mix(_RECESS, rgb, 0.18 * peak) if lit else _RECESS), 255), at, masks["recess"])
+    img.paste((*(lerp_rgb(_FACE, rgb, 0.12 * peak) if lit else _FACE), 255), at, masks["face"])
+    img.paste((*(lerp_rgb(_RECESS, rgb, 0.18 * peak) if lit else _RECESS), 255), at, masks["recess"])
     img.paste((13, 13, 15, 255), at, masks["ring_dark"])
     img.paste((74, 74, 80, 255), at, masks["ring_light"])
     if not lit:
@@ -715,8 +713,8 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
         return None
 
     def _preview_speed(self, state=None) -> int:
-        """The rate the lamp gets (1-255), which previews take as it is."""
-        return max(0, min(255, int(self._state(state).native_effect_speed)))
+        """The rate the lamp gets (0-255), which previews take as it is."""
+        return clamp8(int(self._state(state).native_effect_speed))
 
     def _get_native_effect_preview(self, state=None) -> list[tuple[int, int, int]]:
         """The active built-in animation as the lamp draws it: LED drive for an
@@ -746,7 +744,7 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
                 seconds = now - self._native_preview_started_at
         frame = render_native_effect(
             effect,
-            seconds * (0.25 + speed / 55.0),
+            seconds * preview_rate(speed),
             direction,
             color_mode=state.native_effect_color_mode,
             color_override=state.native_effect_color,

@@ -6,7 +6,7 @@ Full documentation for all custom actions (services) registered under the `yeeli
 > For general setup, cards, and entities, see [README.md](README.md).
 
 > [!NOTE]
-> **`entity_id`** is required by all lamp services. When calling services directly from automations, scripts, or Developer Tools, you must provide it explicitly.
+> Every lamp service needs its lamps: **`entity_id`** in its data (one lamp or a list), or a Home Assistant **target** (`target:` with `entity_id`, `device_id`, `area_id`, `floor_id` or `label_id`; the action editor's lamp, device and area picker). A device or area reaches only its Yeelight Cube lights. A call that names no lamp, or whose target reaches none, fails with an error. The tables below list `entity_id`; a target works in its place.
 
 ---
 
@@ -390,6 +390,7 @@ Display a pixel art frame on the lamp. A Cube Lite has 100 pixels arranged in a 
 | :-- | :-- | :-- |
 | `pixels` | Yes | Array of `{ position, color }` entries |
 | `name` | No | The pixel art these pixels are, so the Pixel Art select shows it (the Draw card sends the one picked in its gallery). Without it the select is cleared |
+| `width` | No | The drawing's width in columns (default 20; 25 to 40 on a Cube Matrix of 5 to 8 modules): positions are `row * width + column` |
 | `entity_id` | Yes | Target lamp entity |
 
 **Pixel entry rules:**
@@ -471,6 +472,7 @@ Save a drawing to the pixel art collection.
 | `name` | No | Name for the saved pixel art; defaults to `Pixel Art N` |
 | `pixels` | Yes | Array of `{ position, color }` entries (single or grouped positions); black pixels are dropped |
 | `orientation` | No | `horizontal` (default) or `vertical`: a drawing made for a lamp standing on its end. The cards show vertical pixel arts standing up |
+| `width` | No | The drawing's width in columns (default 20), as in `apply_custom_pixels`: kept with it, so it is shown at that width |
 
 > [!TIP]
 > The response from `get_pixel_art` (with `group_by_color: true`) uses the same format, so you can paste it directly into `save_pixel_art` without editing.
@@ -623,7 +625,7 @@ Append arts to, or fully replace, the saved pixel art collection. Used by the Dr
 
 | Field | Required | Default | Description |
 | :-- | :-- | :-- | :-- |
-| `pixel_arts` | Yes | - | Array of `{ name, pixels, orientation }` objects (`orientation` optional, as in `save_pixel_art`) |
+| `pixel_arts` | Yes | - | Array of `{ name, pixels, orientation, width }` objects (`orientation` and `width` optional, as in `save_pixel_art`) |
 | `replace` | No | `false` | `true` = full replacement; `false` = append |
 
 > [!WARNING]
@@ -1817,7 +1819,7 @@ a mode Home Assistant does not know about; use **Force Refresh** afterwards.
 
 ## 🔗 Multi-Entity Operations
 
-Most services that accept `entity_id` also accept a list of lamps and update them in parallel. `set_brightness`, `set_font`, `set_alignment`, `set_orientation`, `preview_gradient_modes`, `save_palette` and `test_display` act on the first lamp of a list only.
+Most lamp services also accept a list of lamps and update them in parallel. `preview_gradient_modes`, `save_palette`, `test_display` and the debug services `send_fx_effect`, `query_raw`, `get_capabilities`, `bulb_call` and `set_default` act on one lamp only: the first `entity_id` of a list, else the first lamp (in entity id order) of the devices or areas targeted.
 
 **Each lamp on its own.** A service checks its data, records the new settings on
 every target and returns; each lamp is then updated in the background, so one
@@ -1842,6 +1844,16 @@ slow or unreachable lamp never holds up the others or the call.
 
 <details>
 <summary>View examples</summary>
+
+**Every lamp of an area (a target):**
+
+```yaml
+action: yeelight_cube.set_custom_text
+target:
+  area_id: living_room
+data:
+  text: "SYNC"
+```
 
 **Synchronized pixel art on all lamps:**
 

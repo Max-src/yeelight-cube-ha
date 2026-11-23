@@ -135,8 +135,8 @@ class AttributesMixin:
         """The settings, saved for a restart apart from the state: a lamp
         unreachable (stuck, switched off at the wall) is "unavailable", and
         Home Assistant then saves its state without attributes, so they would
-        be lost (2026-11-14: both Cube Lites came back on Ribbon in default
-        colours after a restart while they were stuck)."""
+        be lost (a lamp stuck during a restart would come back on Ribbon in
+        default colours)."""
         return SavedSettings({
             **self.extra_state_attributes, "brightness": self._brightness, "is_on": self._is_on,
         })

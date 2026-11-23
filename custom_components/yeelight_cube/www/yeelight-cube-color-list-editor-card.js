@@ -366,11 +366,6 @@ class YeelightCubeColorListEditorCard extends ColorInfoMixin(
         console.error("Error refreshing palette sensor:", err);
       }
     }
-    window.dispatchEvent(
-      new CustomEvent("palette-saved", {
-        detail: { palette: currentColors },
-      }),
-    );
   }
 
   // ----- Hex inputs -----------------------------------------------------
@@ -550,9 +545,16 @@ class YeelightCubeColorListEditorCard extends ColorInfoMixin(
     let success = false;
     let failure;
     try {
-      success = await commands.request(this._hass, config, "set_text_colors", {
-        text_colors: colors,
-      });
+      // Coalesced: a colour picker drag fires dozens of changes a second;
+      // only the newest waiting one is sent (SUPERSEDED, truthy, for the
+      // others), so the lamp is not redrawn for each.
+      success = await commands.request(
+        this._hass,
+        config,
+        "set_text_colors",
+        { text_colors: colors },
+        { coalesce: "text-colors" },
+      );
     } catch (error) {
       failure = error;
     }

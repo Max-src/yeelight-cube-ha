@@ -23,11 +23,11 @@ _LOGGER = logging.getLogger(__name__)
 LINK_RECOVERY_TRIES = 3
 LINK_RECOVERY_RETRY = 600.0
 # The wait after a try that could not even connect (s): the lamp was off the
-# network (seen 2026-11-16 18:27), which no try can mend.
+# network, which no try can mend.
 LINK_RECOVERY_UNREACHABLE_RETRY = 60.0
 # Such tries given back per stuck episode; after that one counts as a try: a
-# lamp that stays off the network was swept every minute until it was power
-# cycled (2026-11-20 13:19-13:26, "try 1 of 3" each time).
+# lamp that stays off the network would be swept every minute until it is
+# power cycled ("try 1 of 3" each time).
 LINK_RECOVERY_UNREACHABLE_FREE = 3
 # Seconds after the lamp answered the sweep before its content is drawn
 # again: its restart comes about 18 s after the answer.
@@ -70,7 +70,7 @@ class LinkRecoveryMixin:
         the lamp stuck (a minute of silence): the stream's Matter check found
         its LED part silent (light_studio._stream_recover_now), and the sweep
         works only before the lamp's network part restarts, 1.5 to 2.5
-        minutes after (2026-11-16 and 20). Not while one runs, nor within
+        minutes after. Not while one runs, nor within
         LINK_RECOVERY_NOW_SPACING of the one before. Whether it started."""
         if getattr(self, "is_cube_matrix", False) or self.hass is None:
             return False
@@ -94,10 +94,12 @@ class LinkRecoveryMixin:
         operations on the lamp fail at once instead of waiting for it
         (_link_recovery_running, light_connection._execute_hardware_op)."""
         # Once per try: again after a try given back (unreachable) at INFO.
+        # A sweep at once (_link_recovery_now) may come after the problem
+        # check's last try: the count shown stops at LINK_RECOVERY_TRIES.
         _LOGGER.log(
             logging.INFO if getattr(self, "_link_recovery_misses", 0) else logging.WARNING,
             "[RECOVERY] [%s] The lamp is stuck: trying to bring it back over the LAN (try %s of %s)",
-            self._ip, self._link_recovery_tries, LINK_RECOVERY_TRIES,
+            self._ip, min(self._link_recovery_tries, LINK_RECOVERY_TRIES), LINK_RECOVERY_TRIES,
         )
         if cancel := getattr(self._lamp_client, "_cancel_frame_settle", None):
             cancel()  # no frame sent again during the sweep
@@ -139,16 +141,15 @@ class LinkRecoveryMixin:
         if not await self._lamp_client.probe(answering=True):
             _LOGGER.warning("[RECOVERY] [%s] The lamp answered, then went silent again", self._ip)
             return False
-        # As the health check's own recovery (light_connection): a fresh
-        # connection, UDP again, direct mode and brightness sent again.
-        self._lamp_client.mark_recovered()
+        _LOGGER.warning("[RECOVERY] [%s] The lamp is back: its content follows", self._ip)
+        # As the health check's own recovery (light_connection._async_lamp_back):
+        # a fresh connection, UDP again, direct mode and brightness sent
+        # again, the counters reset, then its music, rotation or content
+        # again (not over another app's content). It restarted: as after an
+        # outage.
+        outage = time.time() - self._outage_since if self._outage_since is not None else 0.0
         self._outage_since = None
         self._silence_logged = False
-        self._direct_mode_lost()
-        self._forget_hardware_brightness()
-        if self.hass is not None:
-            self.async_write_ha_state()
-        _LOGGER.warning("[RECOVERY] [%s] The lamp is back: drawing its content again", self._ip)
-        await self.async_apply_display_mode(update_type="turn_on")
+        await self._async_lamp_back(outage)
         self._async_check_problems()
         return True

@@ -24,6 +24,7 @@ import logging
 from homeassistant.core import HomeAssistant  # type: ignore
 
 from .light_services_clock_presets import async_register_clock_preset_services
+from .light_services_common import remember_services_hass
 from .light_services_diagnostics import async_register_diagnostics_services
 from .light_services_display import async_register_display_services
 from .light_services_native import async_register_native_services
@@ -41,7 +42,8 @@ def async_setup_light_services(hass: HomeAssistant) -> bool:
     Assistant session and find their lamps when called (light_services_common
     _resolve_entity), so no lamp needs to be set up first. Registering them
     again would replace their handlers and their state (locks, trackers)."""
-    _LOGGER.debug("[SERVICES] Registering Yeelight Cube Lite light services")
+    _LOGGER.debug("[SERVICES] Registering Yeelight Cube light services")
+    remember_services_hass(hass)
     async_register_display_services(hass)
     async_register_palette_services(hass)
     async_register_clock_preset_services(hass)

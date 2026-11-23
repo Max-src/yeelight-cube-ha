@@ -327,6 +327,22 @@ class ModuleChangeTests(unittest.TestCase):
         self.assertEqual([{"position": 2 * 25 + 19, "color": [255, 0, 0]}], light._custom_pixels)
         self.assertEqual([2, 2, 2, 3, 1, 0, 0, 0], light._matter.values["topology"])
 
+    def test_the_lamps_extra_leds_stay_on_the_wire(self):
+        # It reported 110 LEDs for 4 blocks: frames keep those 10 after the
+        # modules change (they were padded short to the modules' sum).
+        light = light_on(PROFILES.cube_matrix_profile(topology="2,2,2,2", strip_length=110))
+        self.assertEqual(110, light._lamp_client.profile.wire_length)
+        light._is_on = False
+        light._matrix_modules_changed([2, 2, 2, 3, 1])
+        profile = light._lamp_client.profile
+        self.assertEqual(sum(profile.slots) + 10, profile.wire_length)
+        # Without extra LEDs, the modules' sum as before.
+        light = light_on(matrix("2,2,2,2"))
+        light._is_on = False
+        light._matrix_modules_changed([2, 2, 2, 3, 1])
+        profile = light._lamp_client.profile
+        self.assertEqual(sum(profile.slots), profile.wire_length)
+
     def test_a_stored_art_keeps_its_width_when_migrated(self):
         migrate = module("storage").migrate_pixel_arts
         arts, _changed = migrate([{"name": "Wide", "width": 25,

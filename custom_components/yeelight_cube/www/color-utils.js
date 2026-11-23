@@ -1,8 +1,18 @@
 // Color conversions shared by the cards.
 
+/** `value` rounded (halves up, JS Math.round) and limited to 0-255. */
+export const clampByte = (value) => Math.max(0, Math.min(255, Math.round(value)));
+
+/** A channel times `scale`, rounded (halves up) and at most 255: a
+ * brightness scale (0 and up) on a 0-255 channel. */
+export const scaleChannel = (value, scale) => Math.min(255, Math.round(value * scale));
+
+/** `rgb` (an array of channels) with every channel scaled (scaleChannel). */
+export const scalePixel = (rgb, scale) => rgb.map((value) => scaleChannel(value, scale));
+
 // Coerce each channel to an integer 0-255 so values read from imported files,
 // sensor attributes or config can never break out of a style/HTML attribute.
-const channel = (value) => Math.max(0, Math.min(255, Math.round(Number(value)) || 0));
+const channel = (value) => clampByte(Number(value) || 0);
 
 /** [r, g, b] as a CSS rgb() color, channels clamped. */
 export function rgbToCss(rgb) {
@@ -19,11 +29,7 @@ export function rgbToHex(rgb, fallback = "#000000") {
     "#" +
     rgb
       .slice(0, 3)
-      .map((value) =>
-        Math.max(0, Math.min(255, Math.round(Number(value) || 0)))
-          .toString(16)
-          .padStart(2, "0"),
-      )
+      .map((value) => clampByte(Number(value) || 0).toString(16).padStart(2, "0"))
       .join("")
   );
 }

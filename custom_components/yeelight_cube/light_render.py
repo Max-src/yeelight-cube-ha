@@ -106,27 +106,33 @@ class MatrixRenderMixin:
         self._active_pixel_art_name = None
 
 
-    def calculate_text_offset(self, total_text_width: int, total_columns: int = TOTAL_COLUMNS) -> int:
-        # Check if text needs scrolling - always scroll when text is too long
+    def text_offset(self, total_text_width: int, total_columns: int = TOTAL_COLUMNS) -> int:
+        """Where a text of ``total_text_width`` columns starts within
+        ``total_columns``: the scroll position when it is wider, else its
+        alignment. Reads the scroll state, changes nothing (the card
+        previews use it)."""
         if total_text_width > total_columns:
-            # Text is too long, use scroll offset - always start from left edge for scrolling text
-            self._max_scroll_offset = total_text_width - total_columns
-            # Clamp scroll offset to valid range
-            self._scroll_offset = max(0, min(self._scroll_offset, self._max_scroll_offset))
-            offset = -self._scroll_offset  # Negative offset to move text left (0 at start)
-            _LOGGER.debug("[SCROLL] Scrolling mode: width=%s, max_offset=%s, current_offset=%s, returning=%s", total_text_width, self._max_scroll_offset, self._scroll_offset, offset)
-            return offset
-        else:
-            # Text fits or scrolling disabled, use normal alignment
-            self._max_scroll_offset = 0
-            self._scroll_offset = 0
-            if self._alignment == "center":
-                offset = (total_columns - total_text_width) // 2
-            elif self._alignment == "right":
-                offset = total_columns - total_text_width
-            else:
-                offset = 0
-            return offset
+            # Negative: the text moves left (0 at start).
+            return -max(0, min(self._scroll_offset, total_text_width - total_columns))
+        if self._alignment == "center":
+            return (total_columns - total_text_width) // 2
+        if self._alignment == "right":
+            return total_columns - total_text_width
+        return 0
+
+    def calculate_text_offset(self, total_text_width: int, total_columns: int = TOTAL_COLUMNS) -> int:
+        """text_offset for the text the lamp shows, with its scroll state
+        (the range a text wider than the matrix scrolls) updated."""
+        self._max_scroll_offset = max(0, total_text_width - total_columns)
+        self._scroll_offset = max(0, min(self._scroll_offset, self._max_scroll_offset))
+        return self.text_offset(total_text_width, total_columns)
+
+    def _end_scroll(self) -> None:
+        """What the lamp shows is not a text that scrolls (a drawing, the
+        full panel, the background): no scroll timer left redrawing it."""
+        self._max_scroll_offset = 0
+        self._set_scrolling(False)
+        self.stop_scroll_timer()
 
     def _flip_position(self, pos, total_columns=None, total_rows=TOTAL_ROWS):
         """
@@ -183,144 +189,17 @@ class MatrixRenderMixin:
                 module.set_colors([background_color_hex])
             # Priority: custom drawing if present and custom_draw_active, else text
             if self._custom_draw_active and self._custom_pixels:
-                # Pixel art always uses a black background — missing positions = black
-                for module in self._layout.device_layout:
-                    module.set_colors(["#000000"])
-                # Normalize to the frame's positions (show_pixel_art placed
-                # them at its stride, device_profile.width):
-                #   - positions past the frame are ignored
-                #   - last definition of a position wins (later entries override earlier)
-                #   - missing positions default to black
-                pixel_map = {}
-                frame_pixels = len(self._layout.device_layout)
-                for px in self._custom_pixels:
-                    if not isinstance(px, dict):
-                        continue
-                    pos = px.get("position")
-                    color = px.get("color")
-                    if not isinstance(pos, int) or pos < 0 or pos >= frame_pixels:
-                        continue
-                    # Validate and normalize color — must be list/tuple of 3 ints
-                    if not isinstance(color, (list, tuple)) or len(color) < 3:
-                        pixel_map[pos] = None  # explicitly black
-                        continue
-                    try:
-                        r, g, b = int(color[0]), int(color[1]), int(color[2])
-                    except (TypeError, ValueError, IndexError):
-                        pixel_map[pos] = None
-                        continue
-                    pixel_map[pos] = (r, g, b)
-                color_groups = {}
-                for pos, rgb in pixel_map.items():
-                    if rgb is None or (rgb[0] == 0 and rgb[1] == 0 and rgb[2] == 0):
-                        continue  # background (black) already set
-                    color_hex = rgb_to_hex(rgb)
-                    color_groups.setdefault(color_hex, []).append(pos)
-                for color_hex, positions in color_groups.items():
-                    self.place_pixels(color_hex, self._flip_positions(positions))
-                self._remember_drawing()
-                await self.apply()
+                await self._show_custom_drawing()
                 return
             # If not in custom draw mode, clear custom pixels so text/other modes work as expected
             if not self._custom_draw_active:
                 self._custom_pixels = None
             if self._mode == "Panel Color Sequence":
-                # The colors fill the panel one module after another; any text
-                # or full-panel setting is kept for the text modes.
-                self._set_scrolling(False)
-                self.stop_scroll_timer()
-                self._place_frame(self._panel_sequence_frame(self._text_colors))
-                await self.apply()
+                await self._show_panel_sequence()
             elif self._custom_text or self._full_panel:
-                # SAFETY NET: the text/gradient renderer below only handles the
-                # text render modes.  If we reach here with a non-text mode
-                # left over -- e.g. "Custom Draw" after a pixel art was cleared
-                # by a text call (set_custom_text sets _custom_draw_active=False
-                # but the mode string lingers) -- NONE of the mode branches match
-                # and the panel renders all-black.  Normalise any unrecognised
-                # mode to "Solid Color" so text is ALWAYS rendered.  This keeps
-                # every pixel-art -> text (and similar) transition reliable.
-                if self._mode not in TEXT_RENDER_MODES:
-                    _LOGGER.debug(
-                        "[DISPLAY] [%s] Normalising non-text mode '%s' -> 'Solid Color' for text render",
-                        self._ip, self._mode,
-                    )
-                    self._enter_mode("Solid Color")
-                    if self._matrix_mode not in TEXT_RENDER_MODES:
-                        self._enter_mode(matrix_mode="Solid Color")
-                # --- Panel mode override -----------------------------------
-                # When full_panel is on, replace the actual text with a single
-                # virtual character (PANEL_FULL_CHAR) that covers every pixel
-                # on the 5x20 display.  All rendering modes then see one
-                # "giant letter" filling the whole panel and work through the
-                # normal text rendering path -- no special branches needed.
-                if self._full_panel:
-                    effective_text = PANEL_FULL_CHAR  # single char covering every pixel of the frame
-                    # The columns the lamp shows (a Cube Matrix with fewer
-                    # blocks: its gradients span those, not 20).
-                    total_columns = self._shown_columns()
-                    total_text_width = total_columns  # fills the shown width
-                    current_offset = 0  # no alignment shift -- it already covers everything
-                    _LOGGER.debug(
-                        "[DISPLAY] [%s] Panel mode: rendering virtual full-panel character "
-                        "(mode='%s', colors=%s stops)",
-                        self._ip, self._mode,
-                        len(self._text_colors) if self._text_colors else 0
-                    )
-                else:
-                    effective_text = self._custom_text
-                    # Laid out and scrolled within the columns the lamp shows.
-                    total_columns = self._shown_columns()
-                    total_text_width = sum(self._char_advance(letter) for letter in self._custom_text) - 1
-                    current_offset = self.calculate_text_offset(total_text_width, total_columns)
-                _LOGGER.debug("[DISPLAY] Rendering text: '%s' with mode: '%s' and colors: %s", effective_text, self._mode, self._text_colors)
-                _LOGGER.debug("[DISPLAY] Text layout - total_width: %s, offset: %s", total_text_width, current_offset)
-                
-                # Debug: Check if we have proper text colors
-                _LOGGER.debug("[DISPLAY] Text colors check - _text_colors: %s, type: %s", self._text_colors, type(self._text_colors))
-                if not self._text_colors:
-                    _LOGGER.warning("[DISPLAY] No text colors set! Using default red.")
-                
-                self._place_frame(self._text_mode_frame(
-                    self._mode, effective_text, self._text_colors,
-                    self._angle, current_offset, total_text_width,
-                ))
-
-                # Apply changes for text modes
-                _LOGGER.debug("[DISPLAY] Text rendering complete, about to apply() to lamp")
-                _LOGGER.debug("[DISPLAY] Current lamp state before apply - modules with colors:")
-                for i, module in enumerate(self._layout.device_layout):
-                    colors = getattr(module, '_colors', None)
-                    _LOGGER.debug("[DISPLAY] Module %s: colors=%s", i, colors)
-                
-                # Skip post-delay when scrolling to maintain smooth animation timing
-                await self.apply()
-                _LOGGER.debug("[DISPLAY] Text apply() completed successfully")
-                
-                # Start scroll timer if text is longer than display and scrolling is enabled
-                if self._max_scroll_offset > 0 and self._scroll_enabled:
-                    _LOGGER.debug("[SCROLL] Starting scroll timer for long text (max_offset: %s)", self._max_scroll_offset)
-                    self._set_scrolling(True)
-                    self.start_scroll_timer()
-                else:
-                    # Stop scrolling if text fits or scrolling is disabled
-                    self._set_scrolling(False)
-                    self.stop_scroll_timer()
+                await self._show_text()
             else:
-                # No text, no panel mode, no pixel art, no special mode.
-                # All modules were already set to background color above.
-                # Push that background-only display to the Cube so the lamp
-                # actually shows it (e.g., when panel mode is turned OFF with
-                # no text set -- without this, the lamp stays on the old display).
-                _LOGGER.debug(
-                    "[DISPLAY] [%s] No content to render "
-                    "(text='%s', panel=%s, "
-                    "draw_active=%s, "
-                    "mode='%s') -- pushing background-only display",
-                    self._ip, self._custom_text, self._full_panel,
-                    self._custom_draw_active, self._mode
-                )
-                await self.apply()
+                await self._show_background()
         except Exception as e:
             # Connection-related errors are expected and handled by the queue processor
             # which schedules retries. Only log at DEBUG to avoid duplicate noise.
@@ -337,6 +216,147 @@ class MatrixRenderMixin:
             # a display retry. Previously this was swallowed here, which meant
             # socket errors from apply() never reached the queue processor.
             raise
+
+    async def _show_custom_drawing(self):
+        """_apply_display_mode_internal: the custom drawing (pixel art)."""
+        self._end_scroll()
+        # Pixel art always uses a black background — missing positions = black
+        for module in self._layout.device_layout:
+            module.set_colors(["#000000"])
+        # Normalize to the frame's positions (show_pixel_art placed
+        # them at its stride, device_profile.width):
+        #   - positions past the frame are ignored
+        #   - last definition of a position wins (later entries override earlier)
+        #   - missing positions default to black
+        pixel_map = {}
+        frame_pixels = len(self._layout.device_layout)
+        for px in self._custom_pixels:
+            if not isinstance(px, dict):
+                continue
+            pos = px.get("position")
+            color = px.get("color")
+            if not isinstance(pos, int) or pos < 0 or pos >= frame_pixels:
+                continue
+            # Validate and normalize color — must be list/tuple of 3 ints
+            if not isinstance(color, (list, tuple)) or len(color) < 3:
+                pixel_map[pos] = None  # explicitly black
+                continue
+            try:
+                r, g, b = int(color[0]), int(color[1]), int(color[2])
+            except (TypeError, ValueError, IndexError):
+                pixel_map[pos] = None
+                continue
+            pixel_map[pos] = (r, g, b)
+        color_groups = {}
+        for pos, rgb in pixel_map.items():
+            if rgb is None or (rgb[0] == 0 and rgb[1] == 0 and rgb[2] == 0):
+                continue  # background (black) already set
+            color_hex = rgb_to_hex(rgb)
+            color_groups.setdefault(color_hex, []).append(pos)
+        for color_hex, positions in color_groups.items():
+            self.place_pixels(color_hex, self._flip_positions(positions))
+        self._remember_drawing()
+        await self.apply()
+
+    async def _show_panel_sequence(self):
+        """_apply_display_mode_internal: Panel Color Sequence."""
+        # The colors fill the panel one module after another; any text
+        # or full-panel setting is kept for the text modes.
+        self._end_scroll()
+        self._place_frame(self._panel_sequence_frame(self._text_colors))
+        await self.apply()
+
+    async def _show_text(self):
+        """_apply_display_mode_internal: the text (or the full panel) in a
+        text mode, then the scroll timer started or stopped."""
+        # SAFETY NET: the text/gradient renderer below only handles the
+        # text render modes.  If we reach here with a non-text mode
+        # left over -- e.g. "Custom Draw" after a pixel art was cleared
+        # by a text call (set_custom_text sets _custom_draw_active=False
+        # but the mode string lingers) -- NONE of the mode branches match
+        # and the panel renders all-black.  Normalise any unrecognised
+        # mode to "Solid Color" so text is ALWAYS rendered.  This keeps
+        # every pixel-art -> text (and similar) transition reliable.
+        if self._mode not in TEXT_RENDER_MODES:
+            _LOGGER.debug(
+                "[DISPLAY] [%s] Normalising non-text mode '%s' -> 'Solid Color' for text render",
+                self._ip, self._mode,
+            )
+            self._enter_mode("Solid Color")
+            if self._matrix_mode not in TEXT_RENDER_MODES:
+                self._enter_mode(matrix_mode="Solid Color")
+        # --- Panel mode override -----------------------------------
+        # When full_panel is on, replace the actual text with a single
+        # virtual character (PANEL_FULL_CHAR) that covers every pixel
+        # on the 5x20 display.  All rendering modes then see one
+        # "giant letter" filling the whole panel and work through the
+        # normal text rendering path -- no special branches needed.
+        if self._full_panel:
+            effective_text = PANEL_FULL_CHAR  # single char covering every pixel of the frame
+            # The columns the lamp shows (a Cube Matrix with fewer
+            # blocks: its gradients span those, not 20).
+            total_columns = self._shown_columns()
+            total_text_width = total_columns  # fills the shown width
+            current_offset = 0  # no alignment shift -- it already covers everything
+            self._max_scroll_offset = 0  # a full panel does not scroll
+            _LOGGER.debug(
+                "[DISPLAY] [%s] Panel mode: rendering virtual full-panel character "
+                "(mode='%s', colors=%s stops)",
+                self._ip, self._mode,
+                len(self._text_colors) if self._text_colors else 0
+            )
+        else:
+            effective_text = self._custom_text
+            # Laid out and scrolled within the columns the lamp shows.
+            total_columns = self._shown_columns()
+            total_text_width = sum(self._char_advance(letter) for letter in self._custom_text) - 1
+            current_offset = self.calculate_text_offset(total_text_width, total_columns)
+        _LOGGER.debug(
+            "[DISPLAY] Rendering text: '%s' with mode: '%s' and colors: %s (width %s, offset %s)",
+            effective_text, self._mode, self._text_colors, total_text_width, current_offset,
+        )
+        if not self._text_colors:
+            _LOGGER.warning("[DISPLAY] No text colors set! Using default red.")
+        
+        self._place_frame(self._text_mode_frame(
+            self._mode, effective_text, self._text_colors,
+            self._angle, current_offset, total_text_width,
+        ))
+
+        # Every scroll step comes here: no log per module (up to 100 calls a
+        # step, even with debug off); the frame is the light's matrix_colors.
+
+        # Skip post-delay when scrolling to maintain smooth animation timing
+        await self.apply()
+        _LOGGER.debug("[DISPLAY] Text apply() completed successfully")
+        
+        # Start scroll timer if text is longer than display and scrolling is enabled
+        if self._max_scroll_offset > 0 and self._scroll_enabled:
+            _LOGGER.debug("[SCROLL] Starting scroll timer for long text (max_offset: %s)", self._max_scroll_offset)
+            self._set_scrolling(True)
+            self.start_scroll_timer()
+        else:
+            # Stop scrolling if text fits or scrolling is disabled
+            self._set_scrolling(False)
+            self.stop_scroll_timer()
+
+    async def _show_background(self):
+        """_apply_display_mode_internal: the background only."""
+        self._end_scroll()
+        # No text, no panel mode, no pixel art, no special mode.
+        # All modules were already set to background color above.
+        # Push that background-only display to the Cube so the lamp
+        # actually shows it (e.g., when panel mode is turned OFF with
+        # no text set -- without this, the lamp stays on the old display).
+        _LOGGER.debug(
+            "[DISPLAY] [%s] No content to render "
+            "(text='%s', panel=%s, "
+            "draw_active=%s, "
+            "mode='%s') -- pushing background-only display",
+            self._ip, self._custom_text, self._full_panel,
+            self._custom_draw_active, self._mode
+        )
+        await self.apply()
 
     # The gradient modes' colors when none are set (the others: red).
     _GRADIENT_TEXT_MODES = (
@@ -419,28 +439,7 @@ class MatrixRenderMixin:
             return frame
 
         if mode in ("Angle Gradient", "Radial Gradient"):
-            center_col = (columns - 1) / 2
-            center_row = (TOTAL_ROWS - 1) / 2
-            if mode == "Angle Gradient":
-                dx = math.cos(math.radians(angle))
-                dy = math.sin(math.radians(angle))
-                projections = [
-                    col * dx + row * dy
-                    for col in (-center_col, center_col)
-                    for row in (-center_row, center_row)
-                ]
-                low = min(projections)
-                span = (max(projections) - low) or 1
-
-                def place(row, col):
-                    return ((col - center_col) * dx + (row - center_row) * dy - low) / span
-            else:
-                farthest = math.sqrt(center_col ** 2 + center_row ** 2)
-
-                def place(row, col):
-                    distance = math.sqrt((col - center_col) ** 2 + (row - center_row) ** 2)
-                    return distance / farthest if farthest > 0 else 0
-
+            place = self._panel_gradient_place(mode, angle, columns)
             for glyph, letter_offset in letters:
                 for row, glyph_col in glyph:
                     col = glyph_col + letter_offset
@@ -454,34 +453,11 @@ class MatrixRenderMixin:
             if mode == "Letter Angle Gradient":
                 if not glyph:
                     continue
-                dx = math.cos(math.radians(angle))
-                dy = math.sin(math.radians(angle))
-                # Its box: as the frame's positions read (a letter past an
-                # edge wraps, as it always did).
-                cells = [divmod(row * width + col + letter_offset, width) for row, col in glyph]
-                rows = [row for row, _ in cells]
-                cols = [col for _, col in cells]
-                if len(set(cols)) == 1:
-                    # A one-column letter: a 3-column, full-height box.
-                    min_row, max_row = 0, TOTAL_ROWS - 1
-                    min_col = max(0, cols[0] - 1)
-                    max_col = min(columns - 1, cols[0] + 1)
-                else:
-                    min_row, max_row = min(rows), max(rows)
-                    min_col, max_col = min(cols), max(cols)
-                center_row = (min_row + max_row) / 2
-                center_col = (min_col + max_col) / 2
-                projections = [
-                    (col - center_col) * dx + (row - center_row) * dy
-                    for col in (min_col, max_col)
-                    for row in (min_row, max_row)
-                ]
-                low = min(projections)
-                span = (max(projections) - low) or 1
+                place = self._letter_angle_place(glyph, letter_offset, angle, width, columns)
                 for row, glyph_col in glyph:
                     col = glyph_col + letter_offset
                     if shown(row, col):
-                        position = ((col - center_col) * dx + (row - center_row) * dy - low) / span
+                        position = place(row, col)
                         frame[row * width + col] = clamp(
                             gradient(colors, position * (len(colors) - 1), len(colors))
                         )
@@ -513,6 +489,64 @@ class MatrixRenderMixin:
                 frame[row * width + column + letter_offset] = color
         return frame
 
+    def _panel_gradient_place(self, mode, angle, columns):
+        """Angle Gradient and Radial Gradient (_text_mode_frame): a cell's
+        place along the gradient across the shown columns, 0 to 1."""
+        center_col = (columns - 1) / 2
+        center_row = (TOTAL_ROWS - 1) / 2
+        if mode == "Angle Gradient":
+            dx = math.cos(math.radians(angle))
+            dy = math.sin(math.radians(angle))
+            projections = [
+                col * dx + row * dy
+                for col in (-center_col, center_col)
+                for row in (-center_row, center_row)
+            ]
+            low = min(projections)
+            span = (max(projections) - low) or 1
+
+            def place(row, col):
+                return ((col - center_col) * dx + (row - center_row) * dy - low) / span
+        else:
+            farthest = math.sqrt(center_col ** 2 + center_row ** 2)
+
+            def place(row, col):
+                distance = math.sqrt((col - center_col) ** 2 + (row - center_row) ** 2)
+                return distance / farthest if farthest > 0 else 0
+        return place
+
+    def _letter_angle_place(self, glyph, letter_offset, angle, width, columns):
+        """Letter Angle Gradient (_text_mode_frame): a cell's place along
+        the gradient across one letter's box, 0 to 1."""
+        dx = math.cos(math.radians(angle))
+        dy = math.sin(math.radians(angle))
+        # Its box: as the frame's positions read (a letter past an
+        # edge wraps, as it always did).
+        cells = [divmod(row * width + col + letter_offset, width) for row, col in glyph]
+        rows = [row for row, _ in cells]
+        cols = [col for _, col in cells]
+        if len(set(cols)) == 1:
+            # A one-column letter: a 3-column, full-height box.
+            min_row, max_row = 0, TOTAL_ROWS - 1
+            min_col = max(0, cols[0] - 1)
+            max_col = min(columns - 1, cols[0] + 1)
+        else:
+            min_row, max_row = min(rows), max(rows)
+            min_col, max_col = min(cols), max(cols)
+        center_row = (min_row + max_row) / 2
+        center_col = (min_col + max_col) / 2
+        projections = [
+            (col - center_col) * dx + (row - center_row) * dy
+            for col in (min_col, max_col)
+            for row in (min_row, max_row)
+        ]
+        low = min(projections)
+        span = (max(projections) - low) or 1
+
+        def place(row, col):
+            return ((col - center_col) * dx + (row - center_row) * dy - low) / span
+        return place
+
     def _glyph_cells(self, letter: str) -> list:
         """``letter``'s (row, column) cells in the current font (its glyph
         is kept 20 columns wide, layout.glyph_cells); the full-panel
@@ -541,13 +575,6 @@ class MatrixRenderMixin:
                     _LOGGER.warning("[PLACE_PIXELS] Position %s is not a Module: %s", pos, type(self._layout.device_layout[pos]))
             else:
                 _LOGGER.warning("[PLACE_PIXELS] Position %s is out of bounds (0-%s)", pos, len(self._layout.device_layout)-1)
-
-    def letter_size(self, led_positions):
-        unique_columns = set()
-        for position in led_positions:
-            column_index = position % TOTAL_COLUMNS
-            unique_columns.add(column_index)
-        return len(unique_columns)
 
     def _char_advance(self, letter: str) -> int:
         """Columns to advance the cursor after ``letter`` in the current font.

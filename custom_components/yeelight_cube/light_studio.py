@@ -285,15 +285,15 @@ class StudioStreamMixin:
             return (
                 effect in LITE_STREAMED_EFFECTS
                 or clock_studio_runs(effect, self._native_clock_color_mode, palette)
-                or not self._lite_clock_whole_hours()
+                or not self._clock_whole_hours()
             )
         return False
 
-    def _lite_clock_whole_hours(self) -> bool:
-        """The local UTC offset is whole hours: the lamp's own clock takes no
+    def _clock_whole_hours(self) -> bool:
+        """The local UTC offset is whole hours: the lamps' own clocks take no
         other (in India, Nepal, Newfoundland or parts of Australia it would
-        be 30 or 45 minutes off), so Home Assistant's clock is streamed, as
-        on a Cube Matrix (light_matrix._matrix_clock_whole_hours)."""
+        be 30 or 45 minutes off), so Home Assistant's clock is streamed, on
+        a Cube Lite as on a Cube Matrix (light_matrix)."""
         whole = getattr(self, "_native_clock_whole_hours", None)
         return whole is None or whole()
 
@@ -351,7 +351,7 @@ class StudioStreamMixin:
             if (
                 effect not in LITE_STREAMED_EFFECTS
                 and not clock_studio_runs(effect, colour_mode, palette)
-                and not self._lite_clock_whole_hours()
+                and not self._clock_whole_hours()
             ):
                 # Streamed only for its time (a zone the lamp's clock can't
                 # take, studio_selected): the clock the preview camera
@@ -409,16 +409,20 @@ class StudioStreamMixin:
         for a lamp that has no effects of its own on the LAN (Cube Matrix),
         in raw colours when it converts them itself (device_profile), on the
         columns it shows (device_profile.columns)."""
-        width = self._panel_width()
-        if self.device_profile.raw_colours:
-            with raw_colours():
-                return fit_frame(self._own_effect_frame_drawn(render), width)
-        return fit_frame(self._own_effect_frame_drawn(render), width)
+        return self._own_effect_frame_fitted(render, raw=self.device_profile.raw_colours)
 
     def _own_effect_frame_raw(self, render: int) -> list:
         """_own_effect_frame_drawn in raw colours (a stream's pixels)."""
-        with raw_colours():
-            return fit_frame(self._own_effect_frame_drawn(render), self._panel_width())
+        return self._own_effect_frame_fitted(render, raw=True)
+
+    def _own_effect_frame_fitted(self, render: int, *, raw: bool) -> list:
+        """_own_effect_frame_drawn on the panel's width (fit_frame), in raw
+        colours when ``raw``."""
+        width = self._panel_width()
+        if raw:
+            with raw_colours():
+                return fit_frame(self._own_effect_frame_drawn(render), width)
+        return fit_frame(self._own_effect_frame_drawn(render), width)
 
     def _own_effect_frame_drawn(self, render: int) -> list:
         """_own_effect_frame's frame. An effect the renderers draw: its frame

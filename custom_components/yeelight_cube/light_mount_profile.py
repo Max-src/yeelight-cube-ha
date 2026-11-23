@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 
 from .const import (
+    INTERNAL_REDRAW,
     CONF_MOUNT_PROFILE,
     CONF_MOUNT_PROFILE_NODE,
     CONF_MOUNT_PROFILE_SOURCE,
@@ -222,4 +223,4 @@ class MountProfileMixin:
             return
         if self._mode == MODE_NATIVE_EFFECT or (lamp_changed and self._mode == MODE_CLOCK):
             self._lamp_client.forget_running_effect()
-            await self.async_apply_display_mode(update_type="text_change")
+            await self.async_apply_display_mode(update_type=INTERNAL_REDRAW)

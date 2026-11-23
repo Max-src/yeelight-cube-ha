@@ -11,6 +11,15 @@ from __future__ import annotations
 
 import colorsys
 
+try:
+    from .color_utils import clamp8, hsv_to_rgb8, luma
+except ImportError:  # loaded standalone (tests use runpy.run_path, no package)
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from color_utils import clamp8, hsv_to_rgb8, luma
+
 # The light's _preview_<name> values, in the order they apply.
 ADJUSTMENT_DEFAULTS = {
     "hue_shift": 0,       # -180 to +180: rotate hue
@@ -51,7 +60,7 @@ def adjust_color(rgb, adjustments: dict) -> tuple[int, int, int]:
     # Color: hue shift, temperature.
     if hue_shift := get("hue_shift", 0):
         h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
-        r, g, b = _rgb(colorsys.hsv_to_rgb((h + hue_shift / 360) % 1.0, s, v))
+        r, g, b = hsv_to_rgb8((h + hue_shift / 360) % 1.0, s, v)
     if temperature := get("temperature", 0):
         factor = abs(temperature) / 100
         if temperature > 0:  # warm
@@ -67,20 +76,20 @@ def adjust_color(rgb, adjustments: dict) -> tuple[int, int, int]:
     if (saturation := get("saturation", 100)) != 100:
         h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
         s = max(0, min(1, s * (saturation / 100)))
-        r, g, b = _rgb(colorsys.hsv_to_rgb(h, s, v))
+        r, g, b = hsv_to_rgb8(h, s, v)
     if (vibrance := get("vibrance", 100)) != 100:
         h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
         if s > 0:
             # The less saturated a color, the more vibrance changes it.
             weight = (1 - s) ** 0.5
             s = max(0, min(1, s * (1 + (vibrance / 100 - 1) * weight)))
-        r, g, b = _rgb(colorsys.hsv_to_rgb(h, s, v))
+        r, g, b = hsv_to_rgb8(h, s, v)
 
     # Tone: contrast, glow.
     if (contrast := get("contrast", 100)) != 100:
         factor = contrast / 100
         r, g, b = (
-            max(0, min(255, round(((channel / 255 - 0.5) * factor + 0.5) * 255)))
+            clamp8(round(((channel / 255 - 0.5) * factor + 0.5) * 255))
             for channel in (r, g, b)
         )
     if (glow := get("glow", 0)) > 0:
@@ -94,13 +103,13 @@ def adjust_color(rgb, adjustments: dict) -> tuple[int, int, int]:
     # Effects: grayscale, tint, invert.
     if (grayscale := get("grayscale", 0)) > 0:
         factor = grayscale / 100
-        gray = round(0.299 * r + 0.587 * g + 0.114 * b)
+        gray = round(luma(r, g, b))
         r, g, b = (
-            max(0, min(255, round(channel * (1 - factor) + gray * factor)))
+            clamp8(round(channel * (1 - factor) + gray * factor))
             for channel in (r, g, b)
         )
     if (strength := get("tint_strength", 0)) > 0:
-        tint = _rgb(colorsys.hsv_to_rgb(get("tint_hue", 0) / 360, 1.0, 1.0))
+        tint = hsv_to_rgb8(get("tint_hue", 0) / 360, 1.0, 1.0)
         factor = strength / 100
         r, g, b = (
             round(channel * (1 - factor) + tinted * factor)
@@ -113,9 +122,5 @@ def adjust_color(rgb, adjustments: dict) -> tuple[int, int, int]:
             for channel in (r, g, b)
         )
 
-    return (max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)))
+    return (clamp8(r), clamp8(g), clamp8(b))
 
-
-def _rgb(unit) -> tuple[int, int, int]:
-    """A 0-1 color as 0-255 channels."""
-    return tuple(round(channel * 255) for channel in unit)

@@ -149,7 +149,6 @@ class YeelightCubeDrawCard extends PixelArtActionsMixin(
   static properties = {
     matrix: { type: Array },
     selectedColor: { type: String },
-    isDrawing: { type: Boolean },
     pixelArtVersion: { type: Number },
   };
 
@@ -386,15 +385,8 @@ class YeelightCubeDrawCard extends PixelArtActionsMixin(
       this._pendingDrawUpdate = null;
       this.requestUpdate();
     }
-    this._drawingActive = false;
-    this.isDrawing = false;
+    endDraw(this);
     StorageUtils.flushMatrix();
-
-    // Clear pending timers
-    if (this._applyPixelArtTimer) {
-      clearTimeout(this._applyPixelArtTimer);
-      this._applyPixelArtTimer = null;
-    }
   }
 
   // The official pixel arts, once (pixel-art-utils loadBuiltinPixelArts):
@@ -705,9 +697,6 @@ class YeelightCubeDrawCard extends PixelArtActionsMixin(
     const showExportBtn = cfg.show_pixelart_export_button !== false;
     const showImportBtn = cfg.show_pixelart_import_button !== false;
 
-    // Reference pixelArtVersion to ensure LitElement tracks it
-    const _ = this.pixelArtVersion;
-
     const galleryContent = this._renderPixelArtGallery();
 
     // Add export/import buttons if enabled
@@ -730,7 +719,7 @@ class YeelightCubeDrawCard extends PixelArtActionsMixin(
       showImport: showImportBtn,
       buttonStyle: cfg.pixelart_buttons_style || "modern",
       contentMode: cfg.pixelart_content_mode || "icon_text",
-      importStatus: this._importStatus?.showing ? this._importStatus.type : null,
+      importStatus: this._importStatus.value,
       onExport: () => this._exportPixelArts(),
       onImport: () => this._triggerImportFile(),
     });
@@ -934,8 +923,6 @@ class YeelightCubeDrawCard extends PixelArtActionsMixin(
     });
     // Update pixel art sensor entity
     await this._refreshEntity(this.config?.pixelart_sensor);
-    // Fire pixelart-saved event
-    window.dispatchEvent(new Event("pixelart-saved"));
   }
 
   /**
@@ -943,9 +930,8 @@ class YeelightCubeDrawCard extends PixelArtActionsMixin(
    * @param {Object} [options]
    * @param {boolean} [options.latestOnly] - for quick successive picks (the
    *   pixel-art gallery): a send still waiting in the queue is replaced by
-   *   this one, and the lamp entity is not polled afterwards (it pushes its
-   *   new state itself). Each click otherwise queues two calls, and a fast
-   *   run of clicks piles them up behind each other.
+   *   this one. The lamp entity pushes its new state itself: it is not asked
+   *   for it (update_entity) afterwards.
    * @param {string} [options.name] - the pixel art the drawing is (one just
    *   picked in the gallery), shown by the lamp's Pixel Art select; without
    *   it the drawing is the user's own and the select is cleared.
@@ -959,15 +945,13 @@ class YeelightCubeDrawCard extends PixelArtActionsMixin(
       { pixels, ...(name ? { name } : {}), ...drawingWidth(this.matrix) },
       latestOnly ? { coalesce: "send-matrix" } : {},
     );
-    if (latestOnly) return sent;
-    // Also call update_entity for lamp entity or palette sensor
-    await this._refreshEntity(this._primaryEntity() || this.paletteSensor);
-    // Fire pixelart-saved event for consistency
-    window.dispatchEvent(new Event("pixelart-saved"));
+    return sent;
   }
 
   _onImageUpload(e) {
     const file = e.target.files && e.target.files[0];
+    // Emptied, so picking the same file again is a change (and uploads it).
+    e.target.value = "";
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {

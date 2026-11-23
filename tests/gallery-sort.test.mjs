@@ -64,3 +64,23 @@ test("the clock card lists its effect styles first, then the colours and custom 
   assert.deepEqual(solid, [...solid].sort((a, b) => a - b));
   assert.equal(styles.at(-1).name, "My orange");
 });
+
+// A confirmed rename or delete acts on the item its bar showed, even when
+// another device changed the list meanwhile (collection-gallery _runManage).
+test("rename and delete follow the item the bar showed", async () => {
+  const { manageTargetKey } = await import(
+    "../custom_components/yeelight_cube/www/gallery-display-utils.js"
+  );
+  const item = (dataMode, name, editable = true) => ({ dataMode, name, editable });
+  const list = [item("palette:0", "Sea"), item("palette:1", "Sun"), item("palette:2", "Sky")];
+  assert.equal(manageTargetKey(list, "palette:1", "Sun"), "palette:1");
+  // "Sea" deleted elsewhere: "Sun" is now the first.
+  const after = [item("palette:0", "Sun"), item("palette:1", "Sky")];
+  assert.equal(manageTargetKey(after, "palette:1", "Sun"), "palette:0");
+  // Gone, or two of that name: none (the bar asks to pick it again).
+  assert.equal(manageTargetKey(after, "palette:2", "Sea"), null);
+  const twins = [item("palette:0", "Sky"), item("palette:1", "Sky")];
+  assert.equal(manageTargetKey(twins, "palette:2", "Sky"), null);
+  // Only the user's own items.
+  assert.equal(manageTargetKey([item("builtin:x", "Sun", false)], "palette:1", "Sun"), null);
+});

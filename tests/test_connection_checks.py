@@ -128,6 +128,62 @@ class BrightnessRetryTests(unittest.TestCase):
 
         run(scenario())
 
+    def test_a_retry_that_fails_again_is_kept(self):
+        # set_brightness queues the value anew on a failure (no exception):
+        # the retry keeps it, until it is sent.
+        async def scenario():
+            light = light_in_effect()
+            light._lamp_client.is_connected = lambda: True
+            light._pending_brightness = (128, time.time())
+            sent = []
+
+            async def set_brightness(value):
+                sent.append(value)
+                if len(sent) < 3:
+                    light._pending_brightness = (value, time.time())
+
+            light.set_brightness = set_brightness
+            with instant_sleeps("light_connection"):
+                await asyncio.wait_for(light._process_brightness_retries(), 1)
+            self.assertEqual([128, 128, 128], sent)
+            self.assertIsNone(light._pending_brightness)
+
+        run(scenario())
+
+    def test_a_retry_failing_again_still_expires(self):
+        async def scenario():
+            light = light_in_effect()
+            light._lamp_client.is_connected = lambda: True
+            light._pending_brightness = (128, time.time() - 29.5)
+
+            async def set_brightness(value):
+                light._pending_brightness = (value, time.time())
+
+            light.set_brightness = set_brightness
+            await asyncio.wait_for(light._process_brightness_retries(), 3)
+            self.assertIsNone(light._pending_brightness)
+
+        run(scenario())
+
+    def test_a_newer_brightness_queued_during_a_retry_is_sent(self):
+        async def scenario():
+            light = light_in_effect()
+            light._lamp_client.is_connected = lambda: True
+            light._pending_brightness = (128, time.time())
+            sent = []
+
+            async def set_brightness(value):
+                sent.append(value)
+                if value == 128:  # the user moved the slider meanwhile
+                    light._pending_brightness = (200, time.time())
+
+            light.set_brightness = set_brightness
+            with instant_sleeps("light_connection"):
+                await asyncio.wait_for(light._process_brightness_retries(), 1)
+            self.assertEqual([128, 200], sent)
+
+        run(scenario())
+
 
 class UnsolicitedErrorTests(unittest.TestCase):
     def test_refused_frames_warn_once_per_episode(self):

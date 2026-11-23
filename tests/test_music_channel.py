@@ -25,8 +25,11 @@ MUSIC = _load()
 class FakeLamp:
     """Answers TCP commands; on set_music connects back and records lines."""
 
-    def __init__(self, connect_back=True):
+    def __init__(self, connect_back=True, answer_delay=0.0):
         self.connect_back = connect_back
+        # set_music: connect back first, answer this much later.
+        self.answer_delay = answer_delay
+        self.music_closed = asyncio.Event() if answer_delay else None
         self.music_lines = []
         self.tcp_methods = []
         self.server = None
@@ -40,7 +43,13 @@ class FakeLamp:
         line = await reader.readline()
         message = json.loads(line)
         self.tcp_methods.append(message["method"])
-        if message["method"] == "set_music":
+        if message["method"] == "set_music" and self.answer_delay:
+            _, host, port = message["params"]
+            asyncio.get_running_loop().create_task(self._music(host, port))
+            await asyncio.sleep(self.answer_delay)
+            writer.write(b'{"id":1,"result":["ok"]}\r\n')
+            await writer.drain()
+        elif message["method"] == "set_music":
             writer.write(b'{"id":1,"result":["ok"]}\r\n')
             await writer.drain()
             if self.connect_back:
@@ -60,6 +69,8 @@ class FakeLamp:
         while line := await reader.readline():
             self.music_lines.append(json.loads(line))
         writer.close()
+        if self.music_closed is not None:
+            self.music_closed.set()
 
 
 def run(coro):
@@ -156,6 +167,48 @@ class MusicChannelTests(unittest.TestCase):
                 self.assertIsNone(channel._server)  # a late connect-back finds nobody listening
             finally:
                 lamp.server.close()
+        run(scenario())
+
+
+    def test_a_cancel_before_set_musics_answer_closes_the_connect_back(self):
+        # The lamp connected back before answering set_music: a cancel then
+        # closes that connection too (no TCP slot kept by nobody).
+        async def scenario():
+            lamp = FakeLamp(answer_delay=1.0); await lamp.start()
+            channel = MUSIC.MusicChannel("127.0.0.1", lamp.port)
+            try:
+                frame = asyncio.get_running_loop().create_task(channel.request("update_leds", ["AAAA"]))
+                await asyncio.sleep(0.3)  # connected back, set_music not answered yet
+                frame.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await frame
+                self.assertIsNone(channel._server)
+                self.assertFalse(channel.is_open)
+                await asyncio.wait_for(lamp.music_closed.wait(), 2)
+            finally:
+                lamp.server.close()
+        run(scenario())
+
+
+    def test_another_host_is_not_taken_for_the_lamp(self):
+        # Only the lamp's address: a connection from elsewhere in the few
+        # seconds the port is open is closed, the lamp's is still taken.
+        async def scenario():
+            channel = MUSIC.MusicChannel("192.0.2.50")  # the lamp, as the channel knows it
+            channel._connected = asyncio.get_running_loop().create_future()
+            server = await asyncio.start_server(channel._accepted, "127.0.0.1", 0)
+            port = server.sockets[0].getsockname()[1]
+            try:
+                reader, writer = await asyncio.open_connection("127.0.0.1", port)
+                self.assertEqual(b"", await asyncio.wait_for(reader.read(1), 2))  # closed
+                self.assertFalse(channel._connected.done())
+                writer.close()
+                channel._ip = "127.0.0.1"
+                _, writer = await asyncio.open_connection("127.0.0.1", port)
+                await asyncio.wait_for(asyncio.shield(channel._connected), 2)
+                writer.close()
+            finally:
+                server.close()
         run(scenario())
 
 

@@ -40,6 +40,13 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
+# One module whichever name imports it: test files say `fakes` (run by
+# discover from tests/) or `tests.fakes` (from the repository root). Two
+# copies would each keep their own loaded modules and stubs, and a test
+# could then fail depending on which file ran before it.
+for _name in ("fakes", "tests.fakes"):
+    sys.modules.setdefault(_name, sys.modules[__name__])
+
 ROOT = Path(__file__).parents[1] / "custom_components" / "yeelight_cube"
 # The lamp client (lamp_client.LampClient, its mixins and what they share).
 LAMP_CLIENT_FILES = (
@@ -200,6 +207,7 @@ _STUB_MODULES = (
     "homeassistant.helpers.event", "homeassistant.helpers.issue_registry",
     "homeassistant.helpers.restore_state", "homeassistant.helpers.selector",
     "homeassistant.helpers.service_info", "homeassistant.helpers.service_info.zeroconf",
+    "homeassistant.helpers.start",
     "homeassistant.helpers.storage", "homeassistant.helpers.typing", "homeassistant.util",
     "voluptuous",
 )

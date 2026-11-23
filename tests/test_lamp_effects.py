@@ -501,7 +501,7 @@ class PerformanceTests(unittest.TestCase):
         times = []
         for _ in range(3):
             result = subprocess.run(
-                [shutil.which("python") or "python", "-c", script, str(ROOT)],
+                [sys.executable, "-c", script, str(ROOT)],
                 text=True, capture_output=True, check=True,
             )
             times.append(float(result.stdout))

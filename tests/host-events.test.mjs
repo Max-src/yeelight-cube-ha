@@ -57,8 +57,23 @@ function setup(allowed = () => true) {
 test("attributes name handlers and arguments without any script", () => {
   assert.equal(
     hostEventAttrs({ click: "handleGridDelete", input: null }, ["$event", 3]),
-    `data-on-click="handleGridDelete" data-args='["$event",3]'`,
+    `data-on-click="handleGridDelete" data-args="[&quot;$event&quot;,3]"`,
   );
+});
+
+test("data-args cannot leave their attribute and read back as the same JSON", () => {
+  const args = ["it's", '"quoted"', "<b>&amp;</b>", 1];
+  const attrs = hostEventAttrs({ click: "handleGridDelete" }, args);
+  const value = attrs.match(/data-args="([^"]*)"/)[1];
+  assert.doesNotMatch(value, /['<>]/);
+  // What the browser's attribute parsing gives back (getAttribute).
+  const read = value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+  assert.deepEqual(JSON.parse(read), args);
 });
 
 test("the innermost handler runs once, with the event and its element", () => {

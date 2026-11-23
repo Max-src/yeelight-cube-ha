@@ -34,6 +34,10 @@ EFFECTS_CLUSTER = _vendor(0xFC05)
 # session takes a few minutes to come back), or busy.
 CHECK_TIMEOUT = 5.0
 CHECK_RETRY = 60.0
+# Seconds a command or write may take: a server that never answers (the lamp
+# gone mid-request) would otherwise hold its caller, and what waits behind it
+# (a playlist's steps, the minute's checks), for good. A TimeoutError then.
+COMMAND_TIMEOUT = 15.0
 
 # How a server without the Yeelight clusters refuses a command or a write
 # (matterjs-server's ControllerCommandHandler): 'Cluster Id "<id>" unknown',
@@ -176,11 +180,14 @@ class MatterCommands:
         any. MatterCommandsUnavailable: no server."""
         backend, client, node_id = await self._route()
         self.backend = backend
-        return await self._send(client, node_id, cluster_id, name, payload or {}, endpoint_id)
+        return await asyncio.wait_for(
+            self._send(client, node_id, cluster_id, name, payload or {}, endpoint_id),
+            COMMAND_TIMEOUT,
+        )
 
     async def async_write(self, path: str, value) -> Any:
         """Write a Yeelight attribute ("endpoint/cluster/attribute", as
         matter_link's paths). MatterCommandsUnavailable: no server."""
         backend, client, node_id = await self._route()
         self.backend = backend
-        return await client.write_attribute(node_id, path, value)
+        return await asyncio.wait_for(client.write_attribute(node_id, path, value), COMMAND_TIMEOUT)

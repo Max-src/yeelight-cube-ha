@@ -8,7 +8,6 @@ slot 71, whose picture is the GIF stored on the lamp.
 
 from __future__ import annotations
 
-import colorsys
 import math
 
 try:
@@ -21,6 +20,7 @@ try:
         lamp_settings,
     )
     from .lamp_animations import animation_frame
+    from .color_utils import clamp8, hsv_to_rgb8, lerp_rgb, round_half_up
     from .lamp_core import frame_width_for
     from .lamp_studio import (
         effect_offers_color_mode,
@@ -44,6 +44,7 @@ except ImportError:  # loaded standalone (tests use runpy.run_path, no package)
         lamp_settings,
     )
     from lamp_animations import animation_frame
+    from color_utils import clamp8, hsv_to_rgb8, lerp_rgb, round_half_up
     from lamp_core import frame_width_for
     from lamp_studio import (
         effect_offers_color_mode,
@@ -96,7 +97,7 @@ _MUSIC_FLOW_NOTE_PIXELS = frozenset(
 )
 def _clamp(value: float) -> int:
     # Round half up to match JS Math.round (channel values are always >= 0).
-    return max(0, min(255, math.floor(value + 0.5)))
+    return clamp8(round_half_up(value))
 
 
 def _rgb(red: float, green: float, blue: float, level: float = 1.0):
@@ -108,8 +109,7 @@ def _rgb(red: float, green: float, blue: float, level: float = 1.0):
 
 
 def _hsv(hue: float, saturation: float = 1.0, value: float = 1.0):
-    red, green, blue = colorsys.hsv_to_rgb(hue % 1.0, saturation, value)
-    return _rgb(red * 255, green * 255, blue * 255)
+    return hsv_to_rgb8(hue % 1.0, saturation, value, _clamp)
 
 
 def _palette(stops: tuple[tuple[int, int, int], ...], position: float):
@@ -118,10 +118,7 @@ def _palette(stops: tuple[tuple[int, int, int], ...], position: float):
     index = min(len(stops) - 2, int(scaled))
     local = scaled - index
     start, end = stops[index], stops[index + 1]
-    return tuple(
-        _clamp(start[channel] + (end[channel] - start[channel]) * local)
-        for channel in range(3)
-    )
+    return lerp_rgb(start, end, local, _clamp)
 
 
 def render_music_flow_effect(effect: str) -> list[tuple[int, int, int]]:
@@ -200,9 +197,14 @@ def render_music_flow_effect(effect: str) -> list[tuple[int, int, int]]:
     return pixels
 
 
-# The preview speed: phase advances 0.25 + speed / 55 per second (camera.py,
-# the cards); the lamp's default when none is given.
+# The preview speed: the lamp's default when none is given.
 DEFAULT_PREVIEW_SPEED = DEFAULT_NATIVE_EFFECT_SPEED
+
+
+def preview_rate(speed) -> float:
+    """The phase units a preview advances per second at ``speed``: its phase
+    is seconds x this (camera.py; www/native-effect-preview.js previewRate)."""
+    return 0.25 + speed / 55.0
 
 
 def render_native_effect(
@@ -237,7 +239,7 @@ def render_native_effect(
     frame is as wide as them (lamp_core.frame_width_for), an animation from
     column 0, the rest black."""
     speed = DEFAULT_PREVIEW_SPEED if speed is None else speed
-    seconds = phase / (0.25 + speed / 55.0)
+    seconds = phase / preview_rate(speed)
     if studio_runs(effect, color_mode, palette):
         # Palette beyond what the lamp takes: drawn here and streamed
         # (light_studio); what the lamp shows of it.

@@ -149,6 +149,30 @@ class MatterCommandsTests(unittest.TestCase):
             self.assertFalse(run(channel.async_available()))
         self.assertIn("could not be checked", channel.reason)
 
+    def test_a_command_or_write_never_answered_ends(self):
+        # The server checked, then silent mid-request: the caller is not
+        # held for good (a playlist's steps, the minute's checks wait on it).
+        class Stalls(FakeServer):
+            stall = False
+
+            async def send_command(self, command, **kwargs):
+                if self.stall:
+                    await asyncio.sleep(3600)
+                return await super().send_command(command, **kwargs)
+
+            async def write_attribute(self, node_id, path, value):
+                await asyncio.sleep(3600)
+
+        server = Stalls(knows_yeelight=True)
+        channel = commands(link_to(server))
+        self.assertTrue(run(channel.async_available()))
+        server.stall = True
+        with patch.object(COMMANDS, "COMMAND_TIMEOUT", 0.05):
+            with self.assertRaises(TimeoutError):
+                run(channel.async_command(COMMANDS.EFFECTS_CLUSTER, "setRate", {"rate": 20}))
+            with self.assertRaises(TimeoutError):
+                run(channel.async_write("1/2/3", 1))
+
     def test_other_errors_reach_the_caller(self):
         official = FakeServer(knows_yeelight=True)
         channel = commands(link_to(official))

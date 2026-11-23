@@ -72,8 +72,11 @@ NAMESPACE = {
 }
 METHODS = {
     "_apply_display_mode_internal", "_text_mode_frame", "_place_frame",
-    "_panel_sequence_frame", "place_pixels", "letter_size", "_char_advance", "get_positions_for_letter",
-    "calculate_multi_gradient_color", "calculate_text_offset",
+    "_panel_gradient_place", "_letter_angle_place",
+    # _apply_display_mode_internal's steps, one per kind of content.
+    "_show_custom_drawing", "_show_panel_sequence", "_show_text", "_show_background",
+    "_panel_sequence_frame", "place_pixels", "_char_advance", "get_positions_for_letter",
+    "calculate_multi_gradient_color", "calculate_text_offset", "text_offset", "_end_scroll",
     "_flip_position", "_flip_positions", "_shown_columns", "_panel_width", "_glyph_cells", "gradient_preview",
     # light_state's transitions, which the renderer goes through.
     "_enter_mode", "_set_scrolling", "_set_display_frozen",

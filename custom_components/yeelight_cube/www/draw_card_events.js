@@ -1,34 +1,55 @@
 // Event handler functions for Yeelight Cube Draw Card
 // Each function should be exported and receive the card instance as first argument if needed
 
+// A stroke (pencil or eraser) saves one Undo step when it starts, wherever
+// the press lands (a pixel, then the grid it bubbles to), and ends when the
+// press is released anywhere: outside the grid too, so moving back over it
+// with no button held paints nothing.
+const STROKE_ENDS = ["mouseup", "touchend", "touchcancel", "pointercancel"];
+
+function beginStroke(card, e) {
+  // A right press is the eraser's context menu (erasePixel), not a stroke.
+  if (e && typeof e.button === "number" && e.button !== 0) return false;
+  if (!card.pencilMode && !card.eraserMode) return false;
+  if (card._drawingActive) return true;
+  card._pushMatrixHistory();
+  card._drawingActive = true;
+  card.isDrawing = true;
+  const end = () => endDraw(card);
+  card._strokeEnd = end;
+  for (const type of STROKE_ENDS) window.addEventListener(type, end);
+  return true;
+}
+
 export function drawPixel(card, e, idx) {
   e.preventDefault();
+  if (!beginStroke(card, e)) return;
   if (card.pencilMode) {
-    card.isDrawing = true;
-    // For single pixel click (not drag), push history here
-    if (!card._drawingActive) card._pushMatrixHistory();
     card._setPixel(idx);
-  } else if (card.eraserMode) {
-    card.isDrawing = true;
-    if (!card._drawingActive) card._pushMatrixHistory();
+  } else {
     card.matrixOperations.erasePixel(null, idx);
   }
 }
 
 export function startDraw(card, e) {
-  card.isDrawing = true;
-  // Only push history at the start of a drag session
-  if (!card._drawingActive) card._pushMatrixHistory();
-  card._drawingActive = true;
+  beginStroke(card, e);
 }
 
 export function endDraw(card, e) {
   card.isDrawing = false;
   card._drawingActive = false;
+  const end = card._strokeEnd;
+  card._strokeEnd = null;
+  if (end) for (const type of STROKE_ENDS) window.removeEventListener(type, end);
 }
 
 export function drawMove(card, e) {
   if (!card._drawingActive) return;
+  // Released where no mouseup reached the page (another window).
+  if (!e.touches && e.buttons === 0) {
+    endDraw(card);
+    return;
+  }
   let clientX, clientY;
   if (e.touches && e.touches.length) {
     clientX = e.touches[0].clientX;

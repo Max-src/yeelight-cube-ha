@@ -357,7 +357,7 @@
     },
     "exceptions": {
         "no_target": {
-            "message": "Choose a Yeelight Cube Lite lamp: this action needs an entity_id."
+            "message": "Choose a Yeelight Cube Lite lamp: this action needs an entity_id, or a device or area with one."
         },
         "lamp_not_found": {
             "message": "No matching Yeelight Cube Lite lamp for {entity_id}: it is not one, or it is not set up (still starting, or unreachable since Home Assistant started)."
@@ -370,6 +370,18 @@
         },
         "storage_not_ready": {
             "message": "The saved collections are not loaded yet. Try again in a moment."
+        },
+        "unknown_option": {
+            "message": "Unknown option: {option}"
+        },
+        "no_palettes": {
+            "message": "No palette is saved yet: save one first."
+        },
+        "palette_not_found": {
+            "message": "No palette called \"{name}\"."
+        },
+        "palette_no_colors": {
+            "message": "The palette \"{name}\" has no colors."
         },
         "palettes_full": {
             "message": "The palette collection is limited to {limit} items ({current} saved, {added} to add)."
@@ -457,6 +469,9 @@
         },
         "unknown_kind": {
             "message": "Unknown kind: {kind}"
+        },
+        "hex_color_invalid": {
+            "message": "{color} is not a color: give [R, G, B] or a hex code such as \"#FF0000\"."
         },
         "color_invalid": {
             "message": "color must be [r, g, b] or \"clear\"."
@@ -586,10 +601,6 @@
                 "idx": {
                     "name": "Position",
                     "description": "Index of the palette to load (0-based)"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -600,10 +611,6 @@
                 "effects": {
                     "name": "Effects",
                     "description": "Ordered native effect or clock style names. The first item is button slot 1."
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target Yeelight Cube Lite entity."
                 }
             }
         },
@@ -643,10 +650,6 @@
             "name": "Set Clock Style",
             "description": "Configure the lamp's clock in one call: style, color override, content and time format. Any subset of fields may be provided. Drives the Clock card. By default the lamp switches to Clock mode so the change is visible.",
             "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID."
-                },
                 "style": {
                     "name": "Style",
                     "description": "Clock style name (e.g. \"Yellow\", \"Night-sky waves\") or numeric style id."
@@ -687,13 +690,7 @@
         },
         "preview_gradient_modes": {
             "name": "Preview Gradient Modes",
-            "description": "Generate full 20x5 preview matrices for the text/gradient display modes using the entity's current text, colors, and angle. Does not change the lamp; results are fired as a yeelight_cube_gradient_preview_response event.",
-            "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
-                }
-            }
+            "description": "Generate full 20x5 preview matrices for the text/gradient display modes using the entity's current text, colors, and angle. Does not change the lamp; results are fired as a yeelight_cube_gradient_preview_response event."
         },
         "set_custom_text": {
             "name": "Set Custom Text",
@@ -702,10 +699,6 @@
                 "text": {
                     "name": "Text",
                     "description": "Text to display on the cube matrix (at most 255 characters)"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -716,10 +709,6 @@
                 "text_colors": {
                     "name": "Text colors",
                     "description": "Array of RGB color arrays, e.g. [[255,0,0], [0,255,0]] for red to green gradient"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 },
                 "save_as_palette": {
                     "name": "Save as palette",
@@ -739,10 +728,6 @@
                     "name": "Name",
                     "description": "The name of the pixel art these pixels are, if any, so the Pixel Art select shows it. Without it the select is cleared."
                 },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
-                },
                 "width": {
                     "name": "Width",
                     "description": "The drawing's width in columns: its positions are row * width + column (default 20; a Cube Matrix of more than 4 modules can take 5 columns a module, up to 40)."
@@ -751,12 +736,8 @@
         },
         "send_fx_effect": {
             "name": "DEBUG: Send FX Effect (raw)",
-            "description": "LOCAL DEBUG ONLY. Sends a raw private LAN command (default set_fx_effect) to the lamp. Either provide params (raw JSON array, sent verbatim) or the structured fields (mode/style_id/apply/mixer/color/ data_bytes). Not a stable API.",
+            "description": "LOCAL DEBUG ONLY. Sends a raw private LAN command (default set_fx_effect) to the lamp. Either provide params (raw JSON array, sent verbatim) or the structured fields (mode/effect_id/style_id/apply/mixer/rate/color/data_bytes). Not a stable API.",
             "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID."
-                },
                 "method": {
                     "name": "Method",
                     "description": "LAN method name."
@@ -780,6 +761,14 @@
                 "mixer": {
                     "name": "Mixer",
                     "description": "Built-in mixer/animation preset ID."
+                },
+                "effect_id": {
+                    "name": "Command id",
+                    "description": "Command id, the first element of the params sent (default: the mode). Some effects take one that differs from their mode, e.g. 71 for Fireworks with a mode 40 config."
+                },
+                "rate": {
+                    "name": "Rate",
+                    "description": "Animation speed, sent as the config's rate (none sent when not set)."
                 },
                 "color": {
                     "name": "Color",
@@ -807,10 +796,6 @@
             "name": "DEBUG: Query Raw (capture reply)",
             "description": "LOCAL DEBUG ONLY. Sends a raw command to the lamp and returns the device's reply, e.g. to get_prop or to an experimental command. Not a stable API.",
             "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID."
-                },
                 "method": {
                     "name": "Method",
                     "description": "LAN method name to send."
@@ -823,22 +808,12 @@
         },
         "get_capabilities": {
             "name": "DEBUG: Get Capabilities (SSDP)",
-            "description": "LOCAL DEBUG ONLY. Runs the yeelight library's SSDP get_capabilities probe and returns the advertised capability headers (id, model, fw_ver, power, bright, rgb, support, ...). Works regardless of content mode. Not a stable API.",
-            "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID."
-                }
-            }
+            "description": "LOCAL DEBUG ONLY. Runs the yeelight library's SSDP get_capabilities probe and returns the advertised capability headers (id, model, fw_ver, power, bright, rgb, support, ...). Works regardless of content mode. Not a stable API."
         },
         "bulb_call": {
             "name": "DEBUG: Read/Call Bulb Member",
             "description": "LOCAL DEBUG ONLY. Reads a read-only member of the yeelight Bulb object (e.g. get_model_specs, bulb_type, capabilities) or invokes an allowlisted write method with positional args (e.g. set_rgb with [255, 0, 0]). Anything outside the allowlists is rejected. Not a stable API.",
             "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID."
-                },
                 "member": {
                     "name": "Member",
                     "description": "Bulb attribute/method to read (read-only) or call (write)."
@@ -857,10 +832,6 @@
             "name": "DEBUG: Use TCP",
             "description": "LOCAL DEBUG ONLY (administrators). Sends the lamps' commands over TCP (their fallback) for some minutes instead of their UDP session, to test it on demand. 0 minutes: UDP again at once.",
             "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID(s)."
-                },
                 "minutes": {
                     "name": "Minutes",
                     "description": "How long (0 to 60 minutes; 0 = UDP again)."
@@ -869,22 +840,12 @@
         },
         "set_default": {
             "name": "DEBUG: Save Current State As Default",
-            "description": "LOCAL DEBUG ONLY. Sends the documented set_default command so the lamp restores its CURRENT state after a power cut. Not a stable API.",
-            "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID."
-                }
-            }
+            "description": "LOCAL DEBUG ONLY. Sends the documented set_default command so the lamp restores its CURRENT state after a power cut. Not a stable API."
         },
         "set_native_effect": {
             "name": "Set Native Effect",
             "description": "Select and apply a built-in animation, optionally setting its speed and compatible color palette. Respects the auto-turn-on setting.",
             "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "The Yeelight Cube light to act on."
-                },
                 "effect": {
                     "name": "Effect",
                     "description": "Native effect name. Omit to retain the current effect."
@@ -926,10 +887,6 @@
                 "full_panel": {
                     "name": "Full panel",
                     "description": "Whether to apply gradients to entire panel (true) or just text areas (false). If provided, sets both full_panel and mode in one call to avoid redundant updates."
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -940,10 +897,6 @@
                 "angle": {
                     "name": "Angle",
                     "description": "Gradient angle in degrees (0-360). Used for angle-based gradient modes."
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -954,10 +907,6 @@
                 "full_panel": {
                     "name": "Full panel",
                     "description": "Whether to apply gradients to entire panel (true) or just text areas (false)"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -968,10 +917,6 @@
                 "rgb_color": {
                     "name": "RGB color",
                     "description": "RGB color as a list [R, G, B] (0-255 each) or a hex string (e.g. \"#FF0000\")"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -982,10 +927,6 @@
                 "brightness": {
                     "name": "Brightness",
                     "description": "Brightness percentage (1-100%)"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1026,10 +967,6 @@
                 "idx": {
                     "name": "Position",
                     "description": "Index of the saved pixel art to apply (0-based). Instead of the name."
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1122,10 +1059,6 @@
                 "name": {
                     "name": "Name",
                     "description": "Name for the saved palette"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1206,10 +1139,6 @@
                 "orientation": {
                     "name": "Orientation",
                     "description": "Display orientation"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1220,10 +1149,6 @@
                 "orientation": {
                     "name": "Orientation",
                     "description": "Physical mount orientation"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1234,10 +1159,6 @@
                 "font": {
                     "name": "Font",
                     "description": "Font name to use for text display"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1248,10 +1169,6 @@
                 "alignment": {
                     "name": "Alignment",
                     "description": "Text alignment"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1262,22 +1179,12 @@
                 "image_b64": {
                     "name": "Image (base64)",
                     "description": "Base64-encoded image data (at most 4,000,000 characters, about a 3 MB file, and 2048x2048 pixels)"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
         "test_display": {
             "name": "Test Display",
-            "description": "Test service to manually trigger display mode application for debugging. Forces the lamp on, re-establishes the FX handshake and re-applies the current display.",
-            "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
-                }
-            }
+            "description": "Test service to manually trigger display mode application for debugging. Forces the lamp on, re-establishes the FX handshake and re-applies the current display."
         },
         "set_preview_adjustments": {
             "name": "Set Color Effects",
@@ -1322,41 +1229,21 @@
                 "tint_strength": {
                     "name": "Tint strength",
                     "description": "[Effect] Tint Strength - intensity of color tint (0-100). Use with tint_hue"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
         "force_refresh": {
             "name": "Force Refresh",
-            "description": "Force refresh using raw TCP connections (bypasses the persistent socket). Opens a fresh TCP connection for each command, exactly like the working yeelight_matrix library script. Use this when the lamp is stuck and normal display updates are not reaching it.",
-            "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
-                }
-            }
+            "description": "Force refresh using raw TCP connections (bypasses the persistent socket). Opens a fresh TCP connection for each command, exactly like the working yeelight_matrix library script. Use this when the lamp is stuck and normal display updates are not reaching it."
         },
         "freeze_display": {
             "name": "Freeze Display",
-            "description": "Freeze the animated effect on its current frame. On a native effect the whole panel holds; on the clock the background animation holds while the digits and colon keep updating with the time. To resume, re-apply the current effect or clock mode (the cards' \"Resume effect\" action re-sends the last command).",
-            "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
-                }
-            }
+            "description": "Freeze the animated effect on its current frame. On a native effect the whole panel holds; on the clock the background animation holds while the digits and colon keep updating with the time. To resume, re-apply the current effect or clock mode (the cards' \"Resume effect\" action re-sends the last command)."
         },
         "start_effect_rotation": {
             "name": "Start Effect Rotation",
             "description": "Start a server-side rotation that advances the lamp through the given effect or clock style names on its own timer. Because the loop runs inside Home Assistant (not the dashboard), it keeps rotating after the browser tab is closed or refreshed. Stop it with stop_effect_rotation; a lamp that is turned off stops its own rotation.",
             "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
-                },
                 "items": {
                     "name": "Items",
                     "description": "Ordered modes to cycle through. Each item is either a plain name (native effect name, clock style name, or \"custom:\" followed by a saved preset ID) or an object with name, color_mode and color (an RGB list) that reapplies the color mode recorded with the favourite."
@@ -1382,10 +1269,6 @@
                 "favourites": {
                     "name": "Favourites",
                     "description": "Ordered list (at most 100) of objects with name, color_mode and color. Clock presets use \"custom:\" followed by the preset ID; color is an RGB list for color_mode custom."
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1400,10 +1283,6 @@
                 "interval": {
                     "name": "Interval",
                     "description": "Seconds between changes (1 second to 7 days)."
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1411,10 +1290,6 @@
             "name": "Set Cube Matrix modules",
             "description": "Tell a Cube Matrix which modules it has, from the base, as the Yeelight app's module splicing does (over Matter). The lamp cannot detect them; it keeps the list and lays its own effects and clock out for it.",
             "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "The Cube Matrix's light entity."
-                },
                 "modules": {
                     "name": "Modules",
                     "description": "The modules in chain order from the base: matrix (5 x 5), spot or panel; 1 to 8."
@@ -1423,43 +1298,19 @@
         },
         "stop_effect_rotation": {
             "name": "Stop Effect Rotation",
-            "description": "Stop the server-side effect rotation on the target lamps.",
-            "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
-                }
-            }
+            "description": "Stop the server-side effect rotation on the target lamps."
         },
         "skip_effect_rotation": {
             "name": "Skip Effect Rotation",
-            "description": "Advance a running server-side effect rotation to its next mode immediately.",
-            "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
-                }
-            }
+            "description": "Advance a running server-side effect rotation to its next mode immediately."
         },
         "save_state": {
             "name": "Save State",
-            "description": "Snapshot the lamp's current display state (text, colors, gradient mode, angle, drawing/pixel art, font, alignment, orientation, brightness, all color effects and a running effect/clock rotation). Only one snapshot is kept per lamp; calling again overwrites it. Pair with restore_state to show something temporarily and then return to what was displayed before. Note: the snapshot is held in memory and does not survive a Home Assistant restart.",
-            "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
-                }
-            }
+            "description": "Snapshot the lamp's current display state (text, colors, gradient mode, angle, drawing/pixel art, font, alignment, orientation, brightness, all color effects and a running effect/clock rotation). Only one snapshot is kept per lamp; calling again overwrites it. Pair with restore_state to show something temporarily and then return to what was displayed before. Note: the snapshot is held in memory and does not survive a Home Assistant restart."
         },
         "restore_state": {
             "name": "Restore State",
-            "description": "Restore the display state previously captured with save_state and re-render it on the lamp. A rotation that was running when it was saved starts again, in step with the lamps still running it. Never turns the lamp on or off. Does nothing if no state was saved.",
-            "fields": {
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
-                }
-            }
+            "description": "Restore the display state previously captured with save_state and re-render it on the lamp. A rotation that was running when it was saved starts again, in step with the lamps still running it. Never turns the lamp on or off. Does nothing if no state was saved."
         },
         "set_color_accuracy": {
             "name": "Set Color Accuracy",
@@ -1468,10 +1319,6 @@
                 "enabled": {
                     "name": "Enabled",
                     "description": "Enable or disable color accuracy correction."
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         },
@@ -1482,10 +1329,6 @@
                 "enabled": {
                     "name": "Enabled",
                     "description": "Enable (take control) or disable (release control) the lock."
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102)."
                 }
             }
         },
@@ -1528,10 +1371,6 @@
                 "channel_balance": {
                     "name": "Channel balance",
                     "description": "System 1 — Blend between uniform (0=hue-safe) and per-channel (1=blue fix) correction. Default: 0.7"
-                },
-                "entity_id": {
-                    "name": "Entity",
-                    "description": "Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls."
                 }
             }
         }

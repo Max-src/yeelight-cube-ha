@@ -23,9 +23,11 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+      # Home Assistant's own Python: its current releases need 3.14, so the
+      # Home Assistant tests run on a current one (tests/ha/requirements.txt).
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       - run: npm ci
       # ruff pinned there (tests/requirements.txt).
       - run: python -m pip install -r tests/requirements.txt

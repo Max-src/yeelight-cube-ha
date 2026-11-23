@@ -12,15 +12,12 @@ import {
   frameWidth,
 } from "./matrix-view.js";
 import { hexToRgbOrBlack } from "./draw_utils.js";
+import { BUILTIN_PIXEL_ARTS_RETRY_MS } from "./retry-delays.js";
 
 // The official app's pixel arts (yeelight_cube/builtin_pixel_arts: name,
 // collection, orientation, pixels), read-only: fetched once per connection
 // to Home Assistant (one per page), shared by every card and editor on it.
 const builtinPixelArts = new WeakMap();
-
-/** After a failed request, the official pixel arts are asked again after
- * this long (ms): not on every Home Assistant update meanwhile. */
-export const BUILTIN_PIXEL_ARTS_RETRY_MS = 30000;
 
 /** The official pixel arts (a promise; [] when the backend has none). A
  * failed request is the answer (the same rejected promise) until

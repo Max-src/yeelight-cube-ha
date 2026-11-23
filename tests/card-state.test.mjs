@@ -2,6 +2,7 @@ import { resolvePreviewAppearance } from "../custom_components/yeelight_cube/www
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { endDraw } from "../custom_components/yeelight_cube/www/draw_card_events.js";
 import { GradientPreviewStore } from "../custom_components/yeelight_cube/www/gradient-preview-store.js";
 import {
   CALL_TIMEOUT_MS,
@@ -649,8 +650,9 @@ test("Draw left mid-stroke: the stroke ends, its repaint and the drawing are not
   const object = new Function(
     "StorageUtils",
     "cancelAnimationFrame",
+    "endDraw",
     `return ({${match[0]}})`,
-  )({ flushMatrix: () => flushed.push(1) }, (id) => cancelled.push(id));
+  )({ flushMatrix: () => flushed.push(1) }, (id) => cancelled.push(id), endDraw);
   Object.setPrototypeOf(object, { disconnectedCallback() {} });
   let updates = 0;
   const card = Object.assign(Object.create(object), {

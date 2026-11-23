@@ -23,10 +23,12 @@ from .errors import failed, invalid, invalid_input
 from .image_utils import MAX_IMAGE_B64_LENGTH, image_pixels, image_to_matrix
 from .input_error import InputError
 from .layout import FONT_MAPS
-from .light import _entity_id_or_list
 from .light_display import MAX_TEXT_LENGTH
 from .light_services_common import (
+    BYPASS_LOCK_FIELD,
+    LAMP_TARGET_FIELDS,
     COLOR_LIST_SCHEMA,
+    require_admin,
     _resolve_entity,
     _resolve_entities,
     make_lamp_runner,
@@ -67,39 +69,47 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         "preview_gradient_modes",
         handle_preview_gradient_modes,
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
     async def handle_set_brightness(service_call):
         """Set brightness using Home Assistant's light.turn_on service (1-100%)."""
         brightness_pct = service_call.data.get("brightness", 100)
-        bypass_lock = bool(service_call.data.get("bypass_lock", False))
-        
+        bypass_lock = service_call.data.get("bypass_lock", False)
+        if bypass_lock:
+            await require_admin(hass, service_call)
+
         # Clamp to 1-100 range
         brightness_pct = max(1, min(100, brightness_pct))
         
-        target_entity = _resolve_entity(service_call, "SET_BRIGHTNESS")
+        # Every lamp targeted (an area, a device, several entities).
+        targets = _resolve_entities(service_call, "SET_BRIGHTNESS")
         
         # Map 1-100 slider to Home Assistant brightness (1-255)
         # Formula: map 1-100 to 3-255 (same as lamp preview card)
         ha_brightness = round(3 + ((brightness_pct - 1) * 252) / 99)
         ha_brightness = max(3, min(255, ha_brightness))
         
-        _LOGGER.debug("[SET_BRIGHTNESS] Setting brightness to %s%% (HA value: %s) for %s", brightness_pct, ha_brightness, target_entity.entity_id)
+        _LOGGER.debug(
+            "[SET_BRIGHTNESS] Setting brightness to %s%% (HA value: %s) for %s",
+            brightness_pct, ha_brightness, [target.entity_id for target in targets],
+        )
         
         try:
             if bypass_lock:
                 # Wizard path: call the entity method directly so it bypasses the
                 # calibration lock (light.turn_on is blocked while locked).
-                await target_entity.set_brightness(ha_brightness, bypass_lock=True)
+                await asyncio.gather(*(
+                    target.set_brightness(ha_brightness, bypass_lock=True) for target in targets
+                ))
             else:
                 # Use standard Home Assistant light.turn_on service
                 await hass.services.async_call(
                     "light",
                     "turn_on",
                     {
-                        "entity_id": target_entity.entity_id,
+                        "entity_id": [target.entity_id for target in targets],
                         "brightness": ha_brightness,
                     },
                     blocking=True
@@ -116,7 +126,8 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_brightness,
         schema=vol.Schema({
             vol.Required("brightness", description="Brightness percentage (1-100)"): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **BYPASS_LOCK_FIELD,
+            **LAMP_TARGET_FIELDS,
         }, extra=vol.ALLOW_EXTRA)
     )
 
@@ -124,9 +135,9 @@ def async_register_display_services(hass: HomeAssistant) -> None:
     async def handle_set_orientation(service_call):
         orientation = service_call.data.get("orientation")
         
-        target_entity = _resolve_entity(service_call, "SET_ORIENTATION")
+        targets = _resolve_entities(service_call, "SET_ORIENTATION")
 
-        await target_entity.set_orientation(orientation)
+        await asyncio.gather(*(target.set_orientation(orientation) for target in targets))
 
     hass.services.async_register(
         DOMAIN,
@@ -134,7 +145,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_orientation,
         schema=vol.Schema({
             vol.Required("orientation"): vol.In(["normal", "flipped"]),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -153,15 +164,15 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_device_orientation,
         schema=vol.Schema({
             vol.Required("orientation"): vol.In(list(DEVICE_ORIENTATIONS)),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
     async def handle_set_font(service_call):
         font = service_call.data.get("font")
-        target_entity = _resolve_entity(service_call, "SET_FONT")
+        targets = _resolve_entities(service_call, "SET_FONT")
 
-        await target_entity.set_font(font)
+        await asyncio.gather(*(target.set_font(font) for target in targets))
 
     hass.services.async_register(
         DOMAIN,
@@ -169,15 +180,15 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_font,
         schema=vol.Schema({
             vol.Required("font"): vol.In(list(FONT_MAPS.keys())),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
     async def handle_set_alignment(service_call):
         alignment = service_call.data.get("alignment")
-        target_entity = _resolve_entity(service_call, "SET_ALIGNMENT")
+        targets = _resolve_entities(service_call, "SET_ALIGNMENT")
 
-        await target_entity.set_alignment(alignment)
+        await asyncio.gather(*(target.set_alignment(alignment) for target in targets))
 
     hass.services.async_register(
         DOMAIN,
@@ -185,7 +196,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_alignment,
         schema=vol.Schema({
             vol.Required("alignment"): vol.In(["left", "center", "right"]),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -212,7 +223,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
             vol.Required("text", description="Text to display on the cube matrix"): vol.All(
                 cv.string, vol.Length(max=MAX_TEXT_LENGTH)
             ),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -233,7 +244,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_angle,
         schema=vol.Schema({
             vol.Required("angle", description="Gradient angle in degrees (0-360). Used for angle-based gradient modes."): vol.Coerce(float),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -274,7 +285,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_text_colors,
         schema=vol.Schema({
             vol.Required("text_colors", description="Array of RGB color arrays, e.g. [[255,0,0], [0,255,0]] for red to green gradient"): COLOR_LIST_SCHEMA,
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
             vol.Optional("save_as_palette", default=False, description="Save these colors as a palette for later use"): bool,
         })
     )
@@ -324,7 +335,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
             vol.Required("image_b64"): vol.All(
                 cv.string, vol.Length(min=1, max=MAX_IMAGE_B64_LENGTH)
             ),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -362,7 +373,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
                 "Custom Draw",
             ]),
             vol.Optional("full_panel", description="Whether to apply gradients to entire panel (true) or just text areas (false). If provided, sets full_panel and mode in one call."): cv.boolean,
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -370,7 +381,10 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         # Supports multi-entity parallel dispatch
         rgb_color = service_call.data.get("rgb_color")
         if isinstance(rgb_color, str):
-            rgb_color = hex_to_rgb(rgb_color)
+            try:
+                rgb_color = hex_to_rgb(rgb_color.strip())
+            except ValueError:
+                raise invalid("hex_color_invalid", color=rgb_color) from None
         rgb_color = tuple(rgb_color)
 
         targets = _resolve_entities(service_call, "SET_SOLID_COLOR")
@@ -389,7 +403,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
                 vol.All(vol.ExactSequence((cv.byte, cv.byte, cv.byte)), vol.Coerce(tuple)),
                 cv.string
             ),
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -410,7 +424,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         handle_set_full_panel,
         schema=vol.Schema({
             vol.Required("full_panel", description="Whether to apply gradients to entire panel (true) or just text areas (false)"): cv.boolean,
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -441,7 +455,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
             vol.Optional("glow"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
             vol.Optional("tint_hue"): vol.All(vol.Coerce(int), vol.Range(min=0, max=360)),
             vol.Optional("tint_strength"): vol.All(vol.Coerce(int), vol.Range(min=0, max=100)),
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -457,7 +471,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         "force_refresh",
         handle_force_refresh,
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -482,7 +496,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         "freeze_display",
         handle_freeze_display,
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -504,7 +518,7 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         "save_state",
         handle_save_state,
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -531,6 +545,6 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         "restore_state",
         handle_restore_state,
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )

@@ -39,15 +39,12 @@ import {
 } from "./card-shell.js";
 import { LampSliders } from "./lamp-sliders.js";
 import { createPendingValue } from "./pending-value.js";
-import { LitElement, html, unsafeCSS, unsafeHTML } from "./lib/lit-all.js";
+import { LitElement, html, unsafeCSS } from "./lib/lit-all.js";
 import { modeGallery } from "./collection-gallery.js";
-import { colorModeRow } from "./color-mode-ui.js";
-import { matchingColorOption } from "./color-mode-selector-utils.js";
 import "./mode-controls-ui.js";
 import "./clock-preset-manager.js";
 import {
   clockPresetLibrary,
-  editClockPreset,
   clockColorToRgb,
   clockPresetKey,
   clockStylesWithPresets,
@@ -58,17 +55,11 @@ import {
   matchingClockColorPreset,
 } from "./clock-preset-utils.js";
 import {
-  renderSliderGroup,
   lightSliderConfig,
-  stableSliderMarkup,
   sliderKeys,
   brightnessPctToRaw,
-  brightnessRawToPct,
   speedPctToRaw,
-  speedRawToPct,
   intensityPctToRaw,
-  intensityRawToPct,
-  sliderWhenUsed,
   isSliderHandler,
 } from "./slider-control-utils.js";
 import { TEXT_SELECTOR_STYLES, PREVIEW_SELECTOR_STYLES } from "./selector-shared-styles.js";
@@ -76,7 +67,6 @@ import {
   clockStyleColorModeState,
   clockStyleRespondsToCustomColor,
   clockStyleByName,
-  clockStyleTakes,
   getClockStyles,
   renderClockFrame,
   lookupNativeClockFont,
@@ -87,10 +77,10 @@ import {
   viewerFrame,
   withPendingMount,
 } from "./matrix-view.js";
-import { renderActionButtonGroup } from "./action-button-ui.js";
 import { defineOnce, registerCustomCard } from "./card-registration.js";
 import { ClockPreviewMixin } from "./clock-card-preview.js";
-import { chosenIntensity, chosenSpeed } from "./lamp-renderers.js";
+import { ClockControlsMixin } from "./clock-card-controls.js";
+import { ClockPresetsMixin } from "./clock-card-presets.js";
 import { FamilyFilter, GallerySort, familyBadge, matchesEffectFamily } from "./effect-families.js";
 import { ITEM_BADGES } from "./item-badges.js";
 import { CLOCK_CARD_CSS } from "./clock-card-styles.js";
@@ -98,18 +88,14 @@ import { rgbToHex } from "./color-utils.js";
 import { previewContext } from "./preview-context.js";
 import { itemLabel, itemMatchesQuery, normalizeCardOptions } from "./card-config.js";
 
-const CONTENT_OPTIONS = [
-  { value: "time", label: "Time", icon: "mdi:clock-outline" },
-  { value: "time_date", label: "Time & Date", icon: "mdi:calendar-clock" },
-  { value: "date", label: "Date", icon: "mdi:calendar" },
-];
-
 export {
   COLOR_PRESET_STYLE_CHOICES,
   COLOR_PRESET_SHAPE_CHOICES,
 } from "./color-mode-selector-utils.js";
 
-class YeelightCubeClockCard extends ClockPreviewMixin(YeelightCardMixin(LitElement)) {
+class YeelightCubeClockCard extends ClockPresetsMixin(
+  ClockControlsMixin(ClockPreviewMixin(YeelightCardMixin(LitElement))),
+) {
   static editor = ["yeelight-cube-clock-card-editor", "./yeelight-cube-clock-card-editor.js"];
   // Slider markup names its handlers in data-on-* attributes.
   static hostEvents = isSliderHandler;
@@ -746,12 +732,15 @@ class YeelightCubeClockCard extends ClockPreviewMixin(YeelightCardMixin(LitEleme
     const result = this._callSetClock(action, managed, { coalesce: "select" });
     this.requestUpdate();
     // A newer pick (still being sent) keeps its own highlight.
-    result.then((sent) => {
+    // A failure (already shown by HA, and passed on to the caller) drops
+    // the highlight, as a refusal does.
+    const settle = (sent) => {
       if (this._pendingStyle.value !== key) return;
       if (sent) this._pendingStyle.set(key);
       else this._pendingStyle.clear();
       this.requestUpdate();
-    });
+    };
+    result.then(settle, () => settle(false));
     return result;
   }
 
@@ -1049,35 +1038,6 @@ class YeelightCubeClockCard extends ClockPreviewMixin(YeelightCardMixin(LitEleme
     });
   }
 
-  // A custom clock style of the gallery (key custom:<id>), or undefined.
-  _presetOf(key) {
-    const id = String(key).startsWith("custom:") ? key.slice(7) : null;
-    return clockPresetLibrary(this._hass).find(
-      (preset) => preset.id === id && (preset.kind || "style") === "style",
-    );
-  }
-
-  // Custom clock styles are shared presets: renamed and deleted for every
-  // card, at once (editClockPreset).
-  async _renamePreset(key, name) {
-    const preset = this._presetOf(key);
-    if (!preset) return false;
-    return editClockPreset(this._hass, "save_clock_preset", {
-      preset_id: preset.id,
-      name,
-      color: preset.color,
-      kind: "style",
-    });
-  }
-
-  async _deletePreset(key) {
-    const preset = this._presetOf(key);
-    if (!preset) return false;
-    return editClockPreset(this._hass, "delete_clock_preset", {
-      preset_id: preset.id,
-    });
-  }
-
   async getUpdateComplete() {
     // Renders are synchronous; Lit's scheduler only settles once connected.
     const result = this.isConnected
@@ -1149,208 +1109,6 @@ class YeelightCubeClockCard extends ClockPreviewMixin(YeelightCardMixin(LitEleme
   _clockStyleBadges(style) {
     if (style.presetId) return [ITEM_BADGES.custom];
     return [style.experimental ? ITEM_BADGES.experimental : ITEM_BADGES.official];
-  }
-
-  _controlGroup(options, onChange) {
-    return renderActionButtonGroup(
-      {
-        buttonStyle: this.config.buttons_style || DEFAULT_BUTTON_STYLE,
-        contentMode:
-          this.config.buttons_content_mode || DEFAULT_BUTTON_CONTENT_MODE,
-        ...options,
-      },
-      onChange,
-    );
-  }
-
-  _toggleFormat(value) {
-    const a = this._attrs();
-    this._applyFormat(
-      value === "twelve"
-        ? { twelve_hour: !a.clock_12_hour }
-        : { colon_blink: !a.clock_colon_blink },
-    );
-  }
-
-  _renderContentToggle(a) {
-    const cur = a.clock_content || (a.clock_show_date ? "time_date" : "time");
-    return html`<div class="section">
-      <div data-clock-control="content">
-        ${this._controlGroup(
-          { label: "Content", items: CONTENT_OPTIONS, value: cur },
-          (value) => this._applyContent(value),
-        )}
-      </div>
-    </div>`;
-  }
-
-  _renderFormatToggles(a) {
-    const twelve = !!a.clock_12_hour;
-    const blink = !!a.clock_colon_blink;
-    return html`<div
-      class="section"
-      style="--ctl-accent: color-mix(in srgb, var(--primary-color, #1976d2) 58%, #12a594);"
-    >
-      <div
-        data-clock-control="format"
-        style="--primary-color: var(--ctl-accent); --primary-color-dark: color-mix(in srgb, var(--ctl-accent) 74%, #000);"
-      >
-        ${this._controlGroup(
-          {
-            label: "Format",
-            multiple: true,
-            items: [
-              {
-                value: "twelve",
-                label: "12-hour",
-                icon: "mdi:hours-12",
-                selected: twelve,
-                states: {
-                  on: {
-                    label: "12-hour",
-                    icon: "mdi:hours-12",
-                    title: "12-hour. Switch to 24-hour",
-                  },
-                  off: {
-                    label: "24-hour",
-                    icon: "mdi:hours-24",
-                    title: "24-hour. Switch to 12-hour",
-                  },
-                },
-              },
-              {
-                value: "colon",
-                label: "Colon blinks",
-                icon: "mdi:animation-outline",
-                selected: blink,
-                states: {
-                  on: {
-                    label: "Colon blinks",
-                    icon: "mdi:animation-play-outline",
-                    title: "Colon blinks. Switch to steady",
-                  },
-                  off: {
-                    label: "Colon steady",
-                    icon: "mdi:pause-circle-outline",
-                    title: "Colon steady. Enable blinking",
-                  },
-                },
-              },
-            ],
-          },
-          (value) => this._toggleFormat(value),
-        )}
-      </div>
-    </div>`;
-  }
-
-  _renderColorMode(a) {
-    const mode = this._currentColorMode(a);
-    const options = this._colors.options();
-    const saved =
-      mode === "custom" && !this._customDraft
-        ? matchingColorOption(
-            options,
-            this._customPresetColor,
-            this._selectedColorPresetId,
-            this._selectedColorPresetName,
-          )
-        : null;
-    return html` <div
-      class="section"
-      style="--ctl-accent: color-mix(in srgb, var(--primary-color, #1976d2) 58%, #7c5cbf);"
-    >
-      ${colorModeRow(this, {
-        options,
-        lamp: mode === "custom" ? saved?.value : mode,
-        draft: this._customMode && this._customDraft,
-        saveKinds: this._saveKinds(),
-        previewAttrs: this._previewAttrs(this._currentStyle()),
-        onSaved: (detail) => this._onPresetSaved(detail),
-      })}
-    </div>`;
-  }
-
-  _renderSliders(a) {
-    // Speed and intensity only while the clock's background reads them;
-    // otherwise hidden or greyed out (sliderWhenUsed).
-    const style = this._lampStyle();
-    const showBrightness = this.config.show_brightness === true;
-    const showSpeed = this.config.show_animation_speed !== false;
-    const showIntensity = this.config.show_intensity !== false;
-
-    const controls = [];
-    if (showBrightness) {
-      const briRaw =
-        this._brightnessPreview != null
-          ? brightnessPctToRaw(this._brightnessPreview)
-          : Number(this._attrs().brightness) || 0;
-      const briPct =
-        this._brightnessPreview != null
-          ? this._brightnessPreview
-          : brightnessRawToPct(briRaw);
-      controls.push({
-        label: "Brightness",
-        gc: { ...this._brightnessGc(), rawValue: briRaw },
-        value: briPct,
-        ns: "brightness",
-      });
-    }
-    if (showSpeed) {
-      const raw = chosenSpeed(a);
-      controls.push(sliderWhenUsed(this.config, clockStyleTakes(style, "speed"), {
-        label: "Speed",
-        gc: { ...this._speedGc(), rawValue: this._speedPreview ?? raw },
-        value: this._lampSliders.value("speed") ?? speedRawToPct(raw),
-        ns: "speed",
-      }));
-    }
-    if (showIntensity) {
-      const raw = chosenIntensity(a);
-      controls.push(sliderWhenUsed(this.config, clockStyleTakes(style, "intensity"), {
-        label: "Intensity",
-        gc: { ...this._intensityGc(), rawValue: this._intensityPreview ?? raw },
-        value: this._lampSliders.value("intensity") ?? intensityRawToPct(raw),
-        ns: "intensity",
-      }));
-    }
-    if (!controls.some(Boolean)) return "";
-    // The shared slider renderer emits an HTML string naming this card's
-    // `_sl*` handlers in data-on-* attributes (see host-events.js).
-    return html`<div class="section section-sliders">
-      ${unsafeHTML(
-        stableSliderMarkup(this, "sliders", renderSliderGroup(controls)),
-      )}
-    </div>`;
-  }
-
-  _onPresetSaved({ kind, name, color }) {
-    this._customDraft = null;
-    if (kind === "color_mode") {
-      this._selectedColorPresetId = null;
-      this._selectedColorPresetName = name;
-      this._customPresetColor = [...color];
-      this._customMode = true;
-      this._callSetClock(clockColorPresetAction({ color }));
-      this.requestUpdate();
-      return;
-    }
-    if (kind !== "style" || !name || !Array.isArray(color)) return;
-    this._customPresetColor = null;
-    this._customMode = false;
-    this._revealSavedStyle = name;
-    // That color is now owned by the new style, not the freeform Custom
-    // slot — forget it so the next Custom pick doesn't reuse it, and mark it
-    // pending so the mode reads Normal until the library echoes the preset.
-    this._lastCustomHex = null;
-    this._pendingStyleColor = [...color];
-    this._callSetClock({
-      style: "White",
-      color_mode: "normal",
-      color,
-      activate: true,
-    });
-    this.requestUpdate();
   }
 
   // The trailing "+" choice opens the native picker; changes apply live.

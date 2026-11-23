@@ -12,8 +12,8 @@ from homeassistant.helpers import config_validation as cv  # type: ignore
 from .const import DOMAIN
 from .name_utils import normalize_display_name
 from .storage import async_collection_changed, collection
-from .light import _entity_id_or_list
 from .light_services_common import (
+    LAMP_TARGET_FIELDS,
     MAX_PALETTES,
     COLOR_LIST_SCHEMA,
     NAME_SCHEMA,
@@ -68,7 +68,7 @@ def async_register_palette_services(hass: HomeAssistant) -> None:
         schema=vol.Schema({
             vol.Required("idx"): cv.positive_int,
             vol.Optional("expected_name"): vol.Any(None, cv.string),
-            vol.Required("entity_id"): _entity_id_or_list
+            **LAMP_TARGET_FIELDS
         })
     )
 
@@ -157,7 +157,7 @@ def async_register_palette_services(hass: HomeAssistant) -> None:
         schema=vol.Schema({
             vol.Required("palette"): COLOR_LIST_SCHEMA,
             vol.Optional("name"): NAME_SCHEMA,
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         })
     )
 
@@ -202,8 +202,8 @@ def async_register_palette_services(hass: HomeAssistant) -> None:
         "move_palette",
         handle_move_palette,
         schema=vol.Schema({
-            vol.Required("from_idx"): vol.All(int, vol.Range(min=0)),
-            vol.Required("to_idx"): vol.All(int, vol.Range(min=0)),
+            vol.Required("from_idx"): cv.positive_int,
+            vol.Required("to_idx"): cv.positive_int,
             vol.Optional("expected_name"): vol.Any(None, cv.string),
         }),
     )

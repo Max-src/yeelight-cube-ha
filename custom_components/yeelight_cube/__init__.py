@@ -25,6 +25,13 @@ _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
+# The entity platforms, the light first: it creates the lamp's connection and
+# light entity (entry.runtime_data), which the others use; it is set up alone
+# before them.
+PLATFORMS = [
+    "light", "switch", "text", "select", "sensor", "binary_sensor", "number", "button", "camera", "event",
+]
+
 
 def _read_card_names() -> list:
     """The cards' names, from the list shared with the frontend and the tests
@@ -340,11 +347,14 @@ def _schedule_device_discovery(hass: HomeAssistant) -> None:
     # The scan also re-runs every 10 minutes to detect devices that changed
     # IP via DHCP while HA was running.
     @ha_callback
-    def _discover_cubelite_devices(_event=None):
-        """Fired once after HA startup — kick off SSDP scan."""
+    def _discover_cubelite_devices(_hass=None):
+        """Once Home Assistant has started (at once when the integration is
+        added later: no 10-minute wait for the first scan)."""
         hass.async_create_task(_async_ssdp_discover_cubelite(hass))
 
-    hass.bus.async_listen_once("homeassistant_started", _discover_cubelite_devices)
+    from homeassistant.helpers.start import async_at_started  # type: ignore
+
+    async_at_started(hass, _discover_cubelite_devices)
 
     # Periodic SSDP scan (every 10 min) — catches IP changes at runtime.
     # The discovery flow's config_flow logic handles dedup and IP migration.
@@ -621,7 +631,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: CubeConfigEntry) -> bool
     await async_load_storage(hass)
 
     ip_address = entry.data[CONF_IP]
-    port = entry.data.get('port', LAN_PORT)
     
     # Listen for config entry updates (e.g. IP change from zeroconf rediscovery)
     entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
@@ -634,9 +643,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: CubeConfigEntry) -> bool
 
     _resync_entry_title(hass, entry, ip_address)
 
-    await _async_require_reachable(hass, entry, ip_address, port)
+    # The lamp's LAN Control port (no entry stores another one).
+    await _async_require_reachable(hass, entry, ip_address, LAN_PORT)
 
-    await _async_store_device_id(hass, entry, ip_address, port)
+    await _async_store_device_id(hass, entry, ip_address, LAN_PORT)
 
     # --- Migrate entity unique_ids from IP-based to entry_id-based ---
     # Old format: yeelight_cube_192_168_1_139{suffix}
@@ -647,17 +657,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: CubeConfigEntry) -> bool
     # Set up light platform FIRST — it creates the LampClient and stores the
     # light entity in entry.runtime_data, which the other platforms (switch,
     # camera, …) depend on.
-    await hass.config_entries.async_forward_entry_setups(entry, ["light"])
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS[:1])
     await _async_require_light(hass, entry, ip_address)
 
     # Now set up all dependent platforms (they can safely read the light entity)
-    await hass.config_entries.async_forward_entry_setups(entry, ["switch", "text", "select", "sensor", "binary_sensor", "number", "button", "camera", "event"])
-    
-    # Auto-dismiss built-in Yeelight discovery flows for this device.
-    # The built-in Yeelight integration discovers CubeLite devices via zeroconf/DHCP
-    # but cannot properly control them. Dismiss those flows so users aren't confused.
-    _schedule_dismiss_yeelight_discoveries(hass)
-    
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS[1:])
+
+    # The built-in Yeelight integration's discovery prompts for this lamp are
+    # dismissed by the timers async_setup started (_schedule_dismiss_yeelight_discoveries).
+
     _LOGGER.debug("Set up Yeelight Cube Lite at %s", ip_address)
     return True
 
@@ -849,12 +857,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Unload platforms (removes entities tied to this entry, including sensors
     # if this entry was the one that created them).
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["light", "switch", "text", "select", "sensor", "binary_sensor", "number", "button", "camera", "event"])
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if not unload_ok:
         # Still loaded: its lamp keeps its place for the services and its lock.
         return False
 
-    # Clean up module-level state in light.py (entity registry + device locks)
+    # Clean up module-level state in light.py (the device locks)
     # so stale references don't persist across integration reloads.
     # Import lazily to avoid circular import (light.py imports from __init__).
     from .light import cleanup_module_state  # noqa: E402
@@ -916,10 +924,15 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Forget the stored per-lamp data (favourites, rotation, runtime state,
     drawing) of a lamp that was deleted, so it does not linger in the storage
     file, and its Repairs (issues.py)."""
-    domain_data = hass.data.get(DOMAIN)
+    domain_data = hass.data.setdefault(DOMAIN, {})
     changed = False
-    if not isinstance(domain_data, dict):
-        domain_data = {}
+    if "storage" not in domain_data:
+        # No lamp has loaded the storage (this one never set up, nor any
+        # other): loaded now, so its data is found and removed.
+        try:
+            await async_load_storage(hass)
+        except Exception as err:  # noqa: BLE001 -- the removal goes on without it
+            _LOGGER.debug("Stored data of a removed lamp not cleaned: %s", err)
     for key in ("favourites", "rotation", "device_runtime_state", "drawing"):
         store = domain_data.get(key)
         if isinstance(store, dict) and store.pop(entry.entry_id, None) is not None:

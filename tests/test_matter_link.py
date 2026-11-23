@@ -84,6 +84,18 @@ class NodeMatchingTests(unittest.TestCase):
         self.assertIsNone(LINK.node_matches({**CUBE_ATTRIBUTES, "0/40/2": 0x1234}, LAMP_IP, None))
         self.assertIsNone(LINK.node_matches({**CUBE_ATTRIBUTES, LINK.PRODUCT: 9}, LAMP_IP, None))
 
+    def test_another_lamp_at_the_lamps_ip_is_not_the_lamp(self):
+        """Two lamps that swapped their addresses (DHCP), or a node's stale
+        address: with the lamp's MAC remembered, a node with another MAC at
+        its IP is the other lamp."""
+        other = "cc:ba:97:00:00:01"
+        self.assertIsNone(LINK.node_matches(CUBE_ATTRIBUTES, LAMP_IP, other))
+        self.assertEqual(LAMP_MAC, LINK.node_matches(CUBE_ATTRIBUTES, LAMP_IP, LAMP_MAC))
+        # An interface without a MAC at the lamp's IP: the lamp, its MAC
+        # unknown ("", never the remembered one taken for the node's).
+        no_mac = {**CUBE_ATTRIBUTES, "0/51/0": [{"0": "WIFI_STA_DEF", "1": True, "5": ["wKgBiw=="]}]}
+        self.assertEqual("", LINK.node_matches(no_mac, LAMP_IP, LAMP_MAC))
+
     def test_vendor_paths(self):
         self.assertEqual("2/320011269/319946752", LINK.EFFECT)
         self.assertEqual("2/320011266/319946753", LINK.ROTATION)
@@ -185,6 +197,18 @@ class MatterLinkTests(unittest.TestCase):
         self.assertIsNone(asyncio.run(self.link.async_read_live("topology")))
         self.assertEqual(value, self.link.values["topology"])  # kept
         self.assertIsNone(asyncio.run(self.link.async_read_live("not_reported")))
+
+    def test_a_read_answered_after_the_link_changed_is_not_kept(self):
+        self.link.refresh(LAMP_IP, None)
+        self.link.values["topology"] = [1]
+
+        async def read_attribute(node_id, path):
+            self.link.node_id = 9  # paired again while it was read
+            return {path: [2, 2, 1, 3, 2, 0, 0, 0]}
+
+        self.client.read_attribute = read_attribute
+        self.assertIsNone(asyncio.run(self.link.async_read_live("topology")))
+        self.assertEqual([1], self.link.values["topology"])
 
     def test_a_node_read_anew_reports_what_changed_restart_first(self):
         # 2026-11-20: after 31 min unplugged the server interviewed the lamp
@@ -360,6 +384,9 @@ class FollowedReportTests(unittest.TestCase):
         self.assertFalse(self.light._music_flow_enabled)
 
     def test_echoes_initial_values_and_unknown_effects_change_nothing(self):
+        # Reports come from a linked node (what the lamp showed before a
+        # command is only noted then).
+        self.light._matter = types.SimpleNamespace(linked=True, node_id=2, values={})
         self.report("effect", 34, initial=True)
         # The integration just started Rainbow (39) over Streamer (3): the
         # lamp reporting either is that command's echo.
@@ -669,6 +696,106 @@ class FollowedReportTests(unittest.TestCase):
         self.light._matter_commands.available = False
         self.assertFalse(asyncio.run(self.light._write_button_playlist(items)))
         self.assertEqual([], sent)
+
+    def button_playlist_items(self):
+        """What light_settings._effect_persist_item builds for two names."""
+        items = {
+            "Rainbow": {"effect_id": 39, "custom_id": 0, "effect_params": [
+                {"mode": 39, "onoff": 1, "rate": 50, "direction": 1}]},
+            "Clock: Rainbow": {"effect_id": 40, "custom_id": 6, "effect_params": [
+                {"mode": 40, "mixer": 0, "color": [33553920], "data": "AQAAAA=="}]},
+        }
+
+        def build(name):
+            if name not in items:
+                raise ValueError(f"Unknown native effect: {name}")
+            return items[name]
+
+        self.light._effect_persist_item = build
+
+    def restored_payloads(self, entry, sent, saved):
+        entry.options.update(buttons_as_remote=False, remote_saved_playlist=saved)
+        sent.clear()
+        self.light.sync_remote_playlist()
+        self.assertNotIn("remote_saved_playlist", entry.options)
+        return [payload for name, payload in sent if name == "updatePersistEffectList"]
+
+    def test_turned_off_restores_set_button_effects_slots_in_full(self):
+        # The playlist set with set_button_effects: its slots come back with
+        # their direction, colours and clock data, not only their effect.
+        entry, sent = self.remote_lamp([(39, 0), (40, 6), (42, 42)])
+        self.button_playlist_items()
+        self.light._button_effects = ["Rainbow", "Clock: Rainbow"]
+        self.assertEqual([
+            {"index": 0, "effect": {"effectId": 39, "customId": 0, "effectParams": [
+                {"mode": 39, "onoff": 1, "direction": 1}]}},
+            {"index": 1, "effect": {"effectId": 40, "customId": 6, "effectParams": [
+                {"mode": 40, "mixer": 0, "color": [33553920, 0, 0, 0], "data": "AQAAAA=="}]}},
+            # Not one of set_button_effects' slots: as before.
+            {"index": 2, "effect": {"effectId": 42, "customId": 42, "effectParams": [{"onoff": 1, "mode": 42}]}},
+        ], self.restored_payloads(entry, sent, [[39, 0], [40, 6], [42, 42]]))
+
+    def test_a_slot_changed_since_set_button_effects_is_restored_as_before(self):
+        entry, sent = self.remote_lamp([])
+        self.button_playlist_items()
+
+        def plain(index, effect_id, custom_id):
+            return {"index": index, "effect": {
+                "effectId": effect_id, "customId": custom_id, "effectParams": [{"onoff": 1, "mode": effect_id}]}}
+
+        cases = {
+            # Changed in the Yeelight app: another effect, another clock
+            # style, or the two slots swapped.
+            "other effect": (["Rainbow"], [[41, 0]]),
+            "other clock style": (["Clock: Rainbow"], [[40, 7]]),
+            "swapped": (["Rainbow", "Clock: Rainbow"], [[40, 6], [39, 0]]),
+            # A name the integration can no longer build.
+            "unknown name": (["Gone"], [[39, 0]]),
+            # Nothing set with set_button_effects (or an older backup).
+            "no names": ([], [[39, 0]]),
+        }
+        for case, (names, saved) in cases.items():
+            with self.subTest(case):
+                self.light._button_effects = names
+                self.assertEqual(
+                    [plain(index, *slot) for index, slot in enumerate(saved)],
+                    self.restored_payloads(entry, sent, saved),
+                )
+        # A Cube Matrix's playlist is never set_button_effects'.
+        self.light.is_cube_matrix = True
+        self.light._button_effects = ["Rainbow"]
+        self.assertEqual([plain(0, 39, 0)], self.restored_payloads(entry, sent, [[39, 0]]))
+
+    def test_set_button_effects_while_the_remote_holds_the_playlist(self):
+        """The list takes its places in the saved playlist, written back when
+        Right as Remote is turned off; the black slots stay on the lamp."""
+        from fakes import module
+        settings = module("light_settings")
+        entry, sent = self.remote_lamp([(39, 39), (42, 42), (43, 43)])
+        self.light.sync_remote_playlist()
+        sent.clear()
+        self.button_playlist_items()
+        self.light.is_cube_matrix = False
+        self.light.async_write_ha_state = lambda: None
+        asyncio.run(settings.SettingsMixin.async_set_button_effects(self.light, ["Rainbow", "Clock: Rainbow"]))
+        self.assertEqual([], sent)  # the black slots stay
+        self.assertEqual([[39, 0], [40, 6], [43, 43]], entry.options["remote_saved_playlist"])
+        self.assertEqual(["Rainbow", "Clock: Rainbow"], self.light._button_effects)
+        # Turned off: the new list comes back in full, the slot after it as it was.
+        self.assertEqual([
+            {"index": 0, "effect": {"effectId": 39, "customId": 0, "effectParams": [
+                {"mode": 39, "onoff": 1, "direction": 1}]}},
+            {"index": 1, "effect": {"effectId": 40, "customId": 6, "effectParams": [
+                {"mode": 40, "mixer": 0, "color": [33553920, 0, 0, 0], "data": "AQAAAA=="}]}},
+            {"index": 2, "effect": {"effectId": 43, "customId": 43, "effectParams": [{"onoff": 1, "mode": 43}]}},
+        ], self.restored_payloads(entry, sent, entry.options["remote_saved_playlist"]))
+        # While the playlist is being written, the list is refused, not lost.
+        self.light.sync_remote_playlist()
+        entry.options.update(buttons_as_remote=True)
+        self.light._remote_playlist_busy = True
+        entry.options["remote_saved_playlist"] = [[39, 39]]
+        with self.assertRaises(ValueError):
+            asyncio.run(settings.SettingsMixin.async_set_button_effects(self.light, ["Rainbow"]))
 
     def test_without_matter_settings_the_playlist_is_left_alone(self):
         entry, sent = self.remote_lamp([(39, 39)])
@@ -984,6 +1111,18 @@ class MusicOnReportTests(unittest.IsolatedAsyncioTestCase):
         light._on_matter_report("mic_music_on", False, False)
         self.assertFalse(await light._await_lamp_music_on(0.05))
         self.assertIsNone(light._lamp_music_on_event)
+
+    async def test_a_newer_music_mode_keeps_its_own_wait(self):
+        # One music mode started while another's wait ends: the newer one
+        # still has its event when the older wait gives up.
+        light = FakeLight()
+        light._expect_lamp_music_on()
+        older = asyncio.ensure_future(light._await_lamp_music_on(0.05))
+        await asyncio.sleep(0)
+        light._expect_lamp_music_on()
+        newer = light._lamp_music_on_event
+        self.assertFalse(await older)
+        self.assertIs(newer, light._lamp_music_on_event)
 
 
 class ButtonCombinationTests(unittest.TestCase):
@@ -1488,3 +1627,27 @@ class RemoteConcurrencyTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EntryMovedTests(unittest.TestCase):
+    """entry_moved_to: an entry moved to a new address (Matter discovery, a
+    node's reported address) takes it as its unique id when the old one was
+    its address and no other entry has the new one."""
+
+    def entry(self, unique_id, ip):
+        return types.SimpleNamespace(unique_id=unique_id, data={LINK.CONF_IP: ip, "x": 1})
+
+    def test_an_address_id_moves_with_the_address(self):
+        moved = self.entry("10.0.0.5", "10.0.0.5")
+        changes = LINK.entry_moved_to(moved, "10.0.0.9", [moved])
+        self.assertEqual({"data": {LINK.CONF_IP: "10.0.0.9", "x": 1}, "unique_id": "10.0.0.9"}, changes)
+
+    def test_a_hardware_id_is_kept(self):
+        moved = self.entry("0xabc", "10.0.0.5")
+        self.assertNotIn("unique_id", LINK.entry_moved_to(moved, "10.0.0.9", [moved]))
+
+    def test_an_id_another_entry_has_is_not_taken(self):
+        moved, other = self.entry("10.0.0.5", "10.0.0.5"), self.entry("10.0.0.9", "10.0.0.1")
+        changes = LINK.entry_moved_to(moved, "10.0.0.9", [moved, other])
+        self.assertNotIn("unique_id", changes)
+        self.assertEqual("10.0.0.9", changes["data"][LINK.CONF_IP])

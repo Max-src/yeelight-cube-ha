@@ -32,6 +32,16 @@ class _Base:
         pass
 
 
+def _control_base():
+    """entity.py's CubeControlEntity (and its CubeDeviceEntity), the base the
+    controls share: its listening to ``_topic`` and its state writes."""
+    tree = ast.parse((ROOT / "entity.py").read_text(encoding="utf-8"))
+    tree.body = [node for node in tree.body if isinstance(node, ast.ClassDef)]
+    namespace = {"callback": lambda function: function}
+    exec(compile(tree, "entity.py", "exec"), namespace)
+    return namespace["CubeControlEntity"]
+
+
 def _load_platform(name, source, extra):
     tree = ast.parse(source)
     # Home Assistant and the package's own modules are provided below.
@@ -47,7 +57,8 @@ def _load_platform(name, source, extra):
     namespace = module.__dict__
     namespace.update({
         **{name: value for name, value in CONSTANTS.items() if not name.startswith("__")},
-        "CubeControlEntity": type("CubeControlEntity", (), {}),
+        "CubeControlEntity": _control_base(),
+        "COLLECTION_EVENTS": {"palettes_v2": "palettes_updated", "pixel_arts": "pixel_arts_updated"},
         "ConfigEntry": object,
         "HomeAssistant": object,
         "AddEntitiesCallback": object,
@@ -163,8 +174,9 @@ class ControlEntityTests(unittest.TestCase):
         # An unknown value shows the default; an unknown option is refused.
         light._font = "gone"
         self.assertEqual(font.current_option, "Basic")
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as refused:
             asyncio.run(font.async_select_option("Comic"))
+        self.assertEqual("unknown_option", refused.exception.translation_key)
 
     def test_a_dropdown_never_drops_a_change_because_the_lamp_is_off(self):
         # The display queue's off-lamp rule decides what to show; only Music

@@ -555,8 +555,8 @@ LAMP_ANIMATION_EFFECTS = {
 ALL_NATIVE_EFFECTS.update(LAMP_ANIMATION_EFFECTS)
 
 # The Cube Matrix's own versions: three of its built-in effects look like
-# another effect where a Cube Lite runs the same slot (2026-11-12, both
-# lamps side by side). Each is an effect of its own, beside the one a Cube
+# another effect where a Cube Lite runs the same slot (both lamps side by
+# side). Each is an effect of its own, beside the one a Cube
 # Lite draws (``matrix_version_of``): a Cube Matrix shows these itself and
 # streams the Cube Lite's (light_matrix), a Cube Lite shows its own and these
 # as below. Added after the tables keyed by slot above: they share their

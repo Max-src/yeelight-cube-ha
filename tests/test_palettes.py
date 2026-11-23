@@ -7,7 +7,7 @@ import hashlib
 import json
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 from tests.test_native_features import CONSTANTS, ROOT, _load_standalone_functions
 
@@ -31,7 +31,7 @@ class PaletteActionTests(unittest.IsolatedAsyncioTestCase):
             data={DOMAIN: {"palettes_v2": self.palettes}},
             bus=SimpleNamespace(async_fire=Mock()),
         )
-        self.save = AsyncMock()
+        self.save = Mock()  # async_schedule_save: one per change
         common = _load_standalone_functions(
             (ROOT / "light_services_common.py").read_text(encoding="utf-8"),
             {"_check_collection_size", "_locate_item", "_move_item"},
@@ -41,7 +41,7 @@ class PaletteActionTests(unittest.IsolatedAsyncioTestCase):
         storage = _load_standalone_functions(
             (ROOT / "storage.py").read_text(encoding="utf-8"),
             {"collection", "async_collection_changed"},
-            {"DOMAIN": DOMAIN, "async_save_data": self.save, "COLLECTION_EVENTS": {"palettes_v2": "palettes_updated", "pixel_arts": "pixel_arts_updated"}},
+            {"DOMAIN": DOMAIN, "async_schedule_save": self.save, "COLLECTION_EVENTS": {"palettes_v2": "palettes_updated", "pixel_arts": "pixel_arts_updated"}},
         )
         self.fns = _load_standalone_functions(
             PALETTE_SOURCE,
@@ -81,7 +81,7 @@ class PaletteActionTests(unittest.IsolatedAsyncioTestCase):
             [p["colors"] for p in self.palettes],
         )
         self.assertEqual([f"{DOMAIN}_palettes_updated"] * 3, self.events())
-        self.assertEqual(3, self.save.await_count)
+        self.assertEqual(3, self.save.call_count)
 
     async def test_a_save_before_the_storage_loads_is_refused_not_lost(self):
         # It used to go into a list the storage then replaced.
@@ -119,9 +119,8 @@ def _sensor_classes():
             and n.name in ("_CollectionSensor", "PaletteSensor", "PixelArtSensor")]
 
     class Base:
-        def __init__(self, hass):
-            self.hass = hass
-            self.writes = 0
+        hass = None  # set by Home Assistant when added
+        writes = 0
 
         def async_write_ha_state(self):
             self.writes += 1
@@ -138,7 +137,8 @@ class CollectionSensorTests(unittest.TestCase):
         classes = _sensor_classes()
         arts = [{"name": "Heart", "pixels": [1]}]
         hass = SimpleNamespace(data={DOMAIN: {"pixel_arts": arts, "palettes_v2": []}})
-        sensor = classes["PixelArtSensor"](hass)
+        sensor = classes["PixelArtSensor"]()
+        sensor.hass = hass
         original = hashlib.md5(json.dumps({"pixel_arts": arts, "count": 1}, sort_keys=True).encode()).hexdigest()
         calls = []
         real = json.dumps
@@ -146,7 +146,7 @@ class CollectionSensorTests(unittest.TestCase):
         attributes = sensor.extra_state_attributes
         # The hash the cards have always received for this content.
         self.assertEqual({"pixel_arts": arts, "content_hash": original, "count": 1}, attributes)
-        self.assertEqual("1 drawings", sensor.state)
+        self.assertEqual("1 drawings", sensor.native_value)
         sensor.extra_state_attributes
         self.assertEqual(1, len(calls))  # not again for the same content
         arts.append({"name": "Star", "pixels": [2]})
@@ -154,10 +154,11 @@ class CollectionSensorTests(unittest.TestCase):
         self.assertEqual(2, sensor.extra_state_attributes["count"])
         self.assertEqual(2, len(calls))
         self.assertNotEqual(original, sensor.extra_state_attributes["content_hash"])
-        palette = classes["PaletteSensor"](hass)
+        palette = classes["PaletteSensor"]()
+        palette.hass = hass
         self.assertEqual("palettes_updated", palette._event)
         # Its state counts them, like the pixel art sensor's (it was unknown).
-        self.assertEqual("0 palettes", palette.state)
+        self.assertEqual("0 palettes", palette.native_value)
         self.assertEqual({"palettes_v2": [], "count": 0}, {
             k: v for k, v in palette.extra_state_attributes.items() if k != "content_hash"
         })

@@ -13,7 +13,6 @@ from homeassistant.components.sensor import (  # type: ignore
 from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfPower  # type: ignore
 from homeassistant.core import callback  # type: ignore
 from homeassistant.helpers.event import async_track_time_interval  # type: ignore
-from homeassistant.helpers.entity import Entity # type: ignore
 from homeassistant.config_entries import ConfigEntry # type: ignore
 from .layout import FONT_MAPS, FONT_METRICS
 from .const import DOMAIN, CONF_IP, CONF_DEVICE_ID
@@ -28,14 +27,13 @@ _LOGGER = logging.getLogger(__name__)
 # previous one (the device lock, light_connection._execute_hardware_op).
 PARALLEL_UPDATES = 0
 
-class YeelightCubeBaseSensor(Entity):
+class YeelightCubeBaseSensor(SensorEntity):
     """Base class for Yeelight Cube Lite sensors (of the integration, not of a
-    lamp: no device; named by their translation key alone)."""
+    lamp: no device; named by their translation key alone). Their value is
+    text or a count, without a unit or device class: shown as it is."""
 
     _attr_has_entity_name = True
-    def __init__(self, hass):
-        self.hass = hass
-        self._attr_should_poll = False
+    _attr_should_poll = False
 
     @property
     def device_info(self):
@@ -47,8 +45,7 @@ class ClockPresetSensor(YeelightCubeBaseSensor):
 
     _unrecorded_attributes = frozenset({"clock_presets"})
 
-    def __init__(self, hass):
-        super().__init__(hass)
+    def __init__(self):
         self._attr_unique_id = "yeelight_cube_clock_presets"
         self._attr_translation_key = "clock_presets"
 
@@ -60,15 +57,13 @@ class ClockPresetSensor(YeelightCubeBaseSensor):
 
     @callback
     def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
         super().async_entity_id_changed(old_entity_id)
 
     async def _handle_update(self, event):
         self.async_write_ha_state()
 
     @property
-    def state(self):
+    def native_value(self):
         return len(self.hass.data[DOMAIN].get("clock_presets", []))
 
     @property
@@ -90,8 +85,7 @@ class _CollectionSensor(YeelightCubeBaseSensor):
     _hash_key: str
     _counted: str
 
-    def __init__(self, hass):
-        super().__init__(hass)
+    def __init__(self):
         self._content_hash = None
 
     async def async_added_to_hass(self):
@@ -103,8 +97,6 @@ class _CollectionSensor(YeelightCubeBaseSensor):
 
     @callback
     def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
         super().async_entity_id_changed(old_entity_id)
 
     @callback
@@ -116,7 +108,7 @@ class _CollectionSensor(YeelightCubeBaseSensor):
         return self.hass.data.get(DOMAIN, {}).get(self._collection_key, [])
 
     @property
-    def state(self):
+    def native_value(self):
         return f"{len(self._items())} {self._counted}"
 
     @property
@@ -143,8 +135,8 @@ class PaletteSensor(_CollectionSensor):
     _hash_key = "palettes"
     _counted = "palettes"
 
-    def __init__(self, hass):
-        super().__init__(hass)
+    def __init__(self):
+        super().__init__()
         self._attr_unique_id = "yeelight_cube_color_palettes"
         self._attr_translation_key = "palettes"
 
@@ -154,13 +146,12 @@ class LetterMapSensor(YeelightCubeBaseSensor):
     # Static font data is large and never changes — keep it out of the recorder.
     _unrecorded_attributes = frozenset({"font_maps", "font_metrics"})
     
-    def __init__(self, hass):
-        super().__init__(hass)
+    def __init__(self):
         self._attr_unique_id = "yeelight_cube_font_letter_map"
         self._attr_translation_key = "font_characters"
 
     @property
-    def state(self):
+    def native_value(self):
         return "ready"
 
     @property
@@ -179,27 +170,29 @@ class PixelArtSensor(_CollectionSensor):
     _hash_key = "pixel_arts"
     _counted = "drawings"
 
-    def __init__(self, hass):
-        super().__init__(hass)
+    def __init__(self):
+        super().__init__()
         self._attr_unique_id = "yeelight_cube_saved_pixel_arts"
         self._attr_translation_key = "pixel_arts"
         self._attr_force_update = False
 
-class YeelightCubeIPSensor(Entity):
+class YeelightCubeIPSensor(SensorEntity):
     """Per-device sensor exposing the current IP address.
 
-    This is a diagnostic sensor — read-only, updated automatically whenever
-    the config entry is reloaded (e.g. after DHCP IP change + rediscovery).
+    This is a diagnostic sensor (kept out of the main UI) — read-only,
+    updated automatically whenever the config entry is reloaded (e.g. after
+    DHCP IP change + rediscovery). Its value is text, shown as it is.
     """
 
-    def __init__(self, hass, config_entry: ConfigEntry):
-        self.hass = hass
+    _attr_should_poll = False
+    # Named after its lamp's device.
+    _attr_has_entity_name = True
+    _attr_translation_key = "ip_address"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, config_entry: ConfigEntry):
         self._config_entry = config_entry
-        self._attr_should_poll = False
         self._attr_unique_id = f"{config_entry.entry_id}_ip_address"
-        # Named after its lamp's device.
-        self._attr_has_entity_name = True
-        self._attr_translation_key = "ip_address"
 
     @property
     def device_info(self):
@@ -209,7 +202,7 @@ class YeelightCubeIPSensor(Entity):
         }
 
     @property
-    def state(self):
+    def native_value(self):
         """Return the current IP address from the config entry."""
         return self._config_entry.data.get(CONF_IP, "unknown")
 
@@ -219,12 +212,6 @@ class YeelightCubeIPSensor(Entity):
             "device_id": self._config_entry.data.get(CONF_DEVICE_ID, ""),
             "entry_id": self._config_entry.entry_id,
         }
-
-    @property
-    def entity_category(self):
-        """Mark as diagnostic so it doesn't clutter the main UI."""
-        from homeassistant.const import EntityCategory  # type: ignore
-        return EntityCategory.DIAGNOSTIC
 
 
 class YeelightCubePowerSensor(CubeDeviceEntity, SensorEntity):
@@ -260,8 +247,6 @@ class YeelightCubePowerSensor(CubeDeviceEntity, SensorEntity):
 
     @callback
     def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
         super().async_entity_id_changed(old_entity_id)
 
 
@@ -295,8 +280,6 @@ class YeelightCubeMatterLinkSensor(CubeDeviceEntity, SensorEntity):
 
     @callback
     def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
         super().async_entity_id_changed(old_entity_id)
 
 
@@ -345,8 +328,6 @@ class YeelightCubeEnergySensor(CubeDeviceEntity, RestoreSensor):
 
     @callback
     def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
         super().async_entity_id_changed(old_entity_id)
 
     @callback
@@ -368,14 +349,11 @@ def _create_and_register_sensors(hass, async_add_entities, owner_entry_id):
     Called during initial setup AND when the owning entry is removed so sensors
     can be re-created under a remaining entry's platform.
     """
-    import logging
-    _LOGGER = logging.getLogger(__name__)
-
     sensors = [
-        ClockPresetSensor(hass),
-        LetterMapSensor(hass),
-        PaletteSensor(hass),
-        PixelArtSensor(hass),
+        ClockPresetSensor(),
+        LetterMapSensor(),
+        PaletteSensor(),
+        PixelArtSensor(),
     ]
 
     async_add_entities(sensors, update_before_add=True)
@@ -392,9 +370,6 @@ def _create_and_register_sensors(hass, async_add_entities, owner_entry_id):
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up sensors for Yeelight Cube Lite."""
-    import logging
-    _LOGGER = logging.getLogger(__name__)
-
     # Initialize domain data if needed
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
@@ -404,7 +379,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     hass.data[DOMAIN].setdefault("_sensor_callbacks", {})[entry.entry_id] = async_add_entities
 
     # --- Per-device IP sensor (always created for every entry) ---
-    ip_sensor = YeelightCubeIPSensor(hass, entry)
+    ip_sensor = YeelightCubeIPSensor(entry)
     async_add_entities([ip_sensor], update_before_add=True)
 
     # --- Per-device estimated power and energy ---

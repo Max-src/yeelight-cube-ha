@@ -7,14 +7,15 @@
  * attributes and one listener per event type, on the card's shadow root (so
  * event.target stays the real element), calls them:
  *
- *   <button data-on-click="handleGridDelete" data-args='["$event", 3]'
- *           data-stop="click">
+ *   <button data-on-click="handleGridDelete"
+ *           data-args="[&quot;$event&quot;,3]" data-stop="click">
  *
  * - The handler is looked up on the element's own shadow-root host (what
  *   `this.getRootNode().host` meant), and only if the host allows it.
  * - Without data-args the handler gets (event, element): `element` is the one
  *   carrying the attribute (inline handlers had it as event.currentTarget).
- *   In data-args, "$event" and "$element" stand for those two.
+ *   In data-args (JSON, HTML-escaped: the attribute reads back the same
+ *   JSON), "$event" and "$element" stand for those two.
  * - Only the innermost element handling an event type runs, so nested
  *   controls never fire twice.
  * - The listeners run in the capture phase, so a handler runs before the
@@ -22,6 +23,8 @@
  *   element did. data-stop="click" then stops the event there (the inline
  *   `event.stopPropagation()`); on an element without a handler it only stops.
  */
+import { escapeHtml } from "./html-escape-utils.js";
+
 const EVENTS = [
   ["click"],
   ["input"],
@@ -45,7 +48,7 @@ export function hostEventAttrs(handlers, args, stop) {
   const attrs = Object.entries(handlers)
     .filter(([, method]) => method)
     .map(([type, method]) => `data-on-${type}="${method}"`);
-  if (args) attrs.push(`data-args='${JSON.stringify(args)}'`);
+  if (args) attrs.push(`data-args="${escapeHtml(JSON.stringify(args))}"`);
   if (stop) attrs.push(`data-stop="${stop}"`);
   return attrs.join(" ");
 }

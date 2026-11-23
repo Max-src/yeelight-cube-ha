@@ -79,22 +79,48 @@ class CubeControlEntity(CubeDeviceEntity):
     """A control that acts on the lamp: unavailable while it is unreachable.
 
     Registers with the light, which rewrites its controls' state whenever the
-    lamp's availability changes."""
+    lamp's availability changes. Listens to the light's ``_topic``
+    (light_state.TOPICS) when it has one: every change made elsewhere comes
+    through async_update_from_light, so it never polls; synced once when
+    added."""
+
+    _topic: str | None = None
 
     @property
     def available(self) -> bool:
         return self._light_entity.available
 
+    @callback
+    def async_update_from_light(self) -> None:
+        """Show the light's state again."""
+        if self.hass is not None:
+            self.async_write_ha_state()
+
+    def _write_states(self) -> None:
+        """Publish this control and the lamp."""
+        if self.hass is not None:
+            self.async_write_ha_state()
+        if self._light_entity.hass is not None:
+            self._light_entity.async_write_ha_state()
+
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         self._light_entity.add_control(self)
+        if self._topic:
+            self._listen_to_light(self._topic)
+        self.async_update_from_light()
 
     async def async_will_remove_from_hass(self) -> None:
         self._light_entity.remove_control(self)
         await super().async_will_remove_from_hass()
 
+    # Every class that defines its own lifecycle hook (async_added_to_hass,
+    # async_will_remove_from_hass) also defines this one, calling super():
+    # Home Assistant 2026.11+ then renames the entity in place instead of
+    # removing and adding it again (until 2027.11 it checks each class: a
+    # base's does not cover a subclass with its own hook; docs/ENTITY_IDS.md,
+    # tests/test_entity_id_changes.py). Nothing here is keyed on the entity
+    # id, so the entity keeps running as it is.
     @callback
     def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
         super().async_entity_id_changed(old_entity_id)

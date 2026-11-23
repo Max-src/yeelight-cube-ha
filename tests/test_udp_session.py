@@ -179,6 +179,48 @@ class UdpSessionTests(unittest.IsolatedAsyncioTestCase):
             self.methods(),
         )
 
+    async def test_a_late_copy_of_an_answer_keeps_the_session(self):
+        # The lamp may send an answer twice: a copy that arrives after the
+        # command took its answer is not a refused frame (it reopened the
+        # session and sent direct mode again for nothing).
+        self.session.session_setup = [("activate_fx_mode", [{"mode": "direct"}])]
+        await self.session.request("set_bright", [80])
+        answered = self.lamp.received[-1]["id"]
+        self.session._received(json.dumps(
+            {"id": answered, "error": {"code": -1, "message": "invalid parameter"}}).encode())
+        self.assertTrue(self.session.is_open)
+        # A frame's refusal still drops it.
+        await self.session.request("update_leds", ["AAAA"])
+        await asyncio.sleep(0.05)  # the frame arrives
+        frame = self.lamp.received[-1]["id"]
+        self.assertEqual("update_leds", self.lamp.received[-1]["method"])
+        self.session._received(json.dumps(
+            {"id": frame, "error": {"code": -1, "message": "invalid parameter"}}).encode())
+        self.assertFalse(self.session.is_open)
+
+    async def test_a_session_cancelled_before_its_setup_is_not_used(self):
+        # Cancelled while direct mode is sent: the session is not taken as
+        # open (frames refused without direct mode); the next command opens
+        # a new one, set up.
+        self.session.session_setup = [("activate_fx_mode", [{"mode": "direct"}])]
+        set_up, started = self.session._set_up, asyncio.Event()
+
+        async def stalled():
+            started.set()
+            await asyncio.sleep(10)
+
+        self.session._set_up = stalled
+        command = asyncio.ensure_future(self.session.request("set_bright", [80]))
+        await started.wait()
+        command.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await command
+        self.assertFalse(self.session.is_open)
+        self.session._set_up = set_up
+        await self.session.request("set_bright", [60])
+        self.assertEqual(
+            ["udp_sess_new", "udp_sess_new", "activate_fx_mode", "set_bright"], self.methods())
+
     async def test_a_setup_the_new_session_refuses_makes_it_unavailable(self):
         self.session.session_setup = [("bad_method", [])]
         with self.assertRaises(udp.UdpUnavailable):

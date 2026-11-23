@@ -574,6 +574,18 @@ class CubeTransportTests(unittest.IsolatedAsyncioTestCase):
         await self.settled()
         self.assertEqual(["AAAA"], self.frames())  # no stale frame after it
 
+    async def test_closing_the_music_connection_cancels_the_resend(self):
+        """The last frame's re-send would open a Cube Matrix's music
+        connection again (update_leds opens it) during the pause before the
+        Matter command that follows its closing."""
+        self.cube._udp = lamp_client.MusicChannel("127.0.0.1", 55443)
+        resend = asyncio.get_running_loop().create_task(asyncio.sleep(10))
+        self.cube._frame_settle = resend
+        self.cube.close_music_session()
+        await asyncio.sleep(0)
+        self.assertTrue(resend.cancelled())
+        self.assertIsNone(self.cube._frame_settle)
+
     async def test_the_probe_asks_the_session(self):
         self.assertTrue(await self.cube.probe(0.2))
         self.assertEqual(["udp_sess_new"], self.udp_methods())
@@ -903,6 +915,29 @@ class TcpFallbackTests(unittest.IsolatedAsyncioTestCase):
         except OSError:
             pass  # nothing listens: only the order is tested
         self.assertTrue(kept.closed)
+
+    async def test_a_raw_query_is_sent_as_any_command(self):
+        # A pending frame re-send would draw over what it starts, and the
+        # effect the lamp ran is no longer known; a read changes nothing.
+        async def query(method, params):
+            resend = asyncio.get_running_loop().create_task(asyncio.sleep(10))
+            self.cube._frame_settle, self.cube._running_effect = resend, ("x",)
+            self.cube._udp.session_setup = [("activate_fx_mode", [{"mode": "direct"}])]
+            try:
+                await asyncio.wait_for(self.cube.query_raw_command(method, params, timeout=0.2), 5)
+            except OSError:
+                pass  # nothing listens
+            await asyncio.sleep(0)
+            return resend
+
+        resend = await query("get_prop", ["power"])
+        self.assertFalse(resend.cancelled())
+        self.assertEqual(("x",), self.cube._running_effect)
+        resend.cancel()
+        resend = await query("set_fx_effect", [47, 0, 4, {}])
+        self.assertTrue(resend.cancelled())
+        self.assertIsNone(self.cube._running_effect)
+        self.assertEqual([], self.cube._udp.session_setup)
 
     async def test_a_socket_closed_while_its_send_runs_is_closed_after_it(self):
         held = _HeldSocket()

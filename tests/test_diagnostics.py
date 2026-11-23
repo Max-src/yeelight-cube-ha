@@ -127,10 +127,11 @@ class ConnectionStateTests(unittest.TestCase):
     def test_the_log_summary_shows_the_connection_state(self):
         fns = _load_standalone_functions(
             (ROOT / "lamp_client_health.py").read_text(encoding="utf-8"),
-            {"connection_state", "state_summary"}, {"time": time},
+            {"connection_state", "state_summary"}, {"time": time, "MusicChannel": type("MusicChannel", (), {})},
         )
         cube = light_state(
             _ip=IP, transport="udp", _udp=SimpleNamespace(sessions_opened=2),
+            _silent_since=0.0, _music_failures=0, capabilities={},
             _fast_socket=None, _fast_socket_time=0.0, _consecutive_failures=1,
             _reconnect_cooldown=5.0, _device_unreachable=False, _connection_healthy=True,
             _just_reconnected=False, _last_reconnect_attempt=0, _last_success_time=time.time() - 3,

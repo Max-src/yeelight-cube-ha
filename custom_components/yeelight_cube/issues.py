@@ -66,8 +66,8 @@ def lamp_problems(
     A Cube Lite whose UDP sessions keep opening while their commands fail
     gets udp_unanswered: the network lets UDP through, the lamp is at fault.
     ``lan_fallback_only``: a Cube Matrix showing everything over Matter,
-    which works: a stuck LAN is then no problem of its own (2026-11-16: the
-    Power cycle sensor on while the lamp showed its stream without fault); it
+    which works: a stuck LAN is then no problem of its own (else the Power
+    cycle sensor is on while the lamp shows its stream without fault); it
     is reported once something needs the LAN again (Matter failing, Music
     Flow)."""
     problems = set()

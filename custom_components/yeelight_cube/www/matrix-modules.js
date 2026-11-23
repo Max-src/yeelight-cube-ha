@@ -15,6 +15,7 @@ import {
   isUpsideDownMount,
   lampWidth,
 } from "./matrix-view.js";
+import { scalePixel } from "./color-utils.js";
 
 const MODULE_SIZE = 5;
 
@@ -394,7 +395,7 @@ const BLACK = [0, 0, 0];
 function pixelsOf(pixels, frame, scale) {
   return pixels.map((index) => {
     const rgb = rgbOf(frame?.[index] ?? BLACK);
-    return scale === 1 ? rgb : rgb.map((channel) => Math.min(255, Math.round(channel * scale)));
+    return scale === 1 ? rgb : scalePixel(rgb, scale);
   });
 }
 

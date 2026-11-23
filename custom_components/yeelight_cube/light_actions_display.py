@@ -179,7 +179,7 @@ class DisplayActionsMixin:
         else:
             text = self._custom_text or ""
             width = sum(self._char_advance(letter) for letter in text) - 1
-            offset = self.calculate_text_offset(width, columns) if text else 0
+            offset = self.text_offset(width, columns) if text else 0
         if mode == "Panel Color Sequence":
             # The whole panel, whatever the text (as on the lamp).
             frame = self._panel_sequence_frame(self._text_colors)
@@ -277,8 +277,12 @@ class DisplayActionsMixin:
         """display_image: the image as the lamp's drawing."""
         self._custom_pixels = custom_pixels
         self._enter_mode("Custom Draw", matrix_mode="Custom Draw", custom_draw=True)
+        # An image, not one of the pixel arts (the Pixel Art select).
+        self._active_pixel_art_name = None
+        self._scroll_offset = 0
+        self._scroll_direction = 1
         await self.async_apply_display_mode(update_type="pixel_art")
-        self._notify("display_mode", "content_mode")
+        self._notify("display_mode", "content_mode", "pixel_art")
 
     async def async_set_display_mode(self, mode: str, full_panel=None) -> None:
         """set_mode: a Matrix render mode or a lamp mode (and full_panel when

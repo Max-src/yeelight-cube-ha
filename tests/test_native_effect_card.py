@@ -443,7 +443,8 @@ class NativeEffectCardTests(unittest.IsolatedAsyncioTestCase):
              "DEFAULT_NATIVE_EFFECT": CONSTANTS["DEFAULT_NATIVE_EFFECT"],
              "DEFAULT_NATIVE_EFFECT_DIRECTION": CONSTANTS["DEFAULT_NATIVE_EFFECT_DIRECTION"],
              "DEFAULT_DEVICE_ORIENTATION": CONSTANTS["DEFAULT_DEVICE_ORIENTATION"],
-             "render_native_effect": NATIVE_PREVIEW["render_native_effect"]},
+             "render_native_effect": NATIVE_PREVIEW["render_native_effect"],
+             "preview_rate": NATIVE_PREVIEW["preview_rate"]},
         )["_get_native_effect_preview"]
         camera = SimpleNamespace(
             _light_entity=light_state(

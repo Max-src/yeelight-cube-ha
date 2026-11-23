@@ -1,3 +1,5 @@
+import { hexToRgb } from "./color-utils.js";
+
 const activePickers = new WeakMap();
 const pickerTriggers = new WeakMap();
 
@@ -5,10 +7,7 @@ export function openRgbColorPicker(owner, anchor, rgb, onColor) {
   const view = owner.ownerDocument.defaultView;
   const bounds = anchor.getBoundingClientRect();
   const apply = (hex) => {
-    if (/^#[0-9a-f]{6}$/i.test(hex))
-      onColor(
-        [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)),
-      );
+    if (/^#[0-9a-f]{6}$/i.test(hex)) onColor(hexToRgb(hex));
   };
   return openColorPicker(owner, {
     value: rgb

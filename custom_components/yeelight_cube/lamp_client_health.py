@@ -142,8 +142,8 @@ class ConnectionHealthMixin:
         from failed commands): whether the lamp itself answers a command
         (PROBE_COMMAND), not only its network part. That part, a chip of its
         own, accepts connections and answers keep-alives even while the
-        lamp's command handling has stalled for good (seen after a stream of
-        frames), which only a power cycle fixes: such a lamp is stuck
+        lamp's command handling has stalled for good (it can, after a stream
+        of frames), which only a power cycle fixes: such a lamp is stuck
         (silent_for), not back."""
         if not answering:
             if self._udp_usable() and await self._udp.ping():
@@ -236,6 +236,7 @@ class ConnectionHealthMixin:
         def age(since: float) -> float | None:
             return round(now - since, 1) if since > 0 else None
 
+        music = isinstance(self._udp, MusicChannel)
         return {
             "transport": self.transport,
             "udp_sessions_opened": self._udp.sessions_opened,
@@ -255,13 +256,13 @@ class ConnectionHealthMixin:
                 self._udp.sessions_opened - self._udp_sessions_at_failure
                 if self._udp_failing_since else 0
             ),
-            "silent_for": age(getattr(self, "_silent_since", 0.0)),
+            "silent_for": age(self._silent_since),
             # A Cube Matrix's fast channel is its music connection (the
             # transport's "udp" then means it; its sessions are connections).
-            "channel": "music" if hasattr(self._udp, "connect_back_failed") else "udp_session",
-            "music_failures": getattr(self, "_music_failures", 0),
-            "music_connect_back_failed": bool(getattr(self._udp, "connect_back_failed", False)),
-            "show_off_mode": (getattr(self, "capabilities", None) or {}).get("show_off_mode"),
+            "channel": "music" if music else "udp_session",
+            "music_failures": self._music_failures,
+            "music_connect_back_failed": music and self._udp.connect_back_failed,
+            "show_off_mode": (self.capabilities or {}).get("show_off_mode"),
             "tcp_forced_for": (
                 round(self._tcp_forced_until - time.monotonic(), 1)
                 if self._tcp_forced_until > time.monotonic() else None

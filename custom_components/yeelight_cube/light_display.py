@@ -14,6 +14,7 @@ from yeelight import BulbException  # type: ignore
 
 from .color_utils import rgb_to_hex
 from .color_adjustments import adjust_color
+from .const import INTERNAL_REDRAW
 from .const import LAMP_MODES, MODE_NATIVE_EFFECT, ROTATION_KIND_MODES
 from .lamp_protocol import (
     trace_frame,
@@ -39,15 +40,14 @@ _LOGGER = logging.getLogger(__name__)
 #   update_leds without an error); None: never;
 # - blank_repeat: leaving a drawing for a built-in mode, the black frame is
 #   sent again this long after the first (None: once). Over UDP a frame is
-#   not acknowledged: a dropped one left the drawing in the lamp, shown again
-#   for a moment when the drawing came back (seen twice in 22 effect exits,
-#   18 Oct 2026). Over TCP it arrives (and a second one would wait ~1 s).
-# UDP: tested on both lamps with them watched (18 Oct 2026): clock and effect
-# to a drawing at these waits, 3 rounds, no flicker and no lost first frame
-# (0.3 / 0.15 / 0.12 too); a drawing shown after 150 s without a frame, at
-# once (a session the lamp dropped while idle is put in direct mode again
-# when it opens: LampClient._udp_request). TCP: the waits tuned in the TCP
-# days, kept (not tested again).
+#   not acknowledged: a dropped one would leave the drawing in the lamp,
+#   shown again for a moment when the drawing comes back. Over TCP it
+#   arrives (and a second one would wait ~1 s).
+# UDP: at these waits a clock or an effect goes to a drawing without a
+# flicker or a lost first frame, and a drawing is shown at once even after
+# 150 s without a frame (a session the lamp dropped while idle is put in
+# direct mode again when it opens: LampClient._udp_request). TCP: the waits
+# that suit a TCP connection.
 ACTIVATION_TIMING = {
     "udp": {"native_exit_settle": 0.0, "direct_mode_settle": 0.05, "native_exit_resend": 0.03,
             "staleness": None, "blank_repeat": 0.05},
@@ -178,6 +178,42 @@ class DisplayMixin:
                 return
             await self.async_set_music_flow(False, restore_display=False)
 
+        if self._native_mode_suppresses(update_type, bypass_lock):
+            return
+        # NOTE: _apply_cooldown removed. It was silently DROPPING updates
+        # when they arrived within 100ms of each other (e.g., rapid pixel
+        # drawing or fast slider changes). Redraws queued for the lamp are
+        # coalesced instead (_execute_hardware_op, coalesce="display": only
+        # the newest waiting one runs, and it draws the latest state).
+        # Dropping here caused lost pixel art frames and missed state changes.
+        is_retry = update_type == 'display_retry'
+        
+        if self._retry_limit_blocks(update_type, is_retry):
+            return
+        
+        log_level = _LOGGER.info if is_retry else _LOGGER.debug
+        log_level(f"[DISPLAY] async_apply_display_mode called - mode: '{self._mode}', text: '{self._custom_text}', type: '{update_type}', is_on: {self._is_on}")
+        
+        async def apply_requested_display():
+            # External control can arrive while this operation waits for the
+            # device lock. Recheck before a queued retry/remote restore draws.
+            if self._external_display and (
+                self._restoring_after_lamp
+                or update_type in {"display_update", "display_retry"}
+            ):
+                return
+            await self._apply_display_mode_internal()
+
+        # Execute the display update under the global lock with error handling
+        return await self._execute_hardware_op(
+            apply_requested_display,
+            f"display:{update_type}",
+            coalesce="display",
+        )
+
+    def _native_mode_suppresses(self, update_type: str, bypass_lock: bool) -> bool:
+        """async_apply_display_mode: whether ``update_type`` is dropped
+        because the lamp shows a built-in mode of its own."""
         # LAMP-NATIVE MODE OWNERSHIP: while the lamp is physically showing a
         # built-in clock / native animation / color flow, suppress *incidental*
         # matrix re-renders that would clobber it -- e.g. a sensor/template-driven
@@ -196,7 +232,7 @@ class DisplayMixin:
         # their own activation path in _apply_display_mode_internal and must NOT
         # be suppressed, so they are excluded by the _mode check.
         _NATIVE_COMPETING_UPDATE_TYPES = {
-            "text_change", "display_update", "display_retry",
+            "text_change", "display_update", "display_retry", INTERNAL_REDRAW,
         }
         # A Cube Matrix's drawing over Matter is in a built-in mode too, but
         # shows Home Assistant's own picture: its text and scroll steps pass.
@@ -217,15 +253,12 @@ class DisplayMixin:
                     "mode. Switch the content mode or apply a drawing to leave it.",
                     self._ip, update_type,
                 )
-                return
-        # NOTE: _apply_cooldown removed. It was silently DROPPING updates
-        # when they arrived within 100ms of each other (e.g., rapid pixel
-        # drawing or fast slider changes). Redraws queued for the lamp are
-        # coalesced instead (_execute_hardware_op, coalesce="display": only
-        # the newest waiting one runs, and it draws the latest state).
-        # Dropping here caused lost pixel art frames and missed state changes.
-        is_retry = update_type == 'display_retry'
-        
+                return True
+        return False
+
+    def _retry_limit_blocks(self, update_type: str, is_retry: bool) -> bool:
+        """async_apply_display_mode: whether ``update_type`` is dropped
+        because the retry limit was reached (a user action resets it)."""
         # Only reset the retry counter when it has actually HIT the limit
         # AND the update is a genuine user action (not a periodic display_update).
         #
@@ -240,6 +273,7 @@ class DisplayMixin:
         user_action_types = {
             'turn_on', 'turn_off', 'brightness_change', 'text_change',
             'color_change', 'pixel_art', 'power_limit', 'remote_restore',
+            INTERNAL_REDRAW,
         }
         is_user_action = update_type in user_action_types
         if not is_retry and self._display_retry_count >= self.MAX_DISPLAY_RETRIES:
@@ -263,27 +297,8 @@ class DisplayMixin:
                     self._ip, update_type, self._display_retry_count,
                     self.MAX_DISPLAY_RETRIES
                 )
-                return  # Don't queue -- device is offline and no user is actively requesting
-        
-        log_level = _LOGGER.info if is_retry else _LOGGER.debug
-        log_level(f"[DISPLAY] async_apply_display_mode called - mode: '{self._mode}', text: '{self._custom_text}', type: '{update_type}', is_on: {self._is_on}")
-        
-        async def apply_requested_display():
-            # External control can arrive while this operation waits for the
-            # device lock. Recheck before a queued retry/remote restore draws.
-            if self._external_display and (
-                self._restoring_after_lamp
-                or update_type in {"display_update", "display_retry"}
-            ):
-                return
-            await self._apply_display_mode_internal()
-
-        # Execute the display update under the global lock with error handling
-        return await self._execute_hardware_op(
-            apply_requested_display,
-            f"display:{update_type}",
-            coalesce="display",
-        )
+                return True  # Don't queue -- device is offline and no user is actively requesting
+        return False
 
     def _prepared_frame(self) -> list:
         """The layout's frame as it is sent, before the power limit: its
@@ -366,28 +381,7 @@ class DisplayMixin:
             # set_bright after frames can make the lamp show an older picture
             # again (lamp_client_udp.FRAME_SETTLE_DELAY). Over TCP it goes on the
             # persistent socket, with the frames.
-            if hardware_brightness != self._last_hardware_brightness:
-                _LOGGER.debug(
-                    "[BRIGHTNESS_DIAG] [%s] APPLY -- sending set_bright: "
-                    "user=%s/255, hardware=%s%%, prev_hw=%s, mode='%s'",
-                    self._ip, self._brightness, hardware_brightness,
-                    self._last_hardware_brightness, self._mode
-                )
-                try:
-                    await self._lamp_client.send_command_fast("set_bright", [hardware_brightness])
-                    self._note_hardware_brightness(hardware_brightness)
-                except Exception as e:
-                    if is_connection_error(e):
-                        raise
-                    _LOGGER.debug(
-                        "[BRIGHTNESS_DIAG] [%s] APPLY -- set_bright FAILED: %s", self._ip, e
-                    )
-            else:
-                _LOGGER.debug(
-                    "[BRIGHTNESS_DIAG] [%s] APPLY -- set_bright SKIPPED "
-                    "(unchanged at %s%%)",
-                    self._ip, hardware_brightness
-                )
+            await self._apply_hardware_brightness(hardware_brightness)
 
             frame = self._prepared_frame()
             lamp_frame = self._lamp_frame(frame)
@@ -395,59 +389,11 @@ class DisplayMixin:
 
             _apply_t0 = time.time()
 
-            # The lit pixels, for the debug log only.
-            lit = (
-                sum(1 for rgb in frame if tuple(rgb) != (0, 0, 0))
-                if _LOGGER.isEnabledFor(logging.DEBUG) else 0
-            )
-            idle_since_last_cmd = time.time() - self._lamp_client.last_command_time if self._lamp_client.last_command_time > 0 else -1
-            
-            _LOGGER.debug(
-                "[APPLY] [%s] Sending update_leds: "
-                "%s lit / %s dark pixels, power=%.1fW%s "
-                "text='%s' mode='%s' "
-                "idle=%.1fs fx_age=%.0fs "
-                "bright=%s/255 hw=%s%%",
-                self._ip, lit, len(frame) - lit,
-                # estimated draw of the frame sent (see lamp_power.py)
-                self._last_frame_power,
-                "" if lamp_frame is frame else
-                f" (limited from {estimated_power(frame, hardware_brightness or 100):.1f}W)",
-                (self._custom_text or '')[:10], self._mode,
-                idle_since_last_cmd, time.time() - self._last_fx_mode_time,
-                self._brightness, hardware_brightness
-            )
-            
-            _t_before_send = time.time()
-            trace_frame(self._ip, "frame", raw_rgb_data)
-            await self._draw_direct(raw_rgb_data)
-            _t_after_send = time.time()
-            # Refresh the FX mode timestamp on every successful draw.  Without
-            # this the staleness clock keeps running from the last
-            # activate_fx_mode call, so any periodic trigger (e.g. a 60 s
-            # sensor update) exceeds the threshold and forces an unnecessary
-            # full re-activation which briefly shows the default Yeelight ribbon
-            # before the pixel data arrives.
-            self._last_fx_mode_time = _t_after_send
-            _LOGGER.debug(
-                "[TIMING] [%s] draw_matrices_fast: %.1fms", self._ip, (_t_after_send - _t_before_send)*1000)
+            self._log_frame_send(frame, lamp_frame, hardware_brightness)
 
-            # NATIVE-EXIT RE-SEND: When leaving a built-in renderer, the
-            # first update_leds above can be dropped while the lamp finishes
-            # switching into direct mode.  The lamp is now in direct mode
-            # (_draw_direct made sure of it), so re-send the same frame once --
-            # this is the deterministic equivalent of the manual second send
-            # that was previously needed.
-            if leaving_native_fw_mode:
-                await asyncio.sleep(ACTIVATION_TIMING[self._lamp_client.transport]["native_exit_resend"])
-                _LOGGER.debug(
-                    "[APPLY] [%s] Native-exit re-send of first frame "
-                    "(lamp just left clock/native mode)",
-                    self._ip
-                )
-                trace_frame(self._ip, "native-exit re-send: frame", raw_rgb_data)
-                await self._draw_direct(raw_rgb_data)
-                self._last_fx_mode_time = time.time()
+            _t_before_send, _t_after_send = await self._send_frame(
+                raw_rgb_data, leaving_native_fw_mode
+            )
 
             # IMPORTANT: When we send pixel data, the lamp automatically turns on
             # So we must update our internal state to match the hardware state
@@ -467,44 +413,139 @@ class DisplayMixin:
             )
 
         except BulbException as e:
-            error_dict = e.args[0] if e.args and isinstance(e.args[0], dict) else {}
-            error_code = error_dict.get('code', 0)
-            error_message = error_dict.get('message', str(e))
-            
-            self._last_connection_error = f"BulbException: {error_message}"
-            connection_lost = isinstance(e, CubeConnectionError)
-            if connection_lost:
-                self._direct_mode_lost()
-            if connection_lost:
-                _LOGGER.debug(
-                    "[APPLY] [%s] BulbException (connection): code=%s, "
-                    "msg='%s' -- re-raising for retry",
-                    self._ip, error_code, error_message
-                )
-            else:
-                _LOGGER.warning(
-                    "[APPLY] [%s] BulbException: code=%s, "
-                    "msg='%s' -- re-raising for retry",
-                    self._ip, error_code, error_message
-                )
+            self._apply_bulb_failed(e)
             raise
             
         except Exception as e:
-            msg = str(e)
-            self._last_connection_error = msg
-            connection_lost = is_connection_error(e)
-            if connection_lost:
-                self._direct_mode_lost()
-            if connection_lost:
-                _LOGGER.debug(
-                    "[APPLY] [%s] Connection issue: %s: %s -- re-raising for retry", self._ip, type(e).__name__, msg
-                )
-            else:
-                _LOGGER.error("[APPLY] [%s] Unexpected error: %s: %s", self._ip, type(e).__name__, e)
+            self._apply_failed(e)
             raise
         finally:
             if self.hass is not None:
                 self._publish_frame(cameras=drawn)
+
+    async def _apply_hardware_brightness(self, hardware_brightness) -> None:
+        """apply()'s brightness step: set_bright, only when the hardware
+        brightness differs from the last one sent (or is unknown)."""
+        if hardware_brightness != self._last_hardware_brightness:
+            _LOGGER.debug(
+                "[BRIGHTNESS_DIAG] [%s] APPLY -- sending set_bright: "
+                "user=%s/255, hardware=%s%%, prev_hw=%s, mode='%s'",
+                self._ip, self._brightness, hardware_brightness,
+                self._last_hardware_brightness, self._mode
+            )
+            try:
+                await self._lamp_client.send_command_fast("set_bright", [hardware_brightness])
+                self._note_hardware_brightness(hardware_brightness)
+            except Exception as e:
+                if is_connection_error(e):
+                    raise
+                _LOGGER.debug(
+                    "[BRIGHTNESS_DIAG] [%s] APPLY -- set_bright FAILED: %s", self._ip, e
+                )
+        else:
+            _LOGGER.debug(
+                "[BRIGHTNESS_DIAG] [%s] APPLY -- set_bright SKIPPED "
+                "(unchanged at %s%%)",
+                self._ip, hardware_brightness
+            )
+
+    def _log_frame_send(self, frame, lamp_frame, hardware_brightness) -> None:
+        """apply()'s debug line for the frame about to be sent."""
+        # The lit pixels, for the debug log only.
+        lit = (
+            sum(1 for rgb in frame if tuple(rgb) != (0, 0, 0))
+            if _LOGGER.isEnabledFor(logging.DEBUG) else 0
+        )
+        idle_since_last_cmd = time.time() - self._lamp_client.last_command_time if self._lamp_client.last_command_time > 0 else -1
+        
+        _LOGGER.debug(
+            "[APPLY] [%s] Sending update_leds: "
+            "%s lit / %s dark pixels, power=%.1fW%s "
+            "text='%s' mode='%s' "
+            "idle=%.1fs fx_age=%.0fs "
+            "bright=%s/255 hw=%s%%",
+            self._ip, lit, len(frame) - lit,
+            # estimated draw of the frame sent (see lamp_power.py)
+            self._last_frame_power,
+            "" if lamp_frame is frame else
+            f" (limited from {estimated_power(frame, hardware_brightness or 100):.1f}W)",
+            (self._custom_text or '')[:10], self._mode,
+            idle_since_last_cmd, time.time() - self._last_fx_mode_time,
+            self._brightness, hardware_brightness
+        )
+
+    async def _send_frame(self, raw_rgb_data: str, leaving_native_fw_mode: bool) -> tuple:
+        """apply()'s send step: the frame, then once more when the lamp
+        just left a built-in mode. Returns when the first send started
+        and ended (time.time())."""
+        _t_before_send = time.time()
+        trace_frame(self._ip, "frame", raw_rgb_data)
+        await self._draw_direct(raw_rgb_data)
+        _t_after_send = time.time()
+        # Refresh the FX mode timestamp on every successful draw.  Without
+        # this the staleness clock keeps running from the last
+        # activate_fx_mode call, so any periodic trigger (e.g. a 60 s
+        # sensor update) exceeds the threshold and forces an unnecessary
+        # full re-activation which briefly shows the default Yeelight ribbon
+        # before the pixel data arrives.
+        self._last_fx_mode_time = _t_after_send
+        _LOGGER.debug(
+            "[TIMING] [%s] draw_matrices_fast: %.1fms", self._ip, (_t_after_send - _t_before_send)*1000)
+
+        # NATIVE-EXIT RE-SEND: When leaving a built-in renderer, the
+        # first update_leds above can be dropped while the lamp finishes
+        # switching into direct mode.  The lamp is now in direct mode
+        # (_draw_direct made sure of it), so re-send the same frame once --
+        # this is the deterministic equivalent of the manual second send
+        # that was previously needed.
+        if leaving_native_fw_mode:
+            await asyncio.sleep(ACTIVATION_TIMING[self._lamp_client.transport]["native_exit_resend"])
+            _LOGGER.debug(
+                "[APPLY] [%s] Native-exit re-send of first frame "
+                "(lamp just left clock/native mode)",
+                self._ip
+            )
+            trace_frame(self._ip, "native-exit re-send: frame", raw_rgb_data)
+            await self._draw_direct(raw_rgb_data)
+            self._last_fx_mode_time = time.time()
+        return _t_before_send, _t_after_send
+
+    def _apply_bulb_failed(self, e) -> None:
+        """apply()'s record and log of a BulbException (re-raised by apply)."""
+        error_dict = e.args[0] if e.args and isinstance(e.args[0], dict) else {}
+        error_code = error_dict.get('code', 0)
+        error_message = error_dict.get('message', str(e))
+        
+        self._last_connection_error = f"BulbException: {error_message}"
+        connection_lost = isinstance(e, CubeConnectionError)
+        if connection_lost:
+            self._direct_mode_lost()
+        if connection_lost:
+            _LOGGER.debug(
+                "[APPLY] [%s] BulbException (connection): code=%s, "
+                "msg='%s' -- re-raising for retry",
+                self._ip, error_code, error_message
+            )
+        else:
+            _LOGGER.warning(
+                "[APPLY] [%s] BulbException: code=%s, "
+                "msg='%s' -- re-raising for retry",
+                self._ip, error_code, error_message
+            )
+
+    def _apply_failed(self, e) -> None:
+        """apply()'s record and log of any other error (re-raised by apply)."""
+        msg = str(e)
+        self._last_connection_error = msg
+        connection_lost = is_connection_error(e)
+        if connection_lost:
+            self._direct_mode_lost()
+        if connection_lost:
+            _LOGGER.debug(
+                "[APPLY] [%s] Connection issue: %s: %s -- re-raising for retry", self._ip, type(e).__name__, msg
+            )
+        else:
+            _LOGGER.error("[APPLY] [%s] Unexpected error: %s: %s", self._ip, type(e).__name__, e)
 
     def _publish_frame(self, *, cameras: bool = True) -> None:
         """Publish what apply() drew: the light's state (its matrix_colors,

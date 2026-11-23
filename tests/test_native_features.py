@@ -119,7 +119,7 @@ _DEFAULT_NAMESPACE = {
         "MODE_CLOCK", "MODE_NATIVE_EFFECT", "LAMP_MODES", "ROTATION_KIND_MODES",
         "lamp_rate", "lamp_intensity", "DEFAULT_NATIVE_EFFECT_INTENSITY",
         "PALETTE_COLOR_MODE", "MUSIC_FLOW_EFFECTS", "MUSIC_FLOW_DEFAULT_PALETTE",
-        "DEFAULT_NATIVE_EFFECT_SPEED", "streamed_slot",
+        "DEFAULT_NATIVE_EFFECT_SPEED", "streamed_slot", "INTERNAL_REDRAW",
     )},
     # What an animation's GIF is drawn with (light_native.animation_look).
     **{name: COLOR_ADJUSTMENTS[name] for name in ("ADJUSTMENT_DEFAULTS", "active_adjustments")},
@@ -133,7 +133,8 @@ _DEFAULT_NAMESPACE = {
     "MatterCommandsUnavailable": MATTER_COMMANDS.MatterCommandsUnavailable,
     "GIF_PACKET_ACK": 6,
     "base64": __import__("base64"),
-    **{name: COLOR_UTILS[name] for name in ("rgb_to_argb", "argb_to_rgb")},
+    # The channel helpers light_color.py and camera.py import.
+    **{name: COLOR_UTILS[name] for name in ("rgb_to_argb", "argb_to_rgb", "clamp8", "lerp_rgb", "luma")},
     "compensate_direction": MOUNT_PROFILE["compensate_direction"],
     "one_axis_direction": MOUNT_PROFILE["one_axis_direction"],
     "HIGH_PAIR": MOUNT_PROFILE["HIGH_PAIR"],
@@ -244,10 +245,11 @@ def _load_standalone_functions(source: str, names: set, extra_namespace=None) ->
 
 class NativeFeatureTests(unittest.TestCase):
     def test_external_display_blocks_background_and_queued_restore_but_allows_user_content(self):
-        apply_mode = _load_standalone_functions(
-            LIGHT_SOURCE, {"async_apply_display_mode"},
+        display = _load_standalone_functions(
+            LIGHT_SOURCE, {"async_apply_display_mode", "_native_mode_suppresses", "_retry_limit_blocks"},
             {"_LOGGER": Mock(), "MUSIC_FLOW_EXIT_UPDATE_TYPES": set()},
-        )["async_apply_display_mode"]
+        )
+        apply_mode = display["async_apply_display_mode"]
         calls = []
         device = types.SimpleNamespace(
             _external_display=True, _is_on=True, _rotation_resume_pending=False,
@@ -263,6 +265,8 @@ class NativeFeatureTests(unittest.TestCase):
         async def execute(func, name, **kwargs):
             await func()
 
+        for step in ("_native_mode_suppresses", "_retry_limit_blocks"):
+            setattr(device, step, types.MethodType(display[step], device))
         device._execute_hardware_op = execute
         device._apply_display_mode_internal = draw
         asyncio.run(apply_mode(device, "display_update"))
@@ -825,9 +829,12 @@ class NativeFeatureTests(unittest.TestCase):
         light._apply_display_mode_internal = AsyncMock()
         run_on_loop(light.async_apply_display_mode(update_type="turn_on"))
         light.async_set_music_flow.assert_not_awaited()
-        # The recovery branch itself (light_connection._periodic_health_check,
-        # an endless loop): Music Flow restarted before any redraw.
-        health_check = _function_source(LIGHT_SOURCE, "_periodic_health_check")
+        # The recovery branch itself (light_connection._async_lamp_back, from
+        # the health check's endless loop and a link recovery): Music Flow
+        # restarted before any redraw.
+        self.assertIn("await self._async_lamp_back(outage)",
+                      _function_source(LIGHT_SOURCE, "_periodic_health_check"))
+        health_check = _function_source(LIGHT_SOURCE, "_async_lamp_back")
         self.assertIn("if self._music_flow_enabled:", health_check)
         self.assertLess(
             health_check.index("await self.async_set_music_flow(True)"),
@@ -1488,8 +1495,8 @@ class NativeFeatureTests(unittest.TestCase):
         data = base64.b64encode(bytes([3, 8, 1, 1])).decode("ascii")
         light = make_light(hass=hass, entity_id="light.cube", _refresh_linked_entities=Mock(),
                            async_write_ha_state=Mock(), _mode="Solid Color")
-        self.addCleanup(LIGHT_MODULE._ENTITY_REGISTRY.pop, "test-raw-send", None)
-        LIGHT_MODULE._ENTITY_REGISTRY["test-raw-send"] = light
+        # Set up, as light.async_setup_entry leaves it (its entry's runtime_data).
+        hass.entries.append(types.SimpleNamespace(entry_id="lamp", runtime_data=types.SimpleNamespace(light=light)))
         params = [CONSTANTS["NATIVE_CLOCK_EFFECT_ID"], style, 2, {"mode": 40, "color": [0x123456], "data": data}]
         call = types.SimpleNamespace(data={"entity_id": "light.cube", "params": params}, hass=hass,
                                      context=types.SimpleNamespace(user_id=None))

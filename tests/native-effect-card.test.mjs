@@ -177,7 +177,13 @@ test("native color choices retain configured order while effects respond to the 
 });
 
 function cardMethod(name, dependencies = {}) {
-  const source = sourceFor("yeelight-cube-native-effects-card.js");
+  // The card and its Color Modes mixin.
+  const source = [
+    "yeelight-cube-native-effects-card.js",
+    "native-effects-card-colors.js",
+  ]
+    .map(sourceFor)
+    .join("\n");
   const match = source.match(
     new RegExp(`  (async )?${name}\\(([^\\n]*)\\) \\{([\\s\\S]*?)\\n  \\}`),
   );
@@ -530,8 +536,10 @@ test("favourites allow direct removal without changing selection", () => {
 
 test("the shared carousel swipe steps on horizontal swipes, every card declares the gallery alike", () => {
   // The shared swipe (carousel-utils.js imports Lit, so it is read here).
+  const carousel = sourceFor("carousel-utils.js");
   const carouselSwipe = new Function(
-    `return ${sourceFor("carousel-utils.js").match(/export (function carouselSwipe[\s\S]*?\n\})/)[1]}`,
+    `${carousel.match(/export (function claimHorizontalSwipe[\s\S]*?\n\})/)[1]}
+    return ${carousel.match(/export (function carouselSwipe[\s\S]*?\n\})/)[1]}`,
   )();
   const calls = [];
   const listeners = {};
@@ -1291,4 +1299,26 @@ test("a smooth tile's in-between paint never costs the other tiles their due fra
   seconds = 0.104; // the same render, not due: nothing
   frame.call(card, false);
   assert.deepEqual(paints, [true, false, true]);
+});
+
+// A card removed while the catalogue loads is not kept nor rendered by it.
+test("a removed card stops waiting for the native effect catalogue", async () => {
+  const { nativeEffectCatalog, stopWaitingForCatalog } = await import(
+    "../custom_components/yeelight_cube/www/native-effect-catalog.js"
+  );
+  let answer;
+  const hass = {
+    connection: {},
+    states: { "light.a": { attributes: { native_effect_catalog_key: "k1" } } },
+    callWS: () => new Promise((resolve) => (answer = resolve)),
+  };
+  const updates = { kept: 0, removed: 0 };
+  const kept = { requestUpdate: () => updates.kept++ };
+  const removed = { requestUpdate: () => updates.removed++ };
+  assert.equal(nativeEffectCatalog(hass, "light.a", kept), null);
+  nativeEffectCatalog(hass, "light.a", removed);
+  stopWaitingForCatalog(removed);
+  answer({ key: "k1", catalog: [{ name: "Fire" }] });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(updates, { kept: 1, removed: 0 });
 });

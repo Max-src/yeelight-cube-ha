@@ -56,9 +56,9 @@ KEEP_ALIVE = ["keeplive_interval", 10]
 # What answers a refused token (also a command sent without a session).
 _TOKEN_REFUSED = -1
 # What answers a frame when the lamp is not in direct mode ("illegal
-# request"): something else changed its effect (2026-11-16: a Matter
-# setEffect left the top lamp in its drawing effect; every frame refused
-# while the lamp kept answering checks). A new session puts it back in direct
+# request"): something else changed its effect (e.g. a Matter setEffect
+# leaves the lamp in its drawing effect: every frame refused while the lamp
+# keeps answering checks). A new session puts it back in direct
 # mode (session_setup), at most once every FRAME_REFUSED_REOPEN seconds.
 _FRAME_REFUSED = 6
 FRAME_REFUSED_REOPEN = 2.0
@@ -66,9 +66,8 @@ FRAME_REFUSED_REOPEN = 2.0
 _UNANSWERED = frozenset({"update_leds"})
 # A command the lamp answers waits until no frame was sent for this long. The
 # lamp handles its LAN commands one after another: a command it must answer
-# right after a run of frames can stall that handling for good (watched on a
-# lamp: frames every 40 ms, then a command, and no command answered again
-# until a power cycle; 8 Nov 2026 again during the Studio stream). The
+# right after a run of frames can stall that handling for good (frames every
+# 40 ms, then a command: no command answered again until a power cycle). The
 # keep-alive does not wait: the lamp's network chip answers it, not the lamp.
 FRAME_QUIET = 0.2
 # The stream's statistics (stream_stats): gaps between frames longer than
@@ -150,6 +149,9 @@ class UdpSession:
         self._unsolicited_logged = False
         # (when, ">" sent / "<" received, what): the last TRAIL_LENGTH.
         self._trail: collections.deque = collections.deque(maxlen=TRAIL_LENGTH)
+        # The ids of the last answers taken: the lamp may send one twice, and
+        # a late copy is neither a refused frame nor an unsolicited error.
+        self._answered: collections.deque = collections.deque(maxlen=TRAIL_LENGTH)
 
     def trail(self) -> str:
         """The last datagrams, oldest first, as "-1234ms >update_leds#81"."""
@@ -178,6 +180,8 @@ class UdpSession:
                 f"{message.get('method') or ''}#{message.get('id')}"
                 + (f" err{error.get('code')}" if isinstance(error, dict) else ""),
             ))
+            if future is None and message.get("id") in self._answered:
+                continue  # a late copy of an answer already taken
             if future is None and isinstance(error, dict):
                 # Refused frames come one per frame: the first of an episode
                 # is a WARNING, the rest DEBUG until the lamp answers again.
@@ -220,6 +224,7 @@ class UdpSession:
                 continue
             if future is not None and not future.done():
                 future.set_result(message)
+                self._answered.append(message.get("id"))
 
     def _fail_waiting(self) -> None:
         for future in (*self._waiting.values(), self._handshake):
@@ -297,7 +302,13 @@ class UdpSession:
                 self._token = token
                 self.sessions_opened += 1
                 _LOGGER.debug("[UDP] [%s] Session opened (#%s)", self._ip, self.sessions_opened)
-                await self._set_up()
+                try:
+                    await self._set_up()
+                except BaseException:
+                    # Not set up (cancelled while sending direct mode): not
+                    # used as it is, the next command opens a new session.
+                    self._token = None
+                    raise
                 return
         raise UdpUnavailable("no session token")
 

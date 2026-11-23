@@ -10,7 +10,6 @@ rising wisps and the centre bursts.
 
 from __future__ import annotations
 
-from array import array
 import math
 
 try:
@@ -656,11 +655,6 @@ def crumble_step(state, settings, clock_ms, render) -> bytes:
 
 # ── Slot 61: Particle glows ─────────────────────────────────────────────
 # A glow reaches N // 4 - 2 pixels either side.
-def _f32s(values) -> list:
-    """Every value rounded to a 32-bit float, in one go."""
-    return array("f", values).tolist()
-
-
 def drift_init(settings) -> dict:
     colours = effect_colours(settings)
     length = settings_length(settings)
@@ -716,12 +710,12 @@ def drift_step(state, settings, clock_ms, render) -> bytes:
         if first > last or not age:
             continue
         envelope = f32((life - age if f32(age / life) >= 0.5 else age) / (life * 0.5))
-        shares = _f32s([abs(share) / width for share in _f32s([cell - position for cell in range(first, last + 1)])])
-        shares = _f32s([share * envelope for share in _f32s([1 - share for share in shares])])
+        shares = f32s([abs(share) / width for share in f32s([cell - position for cell in range(first, last + 1)])])
+        shares = f32s([share * envelope for share in f32s([1 - share for share in shares])])
         scale = particle["scale"]
-        shares = _f32s([scale * share for share in shares])
+        shares = f32s([scale * share for share in shares])
         colour = particle["colour"]
-        adds = _f32s([value * share for share in shares for value in colour])
+        adds = f32s([value * share for share in shares for value in colour])
         span = slice(3 * first, 3 * last + 3)
         mixed[span] = [value + int(add) for value, add in zip(mixed[span], adds)]
     strip = state["strip"]

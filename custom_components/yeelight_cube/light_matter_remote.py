@@ -28,6 +28,19 @@ from .light_matter import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _playlist_effect(item: dict) -> dict:
+    """light._effect_persist_item's entry as written over Matter."""
+    params = []
+    for config in item["effect_params"]:
+        # The playlist keeps no speed; colours are copied into a
+        # buffer of 4 (MATTER_COMMANDS.md: send exactly 4).
+        config = {key: value for key, value in config.items() if key != "rate"}
+        if "color" in config:
+            config["color"] = (list(config["color"]) + [0, 0, 0, 0])[:4]
+        params.append(config)
+    return {"effectId": item["effect_id"], "customId": item["custom_id"], "effectParams": params}
+
+
 class RemoteButtonsMixin:
     """The lamp's buttons (light_matter's reports tell the presses)."""
 
@@ -188,6 +201,29 @@ class RemoteButtonsMixin:
                 "and their backup is gone; reset the playlist in the Yeelight app", self._ip,
             )
 
+    def _saved_slot_effect(self, index: int, effect_id: int, custom_id: int) -> dict:
+        """One saved slot as written back. The lamp's playlist read gives
+        only each slot's effect and custom id, so a slot is written back as
+        that effect alone; a slot set with set_button_effects (the same
+        effect and custom id at the same position, light._button_effects)
+        gets the parameters that action writes, built again from its names
+        with the light's current settings (direction, colours, clock data).
+        A slot changed since, in the Yeelight app, does not match and is
+        written back as its effect alone."""
+        plain = {"effectId": effect_id, "customId": custom_id, "effectParams": [{"onoff": 1, "mode": effect_id}]}
+        names = getattr(self, "_button_effects", None) or []
+        build = getattr(self, "_effect_persist_item", None)
+        # A Cube Matrix's playlist is set in the Yeelight app only.
+        if build is None or index >= len(names) or getattr(self, "is_cube_matrix", False):
+            return plain
+        try:
+            item = build(names[index])
+        except Exception:  # noqa: BLE001 -- a name no longer built: as its effect alone
+            return plain
+        if (item["effect_id"], item["custom_id"]) != (effect_id, custom_id):
+            return plain
+        return _playlist_effect(item)
+
     async def _write_saved_playlist(self, channel, entry) -> None:
         """Write the saved playlist back (Right as Remote turned off)."""
         saved = entry.options.get(CONF_REMOTE_SAVED_PLAYLIST) or []
@@ -199,7 +235,7 @@ class RemoteButtonsMixin:
         for index, (effect_id, custom_id) in enumerate(saved):
             await channel.async_command(EFFECTS_CLUSTER, "updatePersistEffectList", {
                 "index": index,
-                "effect": {"effectId": effect_id, "customId": custom_id, "effectParams": [{"onoff": 1, "mode": effect_id}]},
+                "effect": self._saved_slot_effect(index, effect_id, custom_id),
             })
         self._remote_playlist_written_at = time.monotonic()
         options = {key: value for key, value in entry.options.items() if key not in (
@@ -207,6 +243,38 @@ class RemoteButtonsMixin:
         )}
         self.hass.config_entries.async_update_entry(entry, options=options)
         _LOGGER.info("[MATTER] [%s] Right as Remote off: the lamp's playlist is back", self._ip)
+
+    def _keep_button_playlist_for_remote(self, items: list[dict]) -> bool:
+        """set_button_effects while Right as Remote holds the lamp's
+        playlist (its slots black, the lamp's own saved): ``items``
+        (light._effect_persist_item's) take their places in the saved
+        playlist, written back when Right as Remote is turned off; the black
+        slots stay, so the right button keeps working as a remote. True when
+        kept so; False when no playlist is saved (written as usual)."""
+        entry = self._config_entry
+        if entry is None or self.hass is None or not self.remote_playlist_active:
+            return False
+        if self._remote_playlist_busy:
+            # Being saved or written back right now: changed meanwhile, the
+            # list would be lost or written over the black slots.
+            raise ValueError(
+                "The lamp's playlist is being written for Right as Remote; try again in a moment"
+            )
+        saved = [list(slot) for slot in entry.options.get(CONF_REMOTE_SAVED_PLAYLIST) or []]
+        for index, item in enumerate(items):
+            slot = [item["effect_id"], item["custom_id"]]
+            if index < len(saved):
+                saved[index] = slot
+            else:
+                saved.append(slot)
+        self.hass.config_entries.async_update_entry(
+            entry, options={**entry.options, CONF_REMOTE_SAVED_PLAYLIST: saved}
+        )
+        _LOGGER.info(
+            "[MATTER] [%s] Button playlist kept for when Right as Remote is turned off (%s slots)",
+            self._ip, len(items),
+        )
+        return True
 
     async def _write_button_playlist(self, items: list[dict]) -> bool:
         """set_button_effects over Matter: the lamp refuses this write over
@@ -220,21 +288,9 @@ class RemoteButtonsMixin:
             if not await channel.async_available():
                 return False
             for index, item in enumerate(items):
-                params = []
-                for config in item["effect_params"]:
-                    # The playlist keeps no speed; colours are copied into a
-                    # buffer of 4 (MATTER_COMMANDS.md: send exactly 4).
-                    config = {key: value for key, value in config.items() if key != "rate"}
-                    if "color" in config:
-                        config["color"] = (list(config["color"]) + [0, 0, 0, 0])[:4]
-                    params.append(config)
                 await channel.async_command(EFFECTS_CLUSTER, "updatePersistEffectList", {
                     "index": index,
-                    "effect": {
-                        "effectId": item["effect_id"],
-                        "customId": item["custom_id"],
-                        "effectParams": params,
-                    },
+                    "effect": _playlist_effect(item),
                 })
         except MatterCommandsUnavailable:
             return False

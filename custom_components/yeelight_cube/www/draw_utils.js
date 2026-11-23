@@ -42,7 +42,8 @@ const rgbToHsv = ([r, g, b]) => hsvOfChannels(r / 255, g / 255, b / 255);
  * Uses maximin initialization for deterministic, well-spread centroids.
  */
 function kmeansRgb(data, k, maxIter = 20) {
-  if (data.length <= k) return data.slice();
+  // As few points as clusters: each its own (as the caller reads them).
+  if (data.length <= k) return { centroids: data.slice(), counts: data.map(() => 1) };
   // Maximin initialization: pick first centroid, then each subsequent one
   // is the point farthest from all existing centroids
   const centroids = [data[0]];

@@ -16,7 +16,7 @@ from .lamp_studio import studio_palette
 from .matter_commands import EFFECTS_CLUSTER, MatterCommandsUnavailable
 from .color_utils import rgb_to_argb
 from .light_color import hardware_brightness_for
-from .lamp_protocol import CubeConnectionError, encode_rgb_frame
+from .lamp_protocol import encode_rgb_frame
 from .lamp_protocol import LAMP_ERRORS
 from .light_display import ACTIVATION_TIMING
 from .mount_profile import HIGH_PAIR, LOW_PAIR, compensate_direction, one_axis_direction
@@ -637,14 +637,12 @@ class NativeModesMixin:
         ):
             expect()
         try:
-            result = await self._lamp_client.send_command_with_recovery(
+            # Not sent (the reconnect cooldown included): raises
+            # CubeConnectionError.
+            await self._lamp_client.send_command_with_recovery(
                 "set_ps",
                 ["mic_music_mode", _build_music_flow_payload(True, flow, self._text_colors)],
             )
-            if result is None:
-                raise CubeConnectionError(
-                    "Music mode command was skipped during connection cooldown"
-                )
             if direction is not None:
                 await self._send_music_direction(direction)
         finally:

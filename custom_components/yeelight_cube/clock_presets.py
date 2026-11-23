@@ -34,7 +34,7 @@ def save_clock_preset(presets, name, color, builtin_names, preset_id=None, kind=
         raise InputError("preset_limit")
     item = {"id": preset_id or uuid4().hex, "name": name, "color": list(color), "kind": kind}
     if preset_id:
-        return [item if existing["id"] == preset_id else existing for existing in presets]
+        return [item if preset["id"] == preset_id else preset for preset in presets]
     return [*presets, item]
 
 

@@ -217,7 +217,9 @@ class CameraOrientationTests(unittest.TestCase):
             release.set()
             await asyncio.gather(*tasks)
             self.assertEqual(["left", "down"], writes)
-            light.async_apply_display_mode.assert_awaited_once_with(update_type="text_change")
+            # Redrawn as the integration's own redraw: a rotation or Music
+            # Flow running is kept (const.INTERNAL_REDRAW).
+            light.async_apply_display_mode.assert_awaited_once_with(update_type="internal_redraw")
             light._lamp_client.forget_running_effect.assert_called()
             # A choice superseded before its write started is never written.
             release.clear()

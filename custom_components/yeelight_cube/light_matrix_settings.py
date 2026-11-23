@@ -4,10 +4,12 @@ tried again.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import time
 
 from .const import (
+    INTERNAL_REDRAW,
     MODE_CLOCK,
     MODE_NATIVE_EFFECT,
 )
@@ -74,6 +76,11 @@ class MatrixSettingsMixin:
         )
         if tuple(rebuilt.module_types) == tuple(profile.module_types):
             return
+        # The LEDs the lamp reported beyond its modules (strip_lenth: 110 for
+        # 4 blocks) are still on its wire: frames keep their length.
+        extra = profile.wire_length - sum(profile.slots or ())
+        if profile.slots and extra > 0:
+            rebuilt = dataclasses.replace(rebuilt, wire_length=rebuilt.wire_length + extra)
         _LOGGER.info(
             "[MATRIX] [%s] Modules changed: %s -> %s", self._ip, profile.module_types, rebuilt.module_types,
         )
@@ -113,7 +120,7 @@ class MatrixSettingsMixin:
             raise InputError("matrix_modules_need_matter")
         topology = [codes[name] for name in modules]
         # Our music connection open, the lamp skips saving some settings
-        # (the rotation, 2026-11-12): closed first.
+        # (the rotation): closed first.
         if self._lamp_client.close_music_session():
             await asyncio.sleep(MUSIC_CLOSE_SETTLE)
         # Blocks and Spots taken off the list are no longer written by the
@@ -222,6 +229,6 @@ class MatrixSettingsMixin:
             return
         self._matrix_shown = None
         self._create_tracked_task(
-            self.async_apply_display_mode(update_type="text_change"),
+            self.async_apply_display_mode(update_type=INTERNAL_REDRAW),
             name=f"yeelight_cube_matrix_matter_{self._ip}",
         )

@@ -16,6 +16,7 @@
 import {
   effectOffersColorMode,
   effectSupportsColorOverride,
+  previewRate,
 } from "./native-effect-preview.js";
 import { clockStudioRuns, studioClockBackgroundAt, studioDrive, studioRender } from "./lamp-studio.js";
 import {
@@ -180,7 +181,7 @@ export const DEFAULT_CLOCK_SPEED = DEFAULT_EFFECT_SPEED;
 export const clockSpeed = (attrs) => chosenSpeed(attrs);
 
 /** The phase of `seconds` of animation at a speed (renderClockFrame's). */
-export const clockPhase = (seconds, speed) => seconds * (0.25 + speed / 55);
+export const clockPhase = (seconds, speed) => seconds * previewRate(speed);
 
 // Built-in clock style id -> the lamp's mixer (mirrors NATIVE_CLOCK_STYLES 1-15).
 export const CLOCK_STYLE_MIXER = {
@@ -700,7 +701,7 @@ export function renderClockFrame(attrs, fontMap, metrics, phase = 0, speed = nul
         effectName,
         studioDrive(
           studioClockBackgroundAt(
-            effectName, studioRender(phase / (0.25 + rate / 55)), rate, chosenIntensity(attrs),
+            effectName, studioRender(phase / previewRate(rate)), rate, chosenIntensity(attrs),
             attrs.text_colors, clockStyleDirect(attrs), columns,
           ),
         ),
@@ -713,7 +714,7 @@ export function renderClockFrame(attrs, fontMap, metrics, phase = 0, speed = nul
             effectName, rate, override, colorMode, chosenIntensity(attrs), attrs.text_colors,
             clockStyleDirect(attrs), columns,
           ),
-          phase / (0.25 + rate / 55),
+          phase / previewRate(rate),
         ),
       )
     : null;

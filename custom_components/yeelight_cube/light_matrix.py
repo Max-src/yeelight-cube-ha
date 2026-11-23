@@ -96,8 +96,8 @@ MUSIC_CLOSE_SETTLE = 0.3
 # Reports this long after a command are its echo.
 MATRIX_ECHO_WINDOW = 5.0
 # A restart and the effect the lamp starts with are reported together, in
-# either order (2026-11-11: both ~110 s after power-on, when Home Assistant's
-# Matter server reached the lamp again): within this, that effect is the
+# either order (both ~110 s after power-on, when Home Assistant's Matter
+# server reaches the lamp again): within this, that effect is the
 # lamp's start-up, not its button.
 MATRIX_RESTART_WINDOW = 15.0
 # Back after an outage, content shown over Matter is redrawn when the lamp's
@@ -234,7 +234,7 @@ class MatrixMixin:
         now (device_profile, TOPOLOGY_SLOTS entries, zeros after the last):
         the Matter server's copy keeps the list last reported to it, and a
         list written over Matter (set_matrix_modules) is not reported back
-        (2026-11-21: the attribute still showed the old list)."""
+        (the attribute would still show the old list)."""
         if not summary or "topology" not in summary or not self.is_cube_matrix:
             return summary
         types = [int(kind) for kind in self.device_profile.module_types]
@@ -377,7 +377,7 @@ class MatrixMixin:
         background = style.get("mixer", 0)
         if background not in CLOCK_BACKGROUNDS:
             return None
-        if not self._matrix_clock_whole_hours():
+        if not self._clock_whole_hours():
             return None  # the lamp's clock takes whole hours only: streamed
         if self.lamp_turns_clock:
             # Its own clock would read upside down (mounted left) or from the
@@ -402,13 +402,6 @@ class MatrixMixin:
             self._native_clock_timezone_hours(), bool(self._native_clock_12_hour),
             bool(self._native_clock_colon_blink), APPLY_PRIORITY, style_id,
         )
-
-    def _matrix_clock_whole_hours(self) -> bool:
-        """The local UTC offset is whole hours (the lamp's clock takes no
-        other: in India, Newfoundland or parts of Australia it would be 30
-        or 45 minutes off, so Home Assistant's clock is streamed)."""
-        seconds = getattr(self, "_native_clock_utc_offset_seconds", None)
-        return seconds is None or seconds() % 3600 == 0
 
     # ── Showing it ──────────────────────────────────────────────────────
     async def _activate_matrix_content(self) -> bool:
@@ -486,8 +479,8 @@ class MatrixMixin:
         """A Cube Matrix switched on or off: over Matter when a server
         delivers its commands (On/Off, as the Yeelight app), so it never
         depends on the lamp's LAN; over the LAN only would leave it lit
-        while HA shows it off when the LAN has stopped reading commands
-        (2026-11-20). Else, or when that fails, set_power over the LAN. Its
+        while HA shows it off when the LAN has stopped reading commands.
+        Else, or when that fails, set_power over the LAN. Its
         report of the change is not a change by the lamp itself."""
         if note_power := getattr(self, "_expect_lamp_power", None):
             note_power(on)

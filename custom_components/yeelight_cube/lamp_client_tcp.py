@@ -10,7 +10,6 @@ query_raw_command), and the clearing of the lamp's fx-mode flag
 """
 import logging
 import asyncio
-import json
 import select
 import socket
 import time
@@ -21,6 +20,8 @@ from .lamp_protocol import (
     _USE_TCP,
     CubeConnectionError,
     _raw_reply_error,
+    encode_command,
+    one_shot,
 )
 from .music_channel import MusicChannel
 
@@ -28,9 +29,9 @@ _LOGGER = logging.getLogger(__name__)
 
 # Rate limit constants based on validated testing (0.90 FPS = safe sustained rate)
 # Over TCP the lamp takes about one command a second from a client, and
-# refuses more ("client quota exceeded"): in watched tests (18 Oct 2026) a
-# scrolling text over TCP froze both lamps, then the clock and an effect were
-# refused. Every TCP command waits its turn (_tcp_turn); a frame still
+# refuses more ("client quota exceeded"): a scrolling text over TCP freezes
+# the lamp, then the clock and an effect are refused. Every TCP command
+# waits its turn (_tcp_turn); a frame still
 # waiting when a newer one comes is dropped (only the latest picture counts).
 # UDP has no such limit.
 TCP_COMMAND_INTERVAL = 1.0
@@ -156,44 +157,30 @@ class TcpSocketMixin:
         self._matrix_tcp(command)
         if not await self._tcp_turn(command):
             return
-        command_dict = {"id": 1, "method": command, "params": params}
-        request = (json.dumps(command_dict, separators=(",", ":")) + "\r\n").encode("utf8")
+        request = encode_command(command, params)
         # A Cube Matrix drops a command whose connection is reset before it
-        # read it (2026-11-11: 2 of 6 set_bright lost, 6 of 6 taken when its
-        # answer, ~7 ms later, was waited for): its answer is waited for.
+        # read it (its answer comes about 7 ms later): its answer is waited
+        # for.
         wait_reply = check_reply or isinstance(self._udp, MusicChannel)
 
-        def _send():
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(timeout)
-            try:
-                sock.connect((self._ip, self._port))
-                sock.sendall(request)
-                _LOGGER.debug(
-                    "[RAW] [%s] Sent %s on fresh TCP "
-                    "(%s bytes)",
-                    self._ip, command, len(request)
-                )
-                if wait_reply:
-                    error = _raw_reply_error(sock)
-                    if error is not None:
-                        self._note_quota_refusal(error)
-                        if check_reply:
-                            raise BulbException(error)
-                        _LOGGER.debug("[RAW] [%s] %s answered %s", self._ip, command, error)
-            finally:
-                try:
-                    if abortive_close:
-                        sock.setsockopt(
-                            socket.SOL_SOCKET,
-                            socket.SO_LINGER,
-                            _RST_LINGER,
-                        )
-                    sock.close()
-                except OSError as exc:
-                    _LOGGER.debug("[%s] Failed to close raw command socket: %s", self._ip, exc)
+        def _after_send(sock):
+            _LOGGER.debug(
+                "[RAW] [%s] Sent %s on fresh TCP "
+                "(%s bytes)",
+                self._ip, command, len(request)
+            )
+            if wait_reply:
+                error = _raw_reply_error(sock)
+                if error is not None:
+                    self._note_quota_refusal(error)
+                    if check_reply:
+                        raise BulbException(error)
+                    _LOGGER.debug("[RAW] [%s] %s answered %s", self._ip, command, error)
 
-        await asyncio.to_thread(_send)
+        await asyncio.to_thread(
+            one_shot, self._ip, self._port, timeout, request, _after_send,
+            abortive=abortive_close, what="raw command",
+        )
 
     async def clear_fx_mode_flag(self) -> bool:
         """Clear the lamp's fx-mode flag before a music effect, when it may
@@ -235,12 +222,15 @@ class TcpSocketMixin:
         """
         if params is None:
             params = []
-        if refusal := self.profile.refusal(command, params):
-            raise BulbException({"code": -1, "message": refusal})
-        command_dict = {"id": 1, "method": command, "params": params}
-        request = (
-            json.dumps(command_dict, separators=(",", ":")) + "\r\n"
-        ).encode("utf8")
+        self._check_supported(command, params)
+        if not command.startswith("get_"):
+            # As every other send: a pending frame re-send would draw over
+            # it, a new session would put direct mode back, and the effect
+            # the lamp runs is no longer known.
+            self._before_send(command, params)
+            if command == "activate_fx_mode":
+                self.fx_mode_flag_maybe_set = True
+        request = encode_command(command, params)
 
         await self._tcp_turn(command)
         async with self._command_lock:
@@ -258,41 +248,29 @@ class TcpSocketMixin:
         # Give the Cube TCP stack a moment to clean up the closed socket.
         await asyncio.sleep(0.1)
 
-        def _send() -> str:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(timeout)
-            reply = ""
+        def _read_reply(sock) -> str:
+            chunks = []
             try:
-                sock.connect((self._ip, self._port))
-                sock.sendall(request)
-                chunks = []
-                try:
-                    # Read whatever arrives within the timeout window. The lamp
-                    # may push notify messages too; grab a couple of reads.
-                    for _ in range(4):
-                        data = sock.recv(4096)
-                        if not data:
-                            break
-                        chunks.append(data)
-                        if b"\r\n" in data:
-                            break
-                except socket.timeout:
-                    pass
-                reply = b"".join(chunks).decode("utf8", "replace").strip()
-                _LOGGER.debug(
-                    "[QUERY] [%s] %s -> %r", self._ip, command, reply
-                )
-            finally:
-                try:
-                    sock.setsockopt(
-                        socket.SOL_SOCKET, socket.SO_LINGER, _RST_LINGER
-                    )
-                    sock.close()
-                except OSError as exc:
-                    _LOGGER.debug("[%s] Failed to close query socket: %s", self._ip, exc)
+                # Read whatever arrives within the timeout window. The lamp
+                # may push notify messages too; grab a couple of reads.
+                for _ in range(4):
+                    data = sock.recv(4096)
+                    if not data:
+                        break
+                    chunks.append(data)
+                    if b"\r\n" in data:
+                        break
+            except socket.timeout:
+                pass
+            reply = b"".join(chunks).decode("utf8", "replace").strip()
+            _LOGGER.debug(
+                "[QUERY] [%s] %s -> %r", self._ip, command, reply
+            )
             return reply
 
-        return await asyncio.to_thread(_send)
+        return await asyncio.to_thread(
+            one_shot, self._ip, self._port, timeout, request, _read_reply, what="query",
+        )
 
     async def send_command_fast(self, command: str, params: list = None):
         """
@@ -356,8 +334,7 @@ class TcpSocketMixin:
                 params = []
             
             # Build the JSON command exactly like the yeelight library does
-            command_dict = {"id": 1, "method": command, "params": params}
-            request = (json.dumps(command_dict, separators=(",", ":")) + "\r\n").encode("utf8")
+            request = encode_command(command, params)
             
             def _check_peer_closed(sock):
                 """Check if the remote end has closed the connection.
@@ -616,8 +593,7 @@ class TcpSocketMixin:
         always "Bulb closed the connection" anyway).
         """
         # Build JSON to log exact byte count sent to Cube
-        cmd_dict = {"id": 1, "method": "update_leds", "params": [rgb_data]}
-        request_bytes = len((json.dumps(cmd_dict, separators=(',', ':')) + '\r\n').encode('utf8'))
+        request_bytes = len(encode_command("update_leds", [rgb_data]))
         _LOGGER.debug(
             "[DRAW_FAST] [%s] update_leds: "
             "rgb_data=%s chars, json=%s bytes",

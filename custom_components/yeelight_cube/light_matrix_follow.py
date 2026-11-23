@@ -47,7 +47,7 @@ class MatrixFollowMixin:
                 values = self._matter.values if self._matter else {}
                 if value == self._matrix_sent_id:
                     # What Home Assistant started (a report can come late:
-                    # seen 31 s after the command, 2026-11-10).
+                    # up to about 30 s after the command).
                     pass
                 elif self._matrix_just_restarted():
                     # The effect the lamp starts with (its saved one), not
@@ -91,7 +91,7 @@ class MatrixFollowMixin:
                 if lan is not None and lan != value:
                     # Home Assistant's Matter client keeps the value last reported
                     # to it; a write is not reported back, so after a restart it
-                    # read 0 while the lamp ran 3 (2026-11-11): the lamp's own
+                    # can read 0 while the lamp runs 3: the lamp's own
                     # answer (read over the LAN at setup, kept up to date) wins.
                     _LOGGER.debug(
                         "[MATRIX] [%s] Rotation %s from Matter, %s from the lamp: the lamp's kept",
@@ -103,7 +103,7 @@ class MatrixFollowMixin:
                 self._matrix_rotated(value, start=True)
         elif name == "topology":
             # The lamp's own answer over the LAN (read at setup) wins; when
-            # its LAN could not be read (stuck, 2026-11-14), Matter's module
+            # its LAN could not be read (stuck), Matter's module
             # list is the layout: else the default 4 Matrix modules stayed.
             if "cube_topology" not in (getattr(self._lamp_client, "capabilities", None) or {}):
                 self._matrix_modules_changed(value)
@@ -185,8 +185,8 @@ class MatrixFollowMixin:
 
     def matrix_redraw_waits_for_restart(self) -> bool:
         """Back after an outage, what the light shows goes over Matter,
-        which reaches a restarted lamp only ~90 s after power-on (2026-11-11:
-        the health check's redraws each waited 12 s and failed until then):
+        which reaches a restarted lamp only ~90 s after power-on (the health
+        check's redraws would each wait 12 s and fail until then):
         the redraw is left to the lamp's restart report (or the fallback)."""
         if not self.is_cube_matrix or self._music_flow_enabled:
             return False
@@ -231,7 +231,7 @@ class MatrixFollowMixin:
 
     def _matrix_lamp_restarted(self) -> None:
         """The lamp started again (its reboot count changed): a power cut,
-        however short (one between two LAN probes went unseen, 2026-11-11).
+        however short (one between two LAN probes goes unseen by them).
         It shows its saved effect or stays off (its Power-on behavior):
         Home Assistant's content is shown again, as after a longer outage
         (light_connection's health check)."""
@@ -334,8 +334,8 @@ class MatrixFollowMixin:
         """After a restart: the lamp runs the rotation it last saved. It
         saves a written one only after a later request, and not while its
         music mode is on (its LAN stuck, or a connection left open), so it
-        can come back with an older one (seen 2026-11-11 and 12: the one
-        written two minutes before). Written again when it differs from the
+        can come back with an older one (one written minutes before).
+        Written again when it differs from the
         Device Orientation (``orientation``), never followed."""
         rotation = self._rotation_for(orientation) if orientation else None
         if rotation is None:

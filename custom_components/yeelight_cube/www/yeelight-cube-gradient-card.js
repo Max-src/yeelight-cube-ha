@@ -315,15 +315,22 @@ class YeelightCubeGradientCard extends ModeSelectorMixin(
     this._pendingPanel.settle(attrs.full_panel || false);
     this._pendingMode.settle(attrs.mode);
 
-    // The gallery's previews follow what the lamp shows (text, angle,
-    // colors, its rendered matrix, panel mode): reloaded after 500 ms
-    // without a change. Text selectors need no previews.
+    // The gallery's previews follow what they are drawn from (the text, its
+    // angle, colors, font, alignment and scroll, the background, the
+    // columns shown, the panel mode): reloaded after 500 ms without a
+    // change. Not the lamp's frame itself: it changes at every step of a
+    // scrolling text or a stream, and kept the reload waiting. Text
+    // selectors need no previews.
     if (this._isPreviewSelectorActive()) {
       const previewKey = [
         attrs.custom_text,
         attrs.angle,
         valueKey(attrs.text_colors),
-        valueKey(attrs.matrix_colors),
+        attrs.font,
+        attrs.alignment,
+        attrs.scroll_enabled,
+        valueKey(attrs.background_color),
+        attrs.matrix_columns,
         attrs.full_panel || false,
       ].join("\u0000");
       if (previewKey !== this._previewKey) {
@@ -365,9 +372,13 @@ class YeelightCubeGradientCard extends ModeSelectorMixin(
       attrs.custom_text,
       valueKey(attrs.text_colors),
       // The lamp's 100 colors change at every step of a scrolling text: read
-      // only by the angle matrix's text preview and the preview gallery.
-      this.config?.matrix_rotary_text_preview === true ||
-      this._isPreviewSelectorActive()
+      // only by the angle matrix's text preview (the preview gallery draws
+      // the backend's previews, reloaded by _hassUpdated).
+      attrs.font,
+      attrs.alignment,
+      valueKey(attrs.background_color),
+      attrs.matrix_columns,
+      this.config?.matrix_rotary_text_preview === true
         ? valueKey(attrs.matrix_colors)
         : undefined,
     ];

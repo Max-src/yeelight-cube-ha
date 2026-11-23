@@ -806,3 +806,16 @@ export const galleryDisplayStyles =
     box-shadow: 0 0 0 2px var(--primary-color, #03a9f4), 0 4px 12px rgba(3, 169, 244, 0.25) !important;
   }
 `;
+
+// The key a confirmed rename or delete acts on: the item the bar showed
+// (`key`, `name`). Another device may have changed the list since; the key
+// is a position, so the item is looked up again: kept when that position
+// still shows it, followed when it moved (one editable item of that name),
+// else null (deleted, or two of that name: the bar asks to pick it again).
+export function manageTargetKey(items, key, name) {
+  const list = Array.isArray(items) ? items : [];
+  const same = (item) => item?.editable && item.name === name;
+  if (same(list.find((item) => item?.dataMode === key))) return key;
+  const matches = list.filter(same);
+  return matches.length === 1 ? matches[0].dataMode : null;
+}

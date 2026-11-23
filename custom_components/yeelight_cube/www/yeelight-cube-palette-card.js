@@ -19,6 +19,13 @@ import {
 } from "./palette-preview.js";
 import { renderExportImportRow } from "./action-button-ui.js";
 import { PALETTE_CARD_CSS } from "./palette-card-styles.js";
+import {
+  ImportStatus,
+  JsonFileTooLargeError,
+  downloadJson,
+  pickJsonFile,
+  readJsonFile,
+} from "./json-file-transfer.js";
 
 // A palette's gallery key: its index in the sensor's list. Commands also
 // send the name seen at that index (expected_name), so the backend refuses
@@ -41,7 +48,7 @@ class YeelightCubePaletteCard extends YeelightCardMixin(LitElement) {
     this._store = new CollectionStore("palettes", {
       onChange: () => this.requestUpdate(),
     });
-    this._importStatus = { active: false, success: false };
+    this._importStatus = new ImportStatus(this);
   }
 
   setConfig(config) {
@@ -253,94 +260,66 @@ class YeelightCubePaletteCard extends YeelightCardMixin(LitElement) {
   }
 
   _exportPalettes() {
-    const dataStr =
-      "data:text/json;charset=utf-8," +
-      encodeURIComponent(JSON.stringify(this._paletteItems(), null, 2));
-    const a = document.createElement("a");
-    a.setAttribute("href", dataStr);
-    a.setAttribute("download", "palettes.json");
-    a.click();
-  }
-
-  _setImportStatus(status, resetAfter) {
-    clearTimeout(this._importStatusTimer);
-    this._importStatus = status;
-    this.requestUpdate();
-    if (resetAfter)
-      this._importStatusTimer = setTimeout(
-        () => this._setImportStatus({ active: false, success: false }),
-        resetAfter,
-      );
+    downloadJson(this._paletteItems(), "palettes.json");
   }
 
   // Import palettes from a JSON file (appended, never replacing the list).
   _importPalettes() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json,application/json";
-    input.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (file.size > MAX_PALETTE_IMPORT_BYTES) {
-        this._notify("This palette file is too large to import.");
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        let imported;
-        try {
-          const result = normalizeImportedPalettes(
-            JSON.parse(ev.target.result),
-          );
-          imported = result.palettes;
-          if (!imported.length) throw new Error("No valid palettes");
-          this._notifySkipped(result.skipped);
-        } catch (err) {
-          this._setImportStatus({ active: true, success: false }, 3000);
-          this._notify("Invalid palette file");
+    pickJsonFile(async (file) => {
+      let imported;
+      try {
+        const result = normalizeImportedPalettes(
+          await readJsonFile(file, MAX_PALETTE_IMPORT_BYTES),
+        );
+        imported = result.palettes;
+        if (!imported.length) throw new Error("No valid palettes");
+        this._notifySkipped(result.skipped);
+      } catch (err) {
+        if (err instanceof JsonFileTooLargeError) {
+          this._notify("This palette file is too large to import.");
           return;
         }
-        // Append on the server (add_palettes) so palettes other clients added
-        // since this card last refreshed are kept.
-        this._mutatePalettes(
-          this._paletteItems().concat(imported),
-          "add_palettes",
-          { palettes: imported },
-        )
-          .then(async (success) => {
-            if (!success) {
-              this._setImportStatus({ active: true, success: false }, 3000);
-              return;
-            }
-            this._setImportStatus({ active: true, success: true }, 2000);
-            // Force sensor update to get fresh data immediately
-            const paletteSensor = this.config?.palette_sensor;
-            if (paletteSensor) {
-              await this._commands.call(
-                this._hass,
-                "homeassistant",
-                "update_entity",
-                { entity_id: paletteSensor },
-              );
-            }
-          })
-          .catch((error) => this._notifyUnreported(error));
-      };
-      reader.readAsText(file);
+        this._importStatus.set("error", 3000);
+        this._notify("Invalid palette file");
+        return;
+      }
+      // Append on the server (add_palettes) so palettes other clients added
+      // since this card last refreshed are kept.
+      this._mutatePalettes(
+        this._paletteItems().concat(imported),
+        "add_palettes",
+        { palettes: imported },
+      )
+        .then(async (success) => {
+          if (!success) {
+            this._importStatus.set("error", 3000);
+            return;
+          }
+          this._importStatus.set("success", 2000);
+          // Force sensor update to get fresh data immediately
+          const paletteSensor = this.config?.palette_sensor;
+          if (paletteSensor) {
+            await this._commands.call(
+              this._hass,
+              "homeassistant",
+              "update_entity",
+              { entity_id: paletteSensor },
+            );
+          }
+        })
+        .catch((error) => this._notifyUnreported(error));
     });
-    input.click();
   }
 
   // The export / import row (shared: renderExportImportRow).
   _renderPaletteExportImportButtons(showExport, showImport) {
-    const status = this._importStatus;
     return renderExportImportRow({
       noun: "palettes",
       showExport,
       showImport,
       buttonStyle: this.config.buttons_style || "modern",
       contentMode: this.config.buttons_content_mode || "icon_text",
-      importStatus: status.active ? (status.success ? "success" : "error") : null,
+      importStatus: this._importStatus.value,
       onExport: () => this._exportPalettes(),
       onImport: () => this._importPalettes(),
     });
@@ -354,8 +333,6 @@ class YeelightCubePaletteCard extends YeelightCardMixin(LitElement) {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    clearTimeout(this._importStatusTimer);
-    this._importStatus = { active: false, success: false };
     // Late results of this connection are dropped.
     this._store.reset();
   }

@@ -157,7 +157,9 @@ test("a style resolves the shared settings its own way", () => {
 
 test("the ends are buttons that step the value, beside or inside the control", () => {
   const ends = (html) =>
-    [...html.matchAll(/data-on-click="_slSpeedStep" data-args='(\[[^']*\])'/g)].map((m) => JSON.parse(m[1]));
+    [...html.matchAll(/data-on-click="_slSpeedStep" data-args="(\[[^"]*\])"/g)].map((m) =>
+      JSON.parse(m[1].replace(/&quot;/g, '"')),
+    );
   // Beside a Slider: its icons, stepping by the step size.
   const slider = renderSliderControl(gc({ slider_ends: "icons", slider_step_size: 10 }), 50, "speed");
   assert.equal(slider.match(/class="brightness-end /g)?.length, 2);

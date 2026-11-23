@@ -106,6 +106,4 @@ class YeelightCubeCustomTextInput(CubeControlEntity, TextEntity):
 
     @callback
     def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
         super().async_entity_id_changed(old_entity_id)

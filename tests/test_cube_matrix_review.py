@@ -79,9 +79,8 @@ class RefusedCommandTests(unittest.TestCase):
         module("light").async_setup_light_services(hass)
         handler = hass.registered[(CONSTANTS["DOMAIN"], "bulb_call")]
         light = make_light(cube=FakeCube(connection.profile, device=mock.Mock()), hass=hass, entity_id="light.matrix")
-        registry = module("light")._ENTITY_REGISTRY
-        self.addCleanup(registry.pop, "test-refusal", None)
-        registry["test-refusal"] = light
+        # Set up, as light.async_setup_entry leaves it (its entry's runtime_data).
+        hass.entries.append(types.SimpleNamespace(entry_id="lamp", runtime_data=types.SimpleNamespace(light=light)))
         call = types.SimpleNamespace(
             data={"entity_id": "light.matrix", "member": "send_command", "args": list(refused)},
             hass=hass, context=types.SimpleNamespace(user_id=None),
@@ -133,11 +132,15 @@ class NewAddressTests(unittest.TestCase):
         client, link = self.linked("wKgBiw==")
         client.nodes = [matrix_node(8, "wKgBjA==")]
         updates, checks = [], []
-        entry = types.SimpleNamespace(data={CONSTANTS["CONF_IP"]: LAMP_IP, "matter_mac": LAMP_MAC})
+        entry = types.SimpleNamespace(
+            unique_id=LAMP_IP, data={CONSTANTS["CONF_IP"]: LAMP_IP, "matter_mac": LAMP_MAC})
         light = types.SimpleNamespace(
             _matter=link, _ip=LAMP_IP, _address_check=None,
             hass=types.SimpleNamespace(
-                config_entries=types.SimpleNamespace(async_update_entry=lambda entry, data: updates.append(data)),
+                config_entries=types.SimpleNamespace(
+                    async_entries=lambda domain: [entry],
+                    async_update_entry=lambda entry, **changes: updates.append(changes),
+                ),
             ),
             # Tracked: cancelled when the light is removed.
             _create_tracked_task=lambda coro, name=None: checks.append(coro) or "task",
@@ -166,7 +169,15 @@ class NewAddressTests(unittest.TestCase):
             answering.add("192.168.1.140")
             follow(light, entry, LAMP_MAC)
             self.assertTrue(asyncio.run(checks.pop()))
-            self.assertEqual("192.168.1.140", updates[0][CONSTANTS["CONF_IP"]])
+            self.assertEqual("192.168.1.140", updates[0]["data"][CONSTANTS["CONF_IP"]])
+            # Identified by its address: the unique id moves with it.
+            self.assertEqual("192.168.1.140", updates[0]["unique_id"])
+            # Not to another lamp's address, even answering there.
+            other = types.SimpleNamespace(unique_id="x", data={CONSTANTS["CONF_IP"]: "192.168.1.140"})
+            light.hass.config_entries.async_entries = lambda domain: [entry, other]
+            follow(light, entry, LAMP_MAC)
+            self.assertFalse(asyncio.run(checks.pop()))
+            self.assertEqual(1, len(updates))
         finally:
             MATTER.lamp_answers = saved
         # Not without the remembered MAC (the node may be another lamp), nor
@@ -489,8 +500,8 @@ class SecondRoundTests(unittest.TestCase):
 
 
 class UnusableAddressTests(unittest.TestCase):
-    """2026-11-10: after a power-on the Cube Matrix's Matter node reported its
-    Wi-Fi interface as 0.0.0.0, and the entry was moved there."""
+    """After a power-on a Cube Matrix's Matter node can report its Wi-Fi
+    interface as 0.0.0.0: the entry is never moved there."""
 
     def test_0_0_0_0_is_no_address(self):
         for address in ("0.0.0.0", "169.254.3.4", "127.0.0.1", "255.255.255.255", "224.0.0.1", "x", "1.2.3"):
@@ -512,7 +523,10 @@ class UnusableAddressTests(unittest.TestCase):
     def test_the_flows_refuse_it(self):
         flow = (ROOT / "config_flow.py").read_text(encoding="utf-8")
         self.assertIn('if not usable_address(ip):\n            return self.async_abort(reason="no_address")', flow)
-        self.assertIn("and usable_address(ip)", flow)
+        # Refused before any entry is compared, so no entry is moved there.
+        discovery = flow[flow.index("async def async_step_integration_discovery"):]
+        self.assertLess(discovery.index("if not usable_address(ip):"),
+                        discovery.index("for entry in self._async_current_entries():"))
         init = (ROOT / "__init__.py").read_text(encoding="utf-8")
         self.assertIn("or (stored_mac and normalize_device_id(device_id) == stored_mac)", init)
 
@@ -678,7 +692,7 @@ class RestartTests(unittest.TestCase):
         source = (ROOT / "light_connection.py").read_text(encoding="utf-8")
         self.assertIn("or matrix_shown is not None\n", source)
         self.assertIn('matrix_shown[1].get("apply") in (1, 2)', source)
-        recovered = source[source.index("self._forget_hardware_brightness()\n                    # A Cube Matrix"):]
+        recovered = source[source.index("self._forget_hardware_brightness()\n            # A Cube Matrix"):]
         self.assertIn("self._matrix_shown = None", recovered[:400])
 
 

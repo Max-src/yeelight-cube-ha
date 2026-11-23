@@ -5,12 +5,50 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Actions can target areas and devices.** Every lamp action now takes a target: pick lamps, their devices or a
+  whole area in the action editor. Calls that name `entity_id` (one or a list) work exactly as before; a target that
+  reaches no Yeelight Cube is refused with the usual "no matching lamp" message. `set_brightness`, `set_font`,
+  `set_alignment` and `set_orientation` change every lamp targeted; the few actions that answer about one lamp (a
+  preview, a lamp's capabilities, saving its palette, the debug actions) take the first one.
+- **`send_fx_effect` shows its `effect_id` and `rate` fields** in the action editor.
+
+### Changed
+- **A wrong choice in a dropdown is refused with a clear message** (an unknown option, palette or pixel art)
+  instead of being ignored silently.
+- **Importing pixel arts refuses files over 16 MB**, as importing palettes refuses large files; a full collection
+  stays well under it.
+
 ### Removed
 - **The `add_managed_device`, `remove_managed_device`, `is_device_managed` and `list_managed_devices` debug
   actions.** They only kept a list of addresses in memory that nothing else read; hiding the Yeelight integration's
   discoveries of your lamps works as before (from your configured lamps).
 
 ### Fixed
+- **A long text no longer keeps scrolling under a drawing.** Showing an image or a pixel art, or turning the full
+  panel on, after a text too long for the lamp left its scroll running: the lamp was redrawn five times a second
+  with the same picture. The scroll now stops with the text; the card previews no longer change it either.
+- **The Colors card no longer floods the lamp while a colour is picked.** Dragging in the colour picker sent one
+  command for each step of the drag, and the lamp kept changing for seconds after it ended. Only the newest colour
+  waiting is sent now.
+- **A Cube Matrix shows the effect asked for right after a drawing or text over the LAN.** The last frame's
+  repeat could reopen the LAN connection just as the effect was sent over Matter, and the lamp then ignored it.
+- **`enabled: "false"` is false** for `set_color_accuracy` and `set_calibration_lock`, as YAML and Node-RED send
+  it. Before, any text was taken as true: `set_calibration_lock` with `"false"` locked the lamp.
+- **Changing the physical button list with Right as Remote on keeps the remote working.** The new list was written
+  over the remote's slots, so right-button presses were taken for changes made in the Yeelight app. It is now kept
+  and written to the lamp when Right as Remote is turned off.
+- **Two Cube Lites that swap addresses keep their own Matter link.** A lamp could link to the other lamp's Matter
+  node when that node had its address, and follow its buttons and power.
+- **A slider moved again quickly is no longer undone** in the Lamp Preview card, and the clock style or colour mode
+  just picked no longer flickers back.
+- **A Cube Lite brought back over the LAN comes back as after any outage:** its Music Flow is started again
+  (it was left showing the lamp's default), its rotation goes on, and another app's content is not drawn over.
+- **A Cube Matrix's rotation or Music Flow is kept** when its Matter link comes back, when the lamp is turned to
+  another side, or when its mount is confirmed: the redraw that follows no longer stopped them.
+- **Turning Right as Remote off restores the right button's slots in full** when they were written by
+  `set_button_effects`: their direction, colours and clock settings come back, not only the effect. Slots changed in
+  the Yeelight app since are restored as before.
 - **A Cube Matrix's power supply side after a restart.** When the lamp's LAN did not answer as Home Assistant started,
   the side was taken from the Matter server's copy, which can be older than the one Home Assistant last wrote: that
   older side was shown and written back to the lamp. It is now read from the lamp itself, as the modules are; if it
@@ -54,6 +92,45 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   after one unanswered call; sharing the shown palette waits its turn behind earlier commands; a failed save shows
   one message, not two; the Clock card editor shows the same save buttons as the card for older card settings; the
   Draw card keeps its drawing when moved on the dashboard.
+- **The Cube Matrix's music connection is closed when its opening is cancelled.** A connection the lamp had already
+  opened back could stay open with nobody using it, taking one of the lamp's few connections.
+- **Draw card strokes.** One stroke is one Undo step (it was two, so the first Undo seemed to do nothing), and a
+  stroke ends when the mouse is released outside the grid, instead of painting again when the pointer comes back.
+- **Renaming or deleting from a gallery acts on the item it shows.** If another device changed the list meanwhile,
+  it follows the item, or asks to pick it again, instead of acting on whatever is now at that place.
+- **A failed clock style pick in the Clock card no longer stays highlighted.**
+- **The Gradient card's previews no longer reload, and the card no longer redraws, at every step of a scrolling text
+  or stream.** They follow the text, colours, angle, font, alignment, scroll, background and panel width.
+- **The lamp's direction is written again after a write that timed out** (once a minute, up to 3 times), instead of
+  being left unconfirmed until Home Assistant restarts.
+- **A brightness that fails again while it is retried is kept** for another try (within its 30 seconds), and a newer
+  one set meanwhile is sent, instead of being dropped.
+- **A lamp added from Matter that moves to a new address takes it as its id**, so another lamp later given the old
+  address can be added.
+- **`bypass_lock` is for administrators.** The option of `set_brightness` and `apply_custom_pixels` that goes through a
+  lamp held for its calibration is now declared, refused to a user who is not an administrator, and `"false"` given as
+  text is false.
+- **`set_solid_color` explains a colour it can't read** (such as `"red"`) instead of an unknown error.
+- **The pixel art WebSocket command answers.** `yeelight_cube/ws_get_pixel_art_v2` refused every request, and one for
+  a pixel art that can't be read got no answer.
+- **A lamp is looked for at once when the integration is added** while Home Assistant runs, not 10 minutes later.
+- **Removing a lamp that never loaded removes its saved data** (favourites, drawing, rotation) too.
+- **Indexes given as text** (`"3"`, from YAML or Node-RED) are taken by every pixel art and palette action.
+- **A truncated or damaged image** gives the "image not supported" message instead of a raw error.
+- **A lamp that doesn't accept a connection fails within half a second**, as intended, instead of five.
+- **A late copy of a lamp's answer no longer drops its UDP session**, and a session interrupted while it was being set
+  up is not used without direct mode.
+- **The Cube Matrix's music connection only accepts the lamp**, not another host connecting in the few seconds it is
+  open.
+- **The debug `query_raw` action** no longer lets a pending frame repeat draw over what it starts.
+- **Matter.** A value read from a lamp paired again meanwhile is not kept; a music mode keeps its own wait for the
+  microphone; a command or write that never gets an answer ends after 15 seconds; a lamp does not follow its Matter
+  node to an address another lamp's entry has; a Cube Matrix keeps its extra LEDs when its modules change.
+- **Cards.** Picking the same image again in the Draw card uploads it; turning the wheel quickly applies where it
+  stops; a slider change made just before its card goes away is sent; a removed Native Effects card is no longer kept
+  waiting for the effect list.
+- **Gallery edits are saved together**: a burst of renames, moves or deletes is one write of the storage file, a
+  moment later (Home Assistant writes it when it stops).
 
 ## [2.0.0] - 2026-11-21
 

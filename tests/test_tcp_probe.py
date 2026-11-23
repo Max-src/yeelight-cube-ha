@@ -1,5 +1,6 @@
 """The shared reachability probe (lamp_protocol.check_tcp): setup and recovery."""
 import asyncio
+import logging
 import socket
 import struct
 import unittest
@@ -14,11 +15,12 @@ class TcpProbeTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.check_tcp = _load_standalone_functions(
             LAMP_CLIENT_SOURCE,
-            {"check_tcp"},
+            {"check_tcp", "one_shot"},
             {
                 "asyncio": asyncio,
                 "socket": socket,
                 "_RST_LINGER": struct.pack("ii", 1, 0),
+                "_LOGGER": logging.getLogger(__name__),
             },
         )["check_tcp"]
 
@@ -69,8 +71,11 @@ class SendOnceTests(unittest.IsolatedAsyncioTestCase):
 
         self.send_once = _load_standalone_functions(
             LAMP_CLIENT_SOURCE,
-            {"send_once"},
-            {"asyncio": asyncio, "socket": socket, "json": json, "_RST_LINGER": struct.pack("ii", 1, 0)},
+            {"send_once", "one_shot", "encode_command"},
+            {
+                "asyncio": asyncio, "socket": socket, "json": json,
+                "_RST_LINGER": struct.pack("ii", 1, 0), "_LOGGER": logging.getLogger(__name__),
+            },
         )["send_once"]
 
     async def lamp(self, *replies):
@@ -102,7 +107,16 @@ class SendOnceTests(unittest.IsolatedAsyncioTestCase):
             b'{"id":1,"method":"set_fx_effect","params":[34,0,4,{"mode":34}]}\r\n', received[0]
         )
 
+    def test_a_command_is_one_compact_json_line(self):
+        encode = _load_standalone_functions(LAMP_CLIENT_SOURCE, {"encode_command"})["encode_command"]
+        self.assertEqual(
+            b'{"id":1,"method":"set_fx_effect","params":[34,0,4,{"mode":34}]}\r\n',
+            encode("set_fx_effect", [34, 0, 4, {"mode": 34}]),
+        )
+        self.assertEqual(b'{"id":7,"method":"get_prop","params":["power"]}\r\n', encode("get_prop", ["power"], 7))
+
     async def test_a_refusal_or_no_answer_raises(self):
+
         port, _ = await self.lamp(b'{"id":1,"error":{"code":-1,"message":"refused"}}\r\n')
         with self.assertRaises(OSError):
             await self.send_once("127.0.0.1", port, "set_fx_effect", [], 2.0)

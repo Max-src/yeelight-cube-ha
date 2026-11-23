@@ -26,13 +26,12 @@ PARALLEL_UPDATES = 0
 
 
 class CubeNumber(CubeControlEntity, NumberEntity):
-    """A slider of one lamp. It listens to the light's ``_topic`` (light_state):
-    every change made elsewhere comes through async_update_from_light, so it never
-    polls. Named by its translation key, after the lamp's name."""
+    """A slider of one lamp. It listens to the light's ``_topic``
+    (CubeControlEntity), so it never polls. Named by its translation key,
+    after the lamp's name."""
 
     _attr_should_poll = False
     _attr_mode = NumberMode.SLIDER
-    _topic = None
 
     def __init__(
         self, light_entity, config_entry: ConfigEntry, unique_suffix: str,
@@ -48,30 +47,6 @@ class CubeNumber(CubeControlEntity, NumberEntity):
         self._attr_native_unit_of_measurement = unit
         if translation_key:
             self._attr_translation_key = translation_key
-
-    @callback
-    def async_update_from_light(self):
-        if self.hass is not None:
-            self.async_write_ha_state()
-
-    def _write_states(self):
-        """Publish this slider and the lamp."""
-        if self.hass is not None:
-            self.async_write_ha_state()
-        if self._light_entity.hass is not None:
-            self._light_entity.async_write_ha_state()
-
-    async def async_added_to_hass(self):
-        await super().async_added_to_hass()
-        if self._topic:
-            self._listen_to_light(self._topic)
-        self.async_update_from_light()
-
-    @callback
-    def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
-        super().async_entity_id_changed(old_entity_id)
 
 
 async def _restart_scroll(light) -> None:
@@ -209,8 +184,6 @@ class CubeSettingNumber(CubeNumber):
 
     @callback
     def async_entity_id_changed(self, old_entity_id: str) -> None:
-        # Renamed in place (Home Assistant 2026.11+): nothing here is keyed on
-        # the entity id, so it keeps running as it is.
         super().async_entity_id_changed(old_entity_id)
 
 

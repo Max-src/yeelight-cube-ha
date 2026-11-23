@@ -12,6 +12,7 @@ import logging
 import asyncio
 import base64
 from .const import (
+    INTERNAL_REDRAW,
     DEVICE_ORIENTATIONS,
     DEVICE_ORIENTATION_TO_FLIP,
     MODE_CLOCK,
@@ -177,7 +178,7 @@ class SettingsMixin:
             # again in full, not as a live change with nothing to change.
             self._matrix_shown = None
         if orientation == self._device_orientation and self._mode in (MODE_CLOCK, MODE_NATIVE_EFFECT):
-            await self.async_apply_display_mode(update_type='text_change')
+            await self.async_apply_display_mode(update_type=INTERNAL_REDRAW)
         self._notify_camera_preview()
         if self.hass is not None:
             self.async_schedule_update_ha_state()
@@ -288,8 +289,13 @@ class SettingsMixin:
             raise ValueError("The physical button list must contain 1 to 8 effects")
         effect_names = [canonical_button_effect_name(name) for name in effect_names]
         items = [self._effect_persist_item(name) for name in effect_names]
+        # Right as Remote holds the lamp's playlist: the list is kept for
+        # when it is turned off, the black slots stay (light_matter_remote).
+        keep_for_remote = getattr(self, "_keep_button_playlist_for_remote", None)
         write_over_matter = getattr(self, "_write_button_playlist", None)
-        if write_over_matter is None or not await write_over_matter(items):
+        if keep_for_remote is not None and keep_for_remote(items):
+            pass
+        elif write_over_matter is None or not await write_over_matter(items):
             self._lamp_client.close_fast_socket()
             try:
                 for index, item in enumerate(items):

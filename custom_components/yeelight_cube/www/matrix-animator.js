@@ -21,6 +21,7 @@
 
 import { frameWidth, fromDisplayOrder, matrixView } from "./matrix-view.js";
 import { moduleCells, paintModuleCells } from "./matrix-modules.js";
+import { scaleChannel, scalePixel } from "./color-utils.js";
 
 // Every refresh of a 60 Hz display, over twice the lamp's 25 renders a second;
 // faster displays are not followed.
@@ -353,9 +354,9 @@ class MatrixSurface {
         : scale === 1
           ? (0xff000000 | (blue << 16) | (green << 8) | red) >>> 0
           : (0xff000000 |
-              (Math.min(255, Math.round(blue * scale)) << 16) |
-              (Math.min(255, Math.round(green * scale)) << 8) |
-              Math.min(255, Math.round(red * scale))) >>> 0;
+              (scaleChannel(blue, scale) << 16) |
+              (scaleChannel(green, scale) << 8) |
+              scaleChannel(red, scale)) >>> 0;
       if (pixels[offsets[index]] !== value) {
         pixels[offsets[index]] = value;
         changed = true;
@@ -380,7 +381,7 @@ MatrixSurface.prototype.paintCells = function paintCells() {
     const pixel = frame[index] || BLACK;
     const [red, green, blue] = scale === 1
       ? pixel
-      : pixel.map((channel) => Math.min(255, Math.round(channel * scale)));
+      : scalePixel(pixel, scale);
     const hidden = hideBlack !== null && red <= hideBlack && green <= hideBlack && blue <= hideBlack;
     paintCellBackground(cell, hidden ? "transparent" : `rgb(${red},${green},${blue})`);
     paintCellBoxShadow(cell, hidden || !shadow ? "" : shadow);

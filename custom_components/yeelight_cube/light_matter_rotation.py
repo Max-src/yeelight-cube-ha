@@ -30,6 +30,10 @@ from .light_matter import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Profile writes that timed out or failed, tried again (one a minute) on
+# the same node and server before the lamp's Matter value is left unused.
+MOUNT_PROFILE_RETRIES = 3
+
 
 class MatterRotationMixin:
     """The lamp's direction setting and the Device Orientation."""
@@ -77,19 +81,23 @@ class MatterRotationMixin:
         cube = self._lamp_client
         if getattr(self, "is_cube_matrix", False) and cube is not None:
             # A Cube Matrix saves the rotation only with a later request, and
-            # never while its music mode is on (tested 2026-11-12: written
-            # with a music connection open, gone after a power cut): ours is
+            # never while its music mode is on (written with a music
+            # connection open, it is gone after a power cut): ours is
             # closed first (the next frame opens it again).
             cube.close_music_session()
         # While it is written, the previews follow the profile the lamp is
         # about to run (light_mount_profile.lamp_turns_clock), not the old one.
         self._mount_profile_pending = rotation
+        # A write that timed out or failed (not one no server delivers): the
+        # profile check tries it again (_async_confirm_mount_profile).
+        self._rotation_write_failed = False
         try:
             await asyncio.wait_for(channel.async_write(ROTATION, rotation), ROTATION_WRITE_TIMEOUT)
         except MatterCommandsUnavailable:
             return False
         except Exception as err:  # noqa: BLE001 -- the lamp keeps its direction
             _LOGGER.warning("[MATTER] [%s] Could not set the lamp's direction: %s", self._ip, err)
+            self._rotation_write_failed = True
             return False
         finally:
             self._mount_profile_pending = None
@@ -167,6 +175,15 @@ class MatterRotationMixin:
             async with self._rotation_lock():
                 written = await self._sync_lamp_rotation(self._device_orientation, force=True)
             if not written:
+                tried = self._mount_profile_tried
+                failures = self.__dict__.get("_mount_profile_failures", (None, 0))
+                count = failures[1] + 1 if failures[0] == tried else 1
+                if getattr(self, "_rotation_write_failed", False) and count <= MOUNT_PROFILE_RETRIES:
+                    # Timed out or failed: tried again at the next minute's
+                    # check (_refresh_matter_link), a few times per node.
+                    self._mount_profile_failures = (tried, count)
+                    self._mount_profile_tried = None
+                    return
                 _LOGGER.debug(
                     "[MATTER] [%s] Lamp direction not confirmed (no server delivers "
                     "the write): its Matter value is not used", self._ip,

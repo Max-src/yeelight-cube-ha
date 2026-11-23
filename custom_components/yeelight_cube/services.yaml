@@ -49,6 +49,10 @@ ignore_specific_yeelight:
 load_palette:
   name: Load Palette
   description: Load a saved palette by index and apply its colors to the target lamp(s)
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     expected_name:
       description: >-
@@ -67,17 +71,14 @@ load_palette:
         number:
           min: 0
           mode: box
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 set_button_effects:
   name: Set physical button effects
   description: Set one to eight ordered native presets cycled by the Cube Lite physical button.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     effects:
       description: Ordered native effect or clock style names. The first item is button slot 1.
@@ -85,12 +86,6 @@ set_button_effects:
       example: '["Ribbon", "Rainbow", "Clock: Yellow"]'
       selector:
         object:
-    entity_id:
-      description: Target Yeelight Cube Lite entity.
-      required: true
-      selector:
-        entity:
-          domain: light
 
 save_clock_preset:
   name: Save Clock Color Preset
@@ -134,14 +129,11 @@ set_clock_style:
     Configure the lamp's clock in one call: style, color override, content
     and time format. Any subset of fields may be provided. Drives the Clock
     card. By default the lamp switches to Clock mode so the change is visible.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
-    entity_id:
-      description: Target lamp entity ID.
-      required: true
-      example: "light.cubelite_192_168_1_139"
-      selector:
-        entity:
-          domain: light
     style:
       description: Clock style name (e.g. "Yellow", "Night-sky waves") or numeric style id.
       required: false
@@ -224,14 +216,10 @@ set_clock_style:
 preview_gradient_modes:
   name: Preview Gradient Modes
   description: Generate full 20x5 preview matrices for the text/gradient display modes using the entity's current text, colors, and angle. Does not change the lamp; results are fired as a yeelight_cube_gradient_preview_response event.
-  fields:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
 
 set_custom_text:
   name: Set Custom Text
@@ -239,6 +227,10 @@ set_custom_text:
     Set text to display on the cube matrix.
     Clears any existing pixel art and resets scroll position.
     While the lamp shows its clock or a native effect, the text is kept for when it shows text again (the clock and its rotation go on); to show it over the clock, call save_state first and restore_state after.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     text:
       description: Text to display on the cube matrix (at most 255 characters)
@@ -246,17 +238,14 @@ set_custom_text:
       required: true
       selector:
         text:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 set_text_colors:
   name: Set Text Colors
   description: Set the colors used for text display. Supports gradients with multiple colors.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     text_colors:
       description: Array of RGB color arrays, e.g. [[255,0,0], [0,255,0]] for red to green gradient
@@ -264,13 +253,6 @@ set_text_colors:
       required: true
       selector:
         object:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_1_247"
-      required: true
-      selector:
-        entity:
-          domain: light
     save_as_palette:
       description: Save these colors as a palette for later use
       example: false
@@ -282,6 +264,10 @@ set_text_colors:
 apply_custom_pixels:
   name: Apply Custom Pixels
   description: "Display a pixel art frame on the matrix. Positions run left-to-right then bottom-to-top (row * width + column: 0-99 on the 20x5 matrix); missing positions stay black."
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     pixels:
       description: "Array of entries with position and color. position is a single index (row * width + column: 0-99 on the 20x5 matrix) or a list of indexes; color is [R, G, B]."
@@ -304,28 +290,18 @@ apply_custom_pixels:
       required: false
       selector:
         text:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 send_fx_effect:
   name: "DEBUG: Send FX Effect (raw)"
   description: >-
     LOCAL DEBUG ONLY. Sends a raw private LAN command (default set_fx_effect)
     to the lamp. Either provide params (raw JSON array, sent verbatim) or the
-    structured fields (mode/style_id/apply/mixer/color/data_bytes). Not a stable API.
+    structured fields (mode/effect_id/style_id/apply/mixer/rate/color/data_bytes). Not a stable API.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
-    entity_id:
-      description: Target lamp entity ID.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
     method:
       description: LAN method name.
       example: "set_fx_effect"
@@ -375,6 +351,27 @@ send_fx_effect:
           min: 0
           max: 255
           mode: box
+    effect_id:
+      description: >-
+        Command id, the first element of the params sent (default: the mode).
+        Some effects take one that differs from their mode, e.g. 71 for
+        Fireworks with a mode 40 config.
+      example: 71
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box
+    rate:
+      description: Animation speed, sent as the config's rate (none sent when not set).
+      example: 50
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box
     color:
       description: Raw color integer (single int or list of ints).
       example: 33553920
@@ -415,14 +412,11 @@ query_raw:
   description: >-
     LOCAL DEBUG ONLY. Sends a raw command to the lamp and returns the device's
     reply, e.g. to get_prop or to an experimental command. Not a stable API.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
-    entity_id:
-      description: Target lamp entity ID.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
     method:
       description: LAN method name to send.
       example: "get_prop"
@@ -443,14 +437,10 @@ get_capabilities:
     LOCAL DEBUG ONLY. Runs the yeelight library's SSDP get_capabilities probe
     and returns the advertised capability headers (id, model, fw_ver, power,
     bright, rgb, support, ...). Works regardless of content mode. Not a stable API.
-  fields:
-    entity_id:
-      description: Target lamp entity ID.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
 
 bulb_call:
   name: "DEBUG: Read/Call Bulb Member"
@@ -459,14 +449,11 @@ bulb_call:
     (e.g. get_model_specs, bulb_type, capabilities) or invokes an allowlisted
     write method with positional args (e.g. set_rgb with [255, 0, 0]). Anything
     outside the allowlists is rejected. Not a stable API.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
-    entity_id:
-      description: Target lamp entity ID.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
     member:
       description: Bulb attribute/method to read (read-only) or call (write).
       example: "set_rgb"
@@ -524,16 +511,11 @@ force_tcp:
     LOCAL DEBUG ONLY (administrators). Sends the lamps' commands over TCP
     (their fallback) for some minutes instead of their UDP session, to test
     it on demand. 0 minutes: UDP again at once.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
-    entity_id:
-      description: Target lamp entity ID(s).
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          integration: yeelight_cube
-          domain: light
-          multiple: true
     minutes:
       description: How long (0 to 60 minutes; 0 = UDP again).
       example: 10
@@ -549,25 +531,19 @@ set_default:
   description: >-
     LOCAL DEBUG ONLY. Sends the documented set_default command so the lamp
     restores its CURRENT state after a power cut. Not a stable API.
-  fields:
-    entity_id:
-      description: Target lamp entity ID.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
 
 set_native_effect:
   name: Set Native Effect
   description: Select and apply a built-in animation, optionally setting its speed and compatible color palette. Respects the auto-turn-on setting.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
-    entity_id:
-      required: true
-      selector:
-        entity:
-          domain: light
-          multiple: true
     effect:
       description: Native effect name. Omit to retain the current effect.
       example: Rainbow
@@ -641,6 +617,10 @@ set_native_effect:
 set_mode:
   name: Set Mode
   description: Set the clock, text, gradient, or drawing mode on the cube.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     mode:
       description: Clock, text, gradient, or drawing mode
@@ -668,17 +648,14 @@ set_mode:
       required: false
       selector:
         boolean:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_1_247"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 set_angle:
   name: Set Gradient Angle
   description: Set the gradient angle in degrees for angle-based gradient modes.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     angle:
       description: Gradient angle in degrees (0-360). Used for angle-based gradient modes.
@@ -690,17 +667,14 @@ set_angle:
           max: 360
           step: 1
           mode: slider
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 set_full_panel:
   name: Set Panel Mode
   description: Set whether gradients apply to the entire panel or just text areas.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     full_panel:
       description: Whether to apply gradients to entire panel (true) or just text areas (false)
@@ -708,33 +682,27 @@ set_full_panel:
       required: true
       selector:
         boolean:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_1_247"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 set_solid_color:
   name: Set Solid Color
   description: Set a single solid RGB color on the lamp (shortcut for Solid Color mode).
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     rgb_color:
       description: 'RGB color as a list [R, G, B] (0-255 each) or a hex string (e.g. "#FF0000")'
       example: [255, 0, 0]
       required: true
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 set_brightness:
   name: Set Brightness
   description: Set the lamp brightness using a simple percentage (1-100%). This is a convenience service that wraps the standard light.turn_on brightness control, converting percentage values to Home Assistant's 1-255 brightness range.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     brightness:
       description: Brightness percentage (1-100%)
@@ -746,13 +714,6 @@ set_brightness:
           max: 100
           step: 1
           mode: slider
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 # === PIXEL ART MANAGEMENT ===
 
@@ -799,6 +760,10 @@ apply_pixel_art:
   description: >-
     Show a pixel art on the cube: a saved one by index, or a saved or built-in
     (official app) one by name. Give either the index or the name.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     name:
       description: >-
@@ -825,12 +790,6 @@ apply_pixel_art:
         number:
           min: 0
           mode: box
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      required: true
-      selector:
-        entity:
-          domain: light
 
 remove_pixel_art:
   name: Remove Pixel Art
@@ -953,6 +912,10 @@ update_pixel_arts:
 save_palette:
   name: Save Palette
   description: Save a color palette for later use in gradients and text coloring.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     palette:
       description: Array of RGB color arrays
@@ -966,13 +929,6 @@ save_palette:
       required: false
       selector:
         text:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 remove_palette:
   name: Remove Palette
@@ -1078,6 +1034,10 @@ set_palettes:
 set_orientation:
   name: Set Orientation
   description: Set the display orientation of the cube matrix.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     orientation:
       description: Display orientation
@@ -1088,12 +1048,6 @@ set_orientation:
           options:
             - "normal"
             - "flipped"
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      required: true
-      selector:
-        entity:
-          domain: light
 
 set_device_orientation:
   name: Set Device Orientation
@@ -1103,6 +1057,10 @@ set_device_orientation:
     (right/up upright, left/down 180 deg), and native effects are turned so
     their direction stays what you see. The 90 deg visual rotation for up/down is shown
     in the lamp preview card.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     orientation:
       description: Physical mount orientation
@@ -1115,16 +1073,14 @@ set_device_orientation:
             - "down"
             - "left"
             - "up"
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      required: true
-      selector:
-        entity:
-          domain: light
 
 set_font:
   name: Set Font
   description: Set the font used for text display.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     font:
       description: Font name to use for text display
@@ -1137,16 +1093,14 @@ set_font:
             - "fat"
             - "italic"
             - "native"
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      required: true
-      selector:
-        entity:
-          domain: light
 
 set_alignment:
   name: Set Text Alignment
   description: Set the text alignment for displayed text.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     alignment:
       description: Text alignment
@@ -1158,18 +1112,16 @@ set_alignment:
             - "left"
             - "center"
             - "right"
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      required: true
-      selector:
-        entity:
-          domain: light
 
 # === IMAGE DISPLAY ===
 
 display_image:
   name: Display Image
   description: Display a base64-encoded image on the cube matrix (resized to 20x5).
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     image_b64:
       description: Base64-encoded image data (at most 4,000,000 characters, about a 3 MB file, and 2048x2048 pixels)
@@ -1178,30 +1130,24 @@ display_image:
       selector:
         text:
           multiline: true
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      required: true
-      selector:
-        entity:
-          domain: light
 
 # === TESTING AND DEBUGGING ===
 
 test_display:
   name: Test Display
   description: Test service to manually trigger display mode application for debugging. Forces the lamp on, re-establishes the FX handshake and re-applies the current display.
-  fields:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.cubelite_192_168_1_139"
-      required: true
-      selector:
-        entity:
-          domain: light
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
 
 set_preview_adjustments:
   name: Set Color Effects
   description: Apply real-time color effects to the lamp output. Note - Use the light brightness control for overall brightness adjustment.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     # === COLOR ADJUSTMENTS ===
     hue_shift:
@@ -1307,13 +1253,6 @@ set_preview_adjustments:
           min: 0
           max: 100
           mode: slider
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 force_refresh:
   name: Force Refresh
@@ -1322,14 +1261,10 @@ force_refresh:
     Opens a fresh TCP connection for each command, exactly like the working
     yeelight_matrix library script. Use this when the lamp is stuck and
     normal display updates are not reaching it.
-  fields:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
 
 freeze_display:
   name: Freeze Display
@@ -1339,15 +1274,10 @@ freeze_display:
     digits and colon keep updating with the time. To resume, re-apply the
     current effect or clock mode (the cards' "Resume effect" action re-sends
     the last command).
-  fields:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
-          multiple: true
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
 
 start_effect_rotation:
   name: Start Effect Rotation
@@ -1357,15 +1287,11 @@ start_effect_rotation:
     Home Assistant (not the dashboard), it keeps rotating after the browser tab
     is closed or refreshed. Stop it with stop_effect_rotation; a lamp that is
     turned off stops its own rotation.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
-          multiple: true
     items:
       description: >-
         Ordered modes to cycle through. Each item is either a plain name
@@ -1400,6 +1326,10 @@ start_effect_rotation:
 set_favourites:
   name: Set Favourites
   description: Replace a lamp's favourite native effects or clock styles (shown on every dashboard; rotation plays them in this order).
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     kind:
       description: Which favourites to replace.
@@ -1418,18 +1348,14 @@ set_favourites:
       required: true
       selector:
         object:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
-          multiple: true
 
 set_rotation_interval:
   name: Set Rotation Interval
   description: Set the rotation interval every dashboard uses for a lamp (per kind). A running rotation of that kind switches to it at once.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     kind:
       description: Which rotation the interval is for.
@@ -1452,27 +1378,15 @@ set_rotation_interval:
           max: 604800
           unit_of_measurement: s
           mode: box
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
-          multiple: true
 
 set_matrix_modules:
   name: Set Cube Matrix modules
   description: Tell a Cube Matrix which modules it has, from the base, as the Yeelight app's module splicing does (over Matter). The lamp cannot detect them; it keeps the list and lays its own effects and clock out for it. A block left off the list stays dark except for one green light in its corner; blocks and Spots taken off are left dark.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
-    entity_id:
-      description: The Cube Matrix's light entity.
-      example: "light.cubematrix_6a80"
-      required: true
-      selector:
-        entity:
-          domain: light
-          integration: yeelight_cube
     modules:
       description: 'The modules in chain order from the base: matrix (5 x 5), spot or panel; 1 to 8.'
       example: '["matrix", "matrix", "spot", "matrix"]'
@@ -1489,28 +1403,18 @@ set_matrix_modules:
 stop_effect_rotation:
   name: Stop Effect Rotation
   description: Stop the server-side effect rotation on the target lamps.
-  fields:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
-          multiple: true
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
 
 skip_effect_rotation:
   name: Skip Effect Rotation
   description: Advance a running server-side effect rotation to its next mode immediately.
-  fields:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
-          multiple: true
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
 
 save_state:
   name: Save State
@@ -1522,14 +1426,10 @@ save_state:
     overwrites it. Pair with restore_state to show something temporarily and
     then return to what was displayed before. Note: the snapshot is held in
     memory and does not survive a Home Assistant restart.
-  fields:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
 
 restore_state:
   name: Restore State
@@ -1538,14 +1438,10 @@ restore_state:
     re-render it on the lamp. A rotation that was running when it was saved
     starts again, in step with the lamps still running it. Never turns the
     lamp on or off. Does nothing if no state was saved.
-  fields:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
 
 set_color_accuracy:
   name: Set Color Accuracy
@@ -1555,6 +1451,10 @@ set_color_accuracy:
     Reduces green and blue channels slightly so yellows, cyans, and whites
     look neutral rather than greenish, and blues/purples appear deeper instead
     of washed out.  The preview card is NOT affected.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     enabled:
       description: Enable or disable color accuracy correction.
@@ -1562,13 +1462,6 @@ set_color_accuracy:
       required: true
       selector:
         boolean:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 set_calibration_lock:
   name: Set Calibration Lock (Internal)
@@ -1578,6 +1471,10 @@ set_calibration_lock:
     coming from automations or other cards, so the wizard's test patterns are not
     disturbed mid-session.  The lock auto-releases after 15 minutes of inactivity
     as a safety net.  Used internally by the calibration card.
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     enabled:
       description: Enable (take control) or disable (release control) the lock.
@@ -1585,13 +1482,6 @@ set_calibration_lock:
       required: true
       selector:
         boolean:
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102).
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light
 
 set_color_calibration:
   name: Set Color Calibration (Debug)
@@ -1599,6 +1489,10 @@ set_color_calibration:
     Adjust color correction and accuracy calibration values at runtime.
     All fields are optional — only provided values are updated.
     Changes are NOT persisted across restarts (set new defaults in code).
+  target:
+    entity:
+      integration: yeelight_cube
+      domain: light
   fields:
     gamma_r:
       description: "System 1 — Red inverse gamma (0.1–1.0, lower = more boost). Default: 0.85"
@@ -1690,10 +1584,3 @@ set_color_calibration:
           max: 1.0
           step: 0.05
           mode: slider
-    entity_id:
-      description: Target lamp entity ID (e.g. light.cubelite_192_168_1_102). Must be provided for direct service calls.
-      example: "light.yeelight_cube_192_168_1_100"
-      required: true
-      selector:
-        entity:
-          domain: light

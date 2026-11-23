@@ -6,7 +6,8 @@ entity's core: its construction (__init__, calling every mixin's
 _init_*_state), the state write that keeps its controls and power estimate
 in step (async_write_ha_state), its device info and profile, its background
 tasks, the pixel art it shows, and the light platform's setup
-(async_setup_entry), with the lamps the services find (_ENTITY_REGISTRY).
+(async_setup_entry), which stores the light in its entry's runtime_data,
+where the services find it (light_services_common._lamp_for).
 """
 import logging
 import asyncio
@@ -74,13 +75,12 @@ _LOGGER.debug("Yeelight Cube Lite light.py module loaded")
 # timeout -> retry storm -> lamp stuck for 20-30s.
 # JS 300ms debounce provides sufficient rate limiting.
 
-# The lamps, for the services: keyed by IP (fixed for a lamp's lifetime: an
-# IP change reloads its entry). A service finds a lamp by its *live*
-# entity_id (light_services_common._lamp_for), never by a stored id, so a
-# renamed lamp (in place from Home Assistant 2026.11) is found under its new
-# id only, and its old id can never reach it -- even once another lamp takes
-# that id (two lamps' names swapped). Rules: docs/ENTITY_IDS.md.
-_ENTITY_REGISTRY = {}
+# The services find a lamp through the loaded config entries (each one's
+# runtime_data.light), by its *live* entity_id (light_services_common.
+# _lamp_for), never by a stored id, so a renamed lamp (in place from Home
+# Assistant 2026.11) is found under its new id only, and its old id can never
+# reach it -- even once another lamp takes that id (two lamps' names
+# swapped). Rules: docs/ENTITY_IDS.md.
 
 
 
@@ -105,7 +105,6 @@ def cleanup_module_state(ip: str) -> None:
     Called from __init__.async_unload_entry to prevent stale references
     from persisting across integration reloads.
     """
-    _ENTITY_REGISTRY.pop(ip, None)
     # Remove per-device lock
     _DEVICE_LOCKS.pop(ip, None)
     _DEVICE_LOCK_HOLDERS.pop(ip, None)
@@ -418,15 +417,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         light_entity._lamp_client.close()
         return False
 
-    # Register the lamp for the services (by IP: see _ENTITY_REGISTRY).
-    ip = light_entity._ip
-    _ENTITY_REGISTRY[ip] = light_entity
-    _LOGGER.debug("[SETUP] Registered lamp %s for the services (lamps: %s)", ip, list(_ENTITY_REGISTRY))
-
     async_add_entities([light_entity], update_before_add=True)
 
-    # For the other platforms, set up after this one (runtime_data.lamp_of).
+    # For the services (light_services_common._lamp_for) and the other
+    # platforms, set up after this one (runtime_data.lamp_of).
     runtime.light = light_entity
+    _LOGGER.debug("[SETUP] Lamp %s set up for the services", light_entity._ip)
     return True
 
 
@@ -460,8 +456,8 @@ async def _async_create_light(hass: HomeAssistant, entry: ConfigEntry) -> "Yeeli
     
     async def timed(step: str, func, *args):
         """A blocking setup read (an executor), warned about when slow: Home
-        Assistant gives up on a platform after 60 s (2026-11-14: a Cube
-        Matrix whose LAN was stuck never finished its setup)."""
+        Assistant gives up on a platform after 60 s (a lamp whose LAN is
+        stuck may never finish its setup)."""
         started = time.monotonic()
         try:
             return await hass.async_add_executor_job(func, *args)

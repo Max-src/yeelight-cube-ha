@@ -503,9 +503,15 @@ export function createSliderHandlers({
 
     // Called from disconnectedCallback to clean up any in-flight drag listeners.
     Destroy() {
-      if (commitTimer) clearTimeout(commitTimer);
-      commitTimer = null;
-      pendingCommit = null;
+      // A change still waiting out its debounce is sent now: the card going
+      // away (a dashboard edit, another view) does not lose it.
+      if (commitTimer) {
+        clearTimeout(commitTimer);
+        commitTimer = null;
+        const value = pendingCommit;
+        pendingCommit = null;
+        if (value != null) onCommit(value);
+      }
       if (pointerHeld) {
         pointerHeld = false;
         for (const type of ["mouseup", "pointerup", "touchend", "touchcancel"])

@@ -118,6 +118,11 @@ class LampClient(UdpChannelMixin, TcpSocketMixin, BulbCommandsMixin, ConnectionH
         # failed (time.monotonic()).
         self._udp = UdpSession(ip)
         self._udp_retry_at = 0.0
+        # Set by the palette stream (light_studio): True while it sends its
+        # frames again itself or sends changed frames only, so the transport
+        # does not keep the stream busy with the last frame again
+        # (_settle_frame, STREAM_KEEP_BUSY).
+        self.stream_changes_only = False
         # A Cube Matrix's music connection: failed tries in a row
         # (MUSIC_RETRY_STEPS).
         self._music_failures = 0

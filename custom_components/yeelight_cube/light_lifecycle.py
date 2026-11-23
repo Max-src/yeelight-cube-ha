@@ -159,11 +159,9 @@ class LifecycleMixin:
             for task in self._background_tasks:
                 if not task.done():
                     task.cancel()
-            # Wait for cancellation with timeout
-            try:
-                await asyncio.wait(self._background_tasks, timeout=1.0)
-            except asyncio.TimeoutError:
-                pass
+            # Up to a second for them to stop (asyncio.wait returns at the
+            # timeout, it never raises it).
+            await asyncio.wait(self._background_tasks, timeout=1.0)
             self._background_tasks.clear()
 
         # Every socket to the lamp, the UDP session's too.

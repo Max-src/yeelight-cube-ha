@@ -119,32 +119,42 @@ function carouselModel({
 }
 
 /**
+ * For a touchmove of the touch that started at `start` ({ x, y }): whether it
+ * is a horizontal swipe (over 20 px across, and over 1.5 times its vertical
+ * move). The page then does not scroll (preventDefault); vertical moves
+ * still scroll it, small moves stay taps. The carousels' and the album's.
+ */
+export function claimHorizontalSwipe(start, moveEvent) {
+  const touch = moveEvent.touches[0];
+  if (!touch) return false;
+  const dx = touch.clientX - start.x;
+  if (Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(touch.clientY - start.y) * 1.5) {
+    moveEvent.preventDefault();
+    return true;
+  }
+  return false;
+}
+
+/**
  * A touchstart handler that turns a horizontal swipe into a step:
  * `onNavigate(1)` (to the left: next) or `onNavigate(-1)`. Vertical moves
  * still scroll the page, small moves are taps. Used by every carousel.
  */
 export function carouselSwipe(onNavigate) {
   return (event) => {
-    const start = event.touches[0];
-    const startX = start.clientX;
-    const startY = start.clientY;
+    const touch = event.touches[0];
+    const start = { x: touch.clientX, y: touch.clientY };
     let swiping = false;
     const surface = event.currentTarget;
     const move = (moveEvent) => {
-      const touch = moveEvent.touches[0];
-      if (!touch) return;
-      const dx = touch.clientX - startX;
-      if (Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(touch.clientY - startY) * 1.5) {
-        swiping = true;
-        moveEvent.preventDefault();
-      }
+      if (claimHorizontalSwipe(start, moveEvent)) swiping = true;
     };
     const end = (endEvent) => {
       surface.removeEventListener("touchmove", move);
       surface.removeEventListener("touchend", end);
       surface.removeEventListener("touchcancel", end);
       if (swiping && endEvent.type === "touchend") {
-        const dx = endEvent.changedTouches[0].clientX - startX;
+        const dx = endEvent.changedTouches[0].clientX - start.x;
         if (Math.abs(dx) > 50) onNavigate(dx < 0 ? 1 : -1);
       }
     };

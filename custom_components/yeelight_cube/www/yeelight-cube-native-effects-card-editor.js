@@ -21,6 +21,7 @@ import "./clock-preset-manager.js";
 import { getTargetEntities } from "./service-call-utils.js";
 import {
   nativeEffectCatalog,
+  stopWaitingForCatalog,
   withNativeEffectCatalog,
 } from "./native-effect-catalog.js";
 import {
@@ -77,6 +78,12 @@ class YeelightCubeNativeEffectsCardEditor extends YeelightEditorMixin(LitElement
     </div>`;
   }
 
+
+  // Removed from the page: not kept waiting for the lamp's catalogue.
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    stopWaitingForCatalog(this);
+  }
 
   render() {
     if (!this._config) return "";

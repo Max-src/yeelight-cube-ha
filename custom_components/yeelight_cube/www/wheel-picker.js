@@ -97,19 +97,30 @@ class YcWheel extends LitElement {
   }
 
   // One item up (-1) or down (+1); a move tells the gallery (onMove), which
-  // picks it unless it only browses. A move while one is still being
-  // applied only turns the wheel.
+  // picks it unless it only browses. Moves while one is still being applied
+  // turn the wheel; the item it stops on is applied once that one is done.
   _move(step) {
     const center = Math.max(0, Math.min(this.items.length - 1, this.center + step));
     if (center === this.center) return;
     this.center = center;
-    const key = this.items[center]?.dataMode;
-    if (key == null || !this.onMove || this._moving) return;
+    this._sendMove();
+  }
+
+  _sendMove() {
+    const key = this.items[this.center]?.dataMode;
+    if (key == null || !this.onMove) return;
+    if (this._moving) {
+      this._moveWaiting = true;
+      return;
+    }
     this._moving = true;
     Promise.resolve(this.onMove(key))
       .catch((error) => console.error("[Wheel] Move failed:", error))
       .finally(() => {
         this._moving = false;
+        const waiting = this._moveWaiting;
+        this._moveWaiting = false;
+        if (waiting && this.items[this.center]?.dataMode !== key) this._sendMove();
       });
   }
 

@@ -17,7 +17,8 @@ MAX_IMAGE_PIXELS = 2048 * 2048
 def image_to_matrix(image_b64: str, width: int = 20, height: int = 5):
     """
     Convert a base64-encoded image to a list of RGB tuples for a ``width`` x
-    ``height`` matrix, row by row from the top.
+    ``height`` matrix, row by row from the top. The whole image is stretched
+    to that size (LANCZOS): not cropped, its aspect ratio not kept.
 
     Raises InputError (a ValueError) when the data is not a usable image: too long, not
     base64, an unknown format, or more than MAX_IMAGE_PIXELS pixels.
@@ -40,15 +41,14 @@ def image_to_matrix(image_b64: str, width: int = 20, height: int = 5):
         raise InputError(
             "image_too_large", width=image_width, height=image_height, limit=MAX_IMAGE_PIXELS
         )
-    # JPEG: let the decoder downscale while decoding (no-op for other formats).
-    image.draft("RGB", (width, height))
-    image = image.convert("RGB")
-    # Use LANCZOS for Pillow >= 10, fallback for older versions
     try:
-        resample = Image.Resampling.LANCZOS
-    except AttributeError:
-        resample = Image.LANCZOS
-    image = image.resize((width, height), resample)
+        # JPEG: let the decoder downscale while decoding (no-op for other formats).
+        image.draft("RGB", (width, height))
+        # The pixels are decoded here: a truncated or damaged file fails now.
+        image = image.convert("RGB")
+        image = image.resize((width, height), Image.Resampling.LANCZOS)
+    except (OSError, ValueError, SyntaxError) as err:
+        raise InputError("image_not_supported") from err
     # Row by row, 3 bytes (R, G, B) per pixel. tobytes() is in every Pillow
     # (getdata() is deprecated: removed in Pillow 14).
     data = image.tobytes()

@@ -28,9 +28,10 @@ https://developers.home-assistant.io/blog/2026/10/12/new-entity-lifecycle-hooks/
    a rename:
    - Services find a lamp by its **live** id: `_lamp_for(entity_id)` in
      `light_services_common.py` (used by `_resolve_entity` /
-     `_resolve_entities`). `_ENTITY_REGISTRY` (light.py) is keyed by the
-     lamp's **IP**, never by entity id: a stored id lets an old id reach a
-     renamed lamp, or the **wrong lamp** once two lamps swap names.
+     `_resolve_entities`), through the config entries' lamps
+     (`runtime_data`), never a table keyed by entity id: a stored id lets an
+     old id reach a renamed lamp, or the **wrong lamp** once two lamps swap
+     names.
    - Persisted data is keyed by the **config entry id**
      (`_music_flow_runtime_storage_key()`): favourites, rotation, drawings,
      Music Flow state.

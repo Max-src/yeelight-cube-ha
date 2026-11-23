@@ -215,7 +215,9 @@ class WiringTests(unittest.TestCase):
             if isinstance(node, ast.AsyncFunctionDef)
             and "self._check_supported(command, params)" in ast.get_source_segment(source, node)
         }
-        self.assertEqual(guarded, {"send_raw_command", "send_command_fast", "send_command_with_recovery"})
+        self.assertEqual(guarded, {
+            "send_raw_command", "send_command_fast", "send_command_with_recovery", "query_raw_command",
+        })
 
     def test_a_cube_matrix_streams_every_effect_but_microphone_ones(self):
         source = self.source("light_studio.py")

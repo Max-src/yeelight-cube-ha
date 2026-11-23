@@ -39,9 +39,9 @@ LONGEST_LINK_FRAME = 1023
 # Seconds an attempt waits for the lamp's answer (the network part resends
 # an unanswered command 3 times, 300 ms apart: one of them may be read).
 ANSWER_WAIT = 1.3
-CONNECT_TIMEOUT = 3.0
+SWEEP_CONNECT_TIMEOUT = 3.0
 # Commands per TCP connection: the lamp refuses a connection's commands from
-# about its 30th (2026-11-16 18:39). The whole sweep fits on one connection:
+# about its 30th. The whole sweep fits on one connection:
 # a command read late is answered on the connection that sent it.
 COMMANDS_PER_CONNECTION = 29
 # Seconds the answers are still counted after the first one: the same answer
@@ -115,12 +115,12 @@ async def realign(ip: str, port: int, *, answer_wait: float = ANSWER_WAIT) -> in
                 # A fresh connection every COMMANDS_PER_CONNECTION commands:
                 # past its quota the network part refuses a connection's
                 # commands itself ("client quota exceeded"), and they never
-                # reach the lamp (2026-11-16 18:39: a sweep on one connection
-                # was refused from its 30th command); and after the lamp
-                # dropped one (18:47), the same size again on a new one.
+                # reach the lamp (a sweep on one connection is refused from
+                # its 30th command); and after the lamp dropped one, the same
+                # size again on a new one.
                 if connection is None or sent >= COMMANDS_PER_CONNECTION:
                     _close(connection)
-                    connection = await asyncio.wait_for(asyncio.open_connection(ip, port), CONNECT_TIMEOUT)
+                    connection = await asyncio.wait_for(asyncio.open_connection(ip, port), SWEEP_CONNECT_TIMEOUT)
                     sent = 0
                 reader, writer = connection
                 try:

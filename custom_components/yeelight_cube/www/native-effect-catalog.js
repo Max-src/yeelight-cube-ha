@@ -7,13 +7,14 @@
 // An integration that still sends the catalogue as the light's
 // native_effect_catalog attribute is read as before.
 
-/** After a failed request, the next one waits this long (ms). */
-export const CATALOG_RETRY_MS = 10000;
+import { NATIVE_EFFECT_CATALOG_RETRY_MS } from "./retry-delays.js";
 
 // Per connection to Home Assistant (one per page), per lamp:
 // { key, catalog, loading, failedKey, failedAt, waiting: Set of cards }.
 const catalogs = new WeakMap();
 const NO_CONNECTION = {};
+// The entries each card waits on (stopWaitingForCatalog).
+const waitedBy = new WeakMap();
 
 function entryFor(hass, entityId) {
   const connection = hass.connection || NO_CONNECTION;
@@ -60,7 +61,7 @@ function load(hass, entityId, entry, key) {
       entry.failedAt = Date.now();
       console.warn("[Yeelight Cube] Native effect catalogue unavailable:", error);
       // Asked again once the delay is over.
-      setTimeout(() => notify(entry), CATALOG_RETRY_MS);
+      setTimeout(() => notify(entry), NATIVE_EFFECT_CATALOG_RETRY_MS);
     });
 }
 
@@ -79,11 +80,24 @@ export function nativeEffectCatalog(hass, entityId, card = null) {
   if (key == null || typeof hass.callWS !== "function") return null;
   const entry = entryFor(hass, entityId);
   if (entry.key === key && entry.catalog) return entry.catalog;
-  if (card) entry.waiting.add(card);
+  if (card) {
+    entry.waiting.add(card);
+    if (typeof card === "object") {
+      if (!waitedBy.has(card)) waitedBy.set(card, new Set());
+      waitedBy.get(card).add(entry);
+    }
+  }
   const failedLately =
-    entry.failedKey === key && Date.now() - entry.failedAt < CATALOG_RETRY_MS;
+    entry.failedKey === key && Date.now() - entry.failedAt < NATIVE_EFFECT_CATALOG_RETRY_MS;
   if (!entry.loading && !failedLately) load(hass, entityId, entry, key);
   return entry.catalog;
+}
+
+/** A card removed from the page no longer waits for any catalogue: it is
+ * not kept (and asked to render) while a request is still unanswered. */
+export function stopWaitingForCatalog(card) {
+  for (const entry of waitedBy.get(card) || []) entry.waiting.delete(card);
+  waitedBy.delete(card);
 }
 
 const withCatalogs = new WeakMap();
@@ -101,9 +115,4 @@ export function withNativeEffectCatalog(attrs, catalog) {
   const value = { ...attrs, native_effect_catalog: catalog };
   withCatalogs.set(attrs, { catalog, value });
   return value;
-}
-
-/** Forget every catalogue fetched (tests). */
-export function clearNativeEffectCatalogs() {
-  catalogs.delete(NO_CONNECTION);
 }

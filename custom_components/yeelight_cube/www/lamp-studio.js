@@ -329,14 +329,14 @@ function stateAt(key, render, frameOf, step, empty) {
 }
 
 // ── Colors ──────────────────────────────────────────────────────────
-const PALETTES_LIMIT = 32;
+const PALETTE_CACHE_SIZE = 32;
 const palettes = new Map();
 
 function prepared(colours) {
   const key = colours.join(";");
   let out = palettes.get(key);
   if (!out) {
-    if (palettes.size >= PALETTES_LIMIT) palettes.clear();
+    if (palettes.size >= PALETTE_CACHE_SIZE) palettes.clear();
     const count = colours.length;
     const table = paletteTable(colours, []);
     out = {

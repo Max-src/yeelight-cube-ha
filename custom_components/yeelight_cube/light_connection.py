@@ -416,8 +416,8 @@ class ConnectionMixin:
     def _maybe_schedule_retry(self):
         """Schedule a display retry if the retry limit hasn't been reached.
         
-        Thin wrapper that avoids log-spam: only logs 'stopping' ONCE when the
-        limit is first hit, then stays silent on subsequent calls.
+        At the limit nothing is scheduled (logged at DEBUG only): the health
+        check takes over, and its probe logs the outage once (WARNING).
         """
         if self._display_retry_count >= self.MAX_DISPLAY_RETRIES:
             _LOGGER.debug(
@@ -446,16 +446,8 @@ class ConnectionMixin:
         every 10s while there are failures) takes over for longer outages. User actions will still
         trigger a fresh display update, resetting the counter.
         """
+        # Called only below the limit (_maybe_schedule_retry).
         self._display_retry_count += 1
-        
-        if self._display_retry_count > self.MAX_DISPLAY_RETRIES:
-            _LOGGER.warning(
-                "[RETRY] [%s] Stopping auto-retry after %s consecutive failures. "
-                "The lamp appears to be offline. Display will resume on next user action or HA restart. "
-                "[%s]",
-                self._ip, self.MAX_DISPLAY_RETRIES, self._lamp_client.summary
-            )
-            return
         
         # Cancel any existing retry task (avoid stacking retries), unless it
         # is this one: its redraw failed and schedules the next retry, and it
@@ -734,90 +726,7 @@ class ConnectionMixin:
                     self._display_retry_count, self._lamp_client.reconnect_cooldown,
                     RECONNECT_COOLDOWN_INITIAL
                 )
-                self._lamp_client.mark_recovered()  # Fresh socket, backoff reset
-                self._display_retry_count = 0
-                self._direct_mode_lost()  # Force FX mode re-send
-                if outage is not None:
-                    # It was unreachable (maybe restarted): its brightness is
-                    # sent again, right after direct mode, before any frame.
-                    self._forget_hardware_brightness()
-                    # A Cube Matrix that restarted no longer shows what it
-                    # was sent: the redraw sends it in full (not as a live
-                    # change, nor a drawing's new pixels only).
-                    self._matrix_shown = None
-                self._hard_timeout_times.clear()  # Clear circuit breaker
-                # Its whole requested state is applied again below.
-                self._last_command_error = None
-                if self.hass is not None:
-                    # Publishes the light and its controls as available again.
-                    self.async_write_ha_state()
-
-                if self._external_display:
-                    # Matter saw a button or another app change the lamp
-                    # (light_matter): after a power cut the lamp restores
-                    # that itself (its saved colour or effect). Home
-                    # Assistant's content comes back with its next command.
-                    _LOGGER.info(
-                        "[HEALTH] [%s] Not redrawn: the lamp shows another app's "
-                        "or a button's content", self._ip,
-                    )
-                    continue
-                if getattr(self, "is_cube_matrix", False) and self._matrix_power_on == "off":
-                    # Set to stay off at power-on (Matter StartUpOnOff): the
-                    # lamp came back off, and is not switched on again here.
-                    _LOGGER.info("[HEALTH] [%s] Not redrawn: set to stay off at power-on", self._ip)
-                    self._is_on = False
-                    if self.hass is not None:
-                        self.async_write_ha_state()
-                    continue
-                if self._resume_rotation_after_reconnect():
-                    continue
-                if self._rotation_active:
-                    continue
-                waits = getattr(self, "matrix_redraw_waits_for_restart", None)
-                if outage is not None and waits is not None and waits():
-                    # A Cube Matrix showing its content over Matter: Matter
-                    # reaches a restarted lamp ~90 s after power-on, so a
-                    # redraw now only times out. Its restart report redraws
-                    # (light_matrix); a lamp that did not restart still shows it.
-                    _LOGGER.info(
-                        "[HEALTH] [%s] Redrawn once the lamp's restart is reported over Matter",
-                        self._ip,
-                    )
-                    self.matrix_await_restart()
-                    continue
-
-                if self._music_flow_enabled:
-                    _LOGGER.debug(
-                        "[MUSIC FLOW] [%s] HEALTH RECOVERY -- restarting "
-                        "the requested Music Flow renderer",
-                        self._ip,
-                    )
-                    try:
-                        await self.async_set_music_flow(True)
-                    except HomeAssistantError as err:
-                        # Its operation failed (errors.failed, already logged
-                        # by the lamp's queue): tried again at the next
-                        # recovery. Logged once until it works, then at
-                        # debug level.
-                        log = _LOGGER.debug if self._music_recovery_failed else _LOGGER.warning
-                        self._music_recovery_failed = True
-                        log(
-                            "[HEALTH] [%s] Music Flow not restarted: %s -- tried "
-                            "again at the next recovery; further failures are logged "
-                            "at debug level", self._ip, err,
-                        )
-                        continue
-                    self._music_recovery_failed = False
-                else:
-                    # Trigger a full display update (turn_on type so it isn't blocked)
-                    _LOGGER.debug(
-                        "[BRIGHTNESS_DIAG] [%s] HEALTH RECOVERY -- will apply display mode. "
-                        "user=%s/255, last_hw=%s, fx_direct=%s",
-                        self._ip, self._brightness, self._last_hardware_brightness,
-                        self._fx_mode_is_direct
-                    )
-                    await self.async_apply_display_mode(update_type='turn_on')
+                await self._async_lamp_back(outage)
                 
             except asyncio.CancelledError:
                 _LOGGER.debug("[HEALTH] [%s] Health check cancelled", self._ip)
@@ -828,6 +737,98 @@ class ConnectionMixin:
                 _LOGGER.warning("[HEALTH] [%s] Health check error", self._ip, exc_info=True)
         
         _LOGGER.debug("[HEALTH] [%s] Health check stopped", self._ip)
+
+    async def _async_lamp_back(self, outage: float | None) -> None:
+        """The lamp answers again (the health check, or a link recovery's
+        sweep: light_link_recovery): its connection and counters reset, then
+        its requested state applied again (its music, its rotation, its
+        content), unless another app's content or a power-on setting keeps
+        it. ``outage``: how long it was unreachable (None: it never was, the
+        operations only failed)."""
+        self._lamp_client.mark_recovered()  # Fresh socket, backoff reset
+        self._display_retry_count = 0
+        self._direct_mode_lost()  # Force FX mode re-send
+        if outage is not None:
+            # It was unreachable (maybe restarted): its brightness is
+            # sent again, right after direct mode, before any frame.
+            self._forget_hardware_brightness()
+            # A Cube Matrix that restarted no longer shows what it
+            # was sent: the redraw sends it in full (not as a live
+            # change, nor a drawing's new pixels only).
+            self._matrix_shown = None
+        self._hard_timeout_times.clear()  # Clear circuit breaker
+        # Its whole requested state is applied again below.
+        self._last_command_error = None
+        if self.hass is not None:
+            # Publishes the light and its controls as available again.
+            self.async_write_ha_state()
+
+        if self._external_display:
+            # Matter saw a button or another app change the lamp
+            # (light_matter): after a power cut the lamp restores
+            # that itself (its saved colour or effect). Home
+            # Assistant's content comes back with its next command.
+            _LOGGER.info(
+                "[HEALTH] [%s] Not redrawn: the lamp shows another app's "
+                "or a button's content", self._ip,
+            )
+            return
+        if getattr(self, "is_cube_matrix", False) and self._matrix_power_on == "off":
+            # Set to stay off at power-on (Matter StartUpOnOff): the
+            # lamp came back off, and is not switched on again here.
+            _LOGGER.info("[HEALTH] [%s] Not redrawn: set to stay off at power-on", self._ip)
+            self._is_on = False
+            if self.hass is not None:
+                self.async_write_ha_state()
+            return
+        if self._resume_rotation_after_reconnect():
+            return
+        if self._rotation_active:
+            return
+        waits = getattr(self, "matrix_redraw_waits_for_restart", None)
+        if outage is not None and waits is not None and waits():
+            # A Cube Matrix showing its content over Matter: Matter
+            # reaches a restarted lamp ~90 s after power-on, so a
+            # redraw now only times out. Its restart report redraws
+            # (light_matrix); a lamp that did not restart still shows it.
+            _LOGGER.info(
+                "[HEALTH] [%s] Redrawn once the lamp's restart is reported over Matter",
+                self._ip,
+            )
+            self.matrix_await_restart()
+            return
+
+        if self._music_flow_enabled:
+            _LOGGER.debug(
+                "[MUSIC FLOW] [%s] HEALTH RECOVERY -- restarting "
+                "the requested Music Flow renderer",
+                self._ip,
+            )
+            try:
+                await self.async_set_music_flow(True)
+            except HomeAssistantError as err:
+                # Its operation failed (errors.failed, already logged
+                # by the lamp's queue): tried again at the next
+                # recovery. Logged once until it works, then at
+                # debug level.
+                log = _LOGGER.debug if self._music_recovery_failed else _LOGGER.warning
+                self._music_recovery_failed = True
+                log(
+                    "[HEALTH] [%s] Music Flow not restarted: %s -- tried "
+                    "again at the next recovery; further failures are logged "
+                    "at debug level", self._ip, err,
+                )
+                return
+            self._music_recovery_failed = False
+        else:
+            # Trigger a full display update (turn_on type so it isn't blocked)
+            _LOGGER.debug(
+                "[BRIGHTNESS_DIAG] [%s] HEALTH RECOVERY -- will apply display mode. "
+                "user=%s/255, last_hw=%s, fx_direct=%s",
+                self._ip, self._brightness, self._last_hardware_brightness,
+                self._fx_mode_is_direct
+            )
+            await self.async_apply_display_mode(update_type='turn_on')
 
     async def _async_maybe_rediscover(self):
         """Scan for this lamp at a new IP after failed probes (throttled).
@@ -913,10 +914,21 @@ class ConnectionMixin:
             try:
                 _LOGGER.debug("[BRIGHTNESS RETRY] Retrying brightness %s via queue", pending_value)
                 # Queue through the proper channel so it's serialized with other operations
+                entry = self._pending_brightness
                 await self.set_brightness(pending_value)
-                # Success - clear pending
-                self._pending_brightness = None
-                _LOGGER.debug("[BRIGHTNESS RETRY] Successfully queued brightness retry %s", pending_value)
+                current = self._pending_brightness
+                if current is entry:
+                    # Sent: nothing newer was queued meanwhile.
+                    self._pending_brightness = None
+                    _LOGGER.debug("[BRIGHTNESS RETRY] Successfully queued brightness retry %s", pending_value)
+                elif current is not None and current[0] == pending_value:
+                    # Failed again (set_brightness queued it anew, without
+                    # raising): kept, with its first time for the 30 s limit,
+                    # and tried again after a pause.
+                    self._pending_brightness = (pending_value, queued_timestamp)
+                    await asyncio.sleep(1)
+                # Else a newer brightness was queued meanwhile: the next turn
+                # sends it.
             except Exception as e:  # noqa: BLE001 -- the retry loop must outlive any error
                 # Failed again - will retry later
                 if isinstance(e, LAMP_ERRORS):

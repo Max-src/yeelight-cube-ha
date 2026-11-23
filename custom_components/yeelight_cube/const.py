@@ -167,3 +167,8 @@ CUBE_NAME_PATTERNS = [
     "panel",
 ]
 
+# A redraw of the integration's own (the Matrix's Matter link back, a new
+# rotation or mount profile followed): what the lamp shows drawn again as
+# requested, like a text change, but it never stops a rotation (paused or
+# running) nor ends Music Flow, which the user started.
+INTERNAL_REDRAW = "internal_redraw"

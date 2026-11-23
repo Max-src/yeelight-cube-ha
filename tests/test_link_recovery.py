@@ -268,6 +268,37 @@ class DecisionTests(unittest.TestCase):
 
         run(scenario())
 
+    def test_an_answered_sweep_comes_back_as_after_the_health_check(self):
+        """As the health check's recovery (light_connection._async_lamp_back):
+        the counters reset, Music Flow started again (a redraw would not end
+        it), another app's content left alone."""
+        async def answered(light):
+            light._link_recovery_tries = 1
+            light._lamp_client.probe = AsyncMock(return_value=True)
+            light._lamp_client.mark_recovered = Mock()
+            light.async_apply_display_mode = AsyncMock()
+            light.async_set_music_flow = AsyncMock()
+            light._async_check_problems = Mock()
+            with patch.object(RECOVERY, "realign", AsyncMock(return_value=229)),                     patch.object(RECOVERY, "LINK_RECOVERY_RESTART_WAIT", 0):
+                self.assertTrue(await light._async_recover_link())
+
+        async def scenario():
+            music = stuck_light()
+            music._music_flow_enabled = True
+            music._display_retry_count = 3
+            music._hard_timeout_times.append(1.0)
+            await answered(music)
+            music.async_set_music_flow.assert_awaited_once_with(True)
+            music.async_apply_display_mode.assert_not_awaited()
+            self.assertEqual(0, music._display_retry_count)
+            self.assertEqual(0, len(music._hard_timeout_times))
+            other_app = stuck_light()
+            other_app._external_display = True
+            await answered(other_app)
+            other_app.async_apply_display_mode.assert_not_awaited()
+
+        run(scenario())
+
     def test_a_lamp_off_the_network_spends_no_try(self):
         # 2026-11-16 18:27: the top lamp dropped off Wi-Fi for a minute; the
         # sweep could not connect. That try is given back, and the next comes

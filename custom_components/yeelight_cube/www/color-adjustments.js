@@ -63,7 +63,8 @@ function unitMod(x) {
   return rest < 0 ? rest + 1 : rest;
 }
 
-// colorsys.rgb_to_hsv / hsv_to_rgb (channels 0-1; the cards' one RGB to HSV).
+// colorsys.rgb_to_hsv / hsv_to_rgb (channels 0-1; the cards' one RGB to HSV
+// and HSV to RGB). hsvToRgb takes the hue as it is (no wrap).
 export function rgbToHsv(r, g, b) {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
@@ -80,7 +81,7 @@ export function rgbToHsv(r, g, b) {
   return [unitMod(h / 6), s, max];
 }
 
-function hsvToRgb(h, s, v) {
+export function hsvToRgb(h, s, v) {
   if (s === 0) return [v, v, v];
   let i = Math.trunc(h * 6);
   const f = h * 6 - i;

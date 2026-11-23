@@ -52,6 +52,7 @@ def _rotation_helpers():
             "_rotation_scheduled_index",
             "_resume_rotation_after_reconnect",
             "_periodic_health_check",
+            "_async_lamp_back",
             "async_turn_off",
             "_apply_rotation_step",
             "_wait_rotation_retry",
@@ -69,6 +70,8 @@ def _rotation_helpers():
             "set_rotation_interval",
             "_retime_rotation",
             "async_apply_display_mode",
+            "_native_mode_suppresses",
+            "_retry_limit_blocks",
             "_force_refresh_impl",
             "async_force_refresh",
             "_save_display_state",
@@ -110,6 +113,7 @@ def _rotation_helpers():
             "_ROTATING_LAMPS": {},
             "ROTATION_RESUME_BACKOFF": (30.0, 60.0, 120.0, 300.0),
             "copy": copy,
+            "INTERNAL_REDRAW": CONSTANTS["INTERNAL_REDRAW"],
         },
     )
 
@@ -196,7 +200,8 @@ def make_light(helpers, kind="native", is_on=True):
           "_restore_rotation_settings", "_async_resume_saved_rotation",
           "set_rotation_interval", "_retime_rotation",
           "_save_display_state", "_display_attributes", "_running_rotation",
-          "_async_resume_display_rotation", "_text_waits_for_matrix")
+          "_async_resume_display_rotation", "_text_waits_for_matrix",
+          "_native_mode_suppresses", "_retry_limit_blocks", "_async_lamp_back")
     light._DISPLAY_STATE_ATTRS = ("_mode",)
     return light
 
@@ -1283,8 +1288,10 @@ class EffectRotationTransportTests(unittest.IsolatedAsyncioTestCase):
         light = make_light(_rotation_helpers(), kind="clock")
         lock = asyncio.Lock()
         methods = {
-            "async_apply_display_mode", "_execute_hardware_op",
-            "_apply_display_mode_internal",
+            "async_apply_display_mode", "_native_mode_suppresses", "_retry_limit_blocks",
+            "_execute_hardware_op",
+            "_apply_display_mode_internal", "_show_custom_drawing", "_show_panel_sequence",
+            "_show_text", "_show_background",
             "_resolve_native_clock_color", "_set_native_mode_brightness",
             "_native_clock_data_bytes", "stop_scroll_timer",
             "_leave_direct_mode", "_init_display_state",

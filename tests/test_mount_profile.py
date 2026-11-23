@@ -299,6 +299,41 @@ class MatterProfileTests(unittest.TestCase):
         self.assertEqual([(LINK.ROTATION, 2)], channel.written)
         self.assertEqual((2, "matter"), light.mount_profile)
 
+    def test_a_write_that_timed_out_is_tried_again_a_few_times(self):
+        light = ProfileLight()
+        light._device_orientation = "right"
+        channel = Channel()
+        channel.error = asyncio.TimeoutError()
+        light.link(7, 0, channel)
+        attempts = 0
+        for _ in range(6):  # six minutes' link refreshes
+            light._check_mount_profile()
+            attempts += len(light.pending)
+            light.run_tasks()
+        # The first write and 3 more, then left until the node or server changes.
+        self.assertEqual(4, attempts)
+        self.assertEqual((None, "unknown"), light.mount_profile)
+        # A later success on a new server confirms it.
+        channel.error, channel.backend = None, "matter"
+        light._check_mount_profile()
+        light.run_tasks()
+        self.assertEqual([(LINK.ROTATION, 2)], channel.written)
+        self.assertEqual((2, "matter"), light.mount_profile)
+
+    def test_a_write_that_timed_out_once_is_confirmed_at_the_next_minute(self):
+        light = ProfileLight()
+        light._device_orientation = "right"
+        channel = Channel()
+        channel.error = asyncio.TimeoutError()
+        light.link(7, 0, channel)
+        light._check_mount_profile()
+        light.run_tasks()
+        channel.error = None
+        light._check_mount_profile()
+        light.run_tasks()
+        self.assertEqual([(LINK.ROTATION, 2)], channel.written)
+        self.assertEqual((2, "matter"), light.mount_profile)
+
     def test_a_change_in_the_app_confirms_and_is_followed(self):
         light = ProfileLight()
         light._device_orientation = "right"

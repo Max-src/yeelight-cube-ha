@@ -92,3 +92,26 @@ def test_the_guarded_library_fails_at_once(closing_lamp):
 
 def test_every_lamp_uses_the_guarded_library():
     assert isinstance(LampClient("127.0.0.1", 9).device, _GuardedBulb)
+
+
+def test_a_lamp_that_does_not_accept_fails_within_the_components_time():
+    """The library connects with 5 s whatever it is given; the guard
+    connects within the bulb's own _timeout (CONNECT_TIMEOUT), and the
+    failure is the library's BulbException, its socket forgotten."""
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind(("127.0.0.1", 0))
+    port = server.getsockname()[1]
+    server.close()  # nothing listens: refused
+    bulb = _GuardedBulb("127.0.0.1", port, auto_on=False)
+    bulb._timeout = 0.5
+    finished, outcome = _command(bulb)
+    assert finished and "error" in outcome
+    assert bulb._Bulb__socket is None
+    # The connection the guard opens waits as long as the bulb asks.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listening:
+        listening.bind(("127.0.0.1", 0))
+        listening.listen()
+        bulb = _GuardedBulb("127.0.0.1", listening.getsockname()[1], auto_on=False)
+        bulb._timeout = 0.5
+        assert bulb._socket.gettimeout() == 0.5
+        bulb._socket.close()

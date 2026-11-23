@@ -162,6 +162,24 @@ test("a pending value (a picked mode, a switch) shows until the lamp confirms it
   assert.equal(expired, 1); // cleared: no expiry
 });
 
+test("a value held after a sent one is not dropped by the sent one's timeout", async () => {
+  const { createPendingValue } = await import(
+    "../custom_components/yeelight_cube/www/pending-value.js"
+  );
+  let expired = 0;
+  const pending = createPendingValue({ timeoutMs: 20, onExpire: () => expired++ });
+  pending.set(10); // sent, its timeout running
+  await wait(10);
+  pending.hold(20); // moved again, not sent yet (a debounced call)
+  await wait(30);
+  assert.equal(pending.value, 20);
+  assert.equal(expired, 0);
+  pending.set(20);
+  await wait(30);
+  assert.equal(pending.value, null);
+  assert.equal(expired, 1);
+});
+
 test("a sent pick yields to a new lamp value (yieldToLamp), never to an older one", async () => {
   const { createPendingValue } = await import(
     "../custom_components/yeelight_cube/www/pending-value.js"
@@ -349,6 +367,21 @@ test("a cancelled touch ends a rotary drag", () => {
     globalThis.document.dispatch("touchcancel");
     assert.equal(host._slRotaryDragging, false);
     assert.equal(globalThis.document.listening("touchmove"), false);
+  } finally {
+    doc.restore();
+  }
+});
+
+test("a change waiting its commit is sent when the card goes away", async () => {
+  const doc = stubDocument();
+  try {
+    const { commits, handlers } = slider({ commitDelay: 5000 });
+    handlers._slChange({ target: { value: "65" } });
+    handlers._slDestroy();
+    assert.deepEqual(commits, [65]);
+    await wait(20);
+    handlers._slDestroy(); // nothing left: nothing sent again
+    assert.deepEqual(commits, [65]);
   } finally {
     doc.restore();
   }

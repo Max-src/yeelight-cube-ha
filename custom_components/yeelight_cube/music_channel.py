@@ -7,8 +7,8 @@ seconds behind) or not at all. Its music mode does not: ``set_music [1, host,
 port]`` makes the lamp connect back to ``host:port``, and every command sent
 on that connection is taken at once, unanswered and without quota:
 frames are shown in real time; up to 6 frames a second all shown, beyond that the
-lamp skips some but never falls behind. The connection stays up idle (2 min
-tested), ordinary TCP commands still work meanwhile (``get_prop`` answered,
+lamp skips some but never falls behind. The connection stays up idle (for
+minutes), ordinary TCP commands still work meanwhile (``get_prop`` answered,
 ``music_on`` 1), and the lamp leaves music mode when it is closed.
 
 MusicChannel has UdpSession's interface (request, ping, close, is_open,
@@ -20,15 +20,16 @@ that read something (get_prop...) go over a short TCP connection instead.
 
 Opening the connection puts the lamp in music mode, which shows the last
 frame over whatever it ran (its own effect, started over
-Matter, froze a few seconds later, when a connection check opened it). So it
+Matter, freezes a few seconds later when a connection check opens it). So it
 is opened only for frames: direct mode, a frame, or any command while direct
 mode is on (session_setup). Anything else, and a connection check, goes over
 TCP while it is closed (NotOpen).
 
 Direct mode is sent again at least every DIRECT_REFRESH seconds while frames
-go (before the frame that is due): sent once, a stream froze on its last
-frame after 10 to 20 s (on some ticks of the lamp's demo loop); every 2 s kept 5 to 6 frames a second shown, a 15-minute stream
-without a freeze. Before every frame also works, but halves the frames shown.
+go (before the frame that is due): sent once, a stream can freeze on its last
+frame after 10 to 20 s (on some ticks of the lamp's demo loop); every 2 s keeps
+5 to 6 frames a second shown, without a freeze. Before every frame also works,
+but halves the frames shown.
 
 No Home Assistant import.
 """
@@ -41,11 +42,12 @@ import logging
 import socket
 import time
 
+from .const import LAN_PORT
+from .lamp_protocol import encode_command
 from .udp_session import UdpTooLarge, UdpUnavailable
 
 _LOGGER = logging.getLogger(__name__)
 
-LAN_PORT = 55443
 # How long the lamp has to connect back after set_music.
 CONNECT_BACK_TIMEOUT = 5.0
 # The port Home Assistant listens on for the lamp's music connection (any
@@ -97,8 +99,7 @@ async def tcp_request(ip: str, method: str, params: list, port: int = LAN_PORT,
     reader = writer = None
     try:
         reader, writer = await asyncio.wait_for(asyncio.open_connection(ip, port), timeout)
-        payload = json.dumps({"id": 1, "method": method, "params": params}, separators=(",", ":"))
-        writer.write(payload.encode() + b"\r\n")
+        writer.write(encode_command(method, params))
         await writer.drain()
         deadline = time.monotonic() + timeout
         while (left := deadline - time.monotonic()) > 0:
@@ -150,6 +151,13 @@ class MusicChannel:
         if self._connected is None or self._connected.done():
             writer.close()  # not asked for (or already connected)
             return
+        peer = writer.get_extra_info("peername")
+        if not peer or peer[0] != self._ip:
+            # Another host on the network, in the few seconds the port is
+            # open: not taken for the lamp, which can still connect.
+            _LOGGER.debug("[MUSIC] [%s] A connection from %s refused", self._ip, peer)
+            writer.close()
+            return
         self._connected.set_result(writer)
         # Nothing is answered on it; reading notices the lamp closing it.
         try:
@@ -172,24 +180,34 @@ class MusicChannel:
             except OSError:
                 self._server = await asyncio.start_server(self._accepted, host=host, port=0)
             port = self._server.sockets[0].getsockname()[1]
-        except OSError as err:
+        except BaseException as err:
+            # A cancel while looking up the address or listening too.
             self.close()
-            raise UdpUnavailable(f"no music connection: {err}") from err
-        answer = await tcp_request(self._ip, "set_music", [1, host, port], self._port)
-        if answer is None or "error" in answer:
-            self.close()
-            raise UdpUnavailable(f"set_music refused: {answer}")
+            if isinstance(err, OSError):
+                raise UdpUnavailable(f"no music connection: {err}") from err
+            raise
+        connected = self._connected
         try:
-            writer = await asyncio.wait_for(self._connected, CONNECT_BACK_TIMEOUT)
+            answer = await tcp_request(self._ip, "set_music", [1, host, port], self._port)
+            if answer is None or "error" in answer:
+                self.close()
+                raise UdpUnavailable(f"set_music refused: {answer}")
+            writer = await asyncio.wait_for(connected, CONNECT_BACK_TIMEOUT)
         except asyncio.TimeoutError as err:
             self.close()
             self.connect_back_failed = True
             raise UdpUnavailable(
                 f"the lamp did not connect back to {host}:{port} (firewall?)"
             ) from err
+        except UdpUnavailable:
+            raise
         except BaseException:
-            # This task was cancelled: stop listening, so a late connect-back
-            # does not leave a connection nobody uses on one of its TCP slots.
+            # This task was cancelled (sending set_music or waiting for the
+            # connect-back): stop listening, and close a connect-back that
+            # already arrived, so no connection nobody uses keeps one of the
+            # lamp's TCP slots.
+            if connected.done() and not connected.cancelled() and connected.result() is not None:
+                connected.result().close()
             self.close()
             raise
         if writer is None:
@@ -205,9 +223,8 @@ class MusicChannel:
             await self._write(method, params)
 
     async def _write(self, method: str, params: list) -> None:
-        payload = json.dumps({"id": 1, "method": method, "params": params}, separators=(",", ":"))
         try:
-            self._writer.write(payload.encode() + b"\r\n")
+            self._writer.write(encode_command(method, params))
             await asyncio.wait_for(self._writer.drain(), WRITE_TIMEOUT)
         except asyncio.TimeoutError as err:
             self.close()

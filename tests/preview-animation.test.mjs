@@ -5,10 +5,12 @@ const WWW = "../custom_components/yeelight_cube/www";
 const { createRafLoop } = await import(`${WWW}/matrix-animator.js`);
 const { AnimatedPreview, PreviewClock } = await import(`${WWW}/preview-animation.js`);
 const { acquireStreamFrames, STREAM_RETRY_MS } = await import(`${WWW}/stream-frames.js`);
-const { nativeEffectCatalog, withNativeEffectCatalog, CATALOG_RETRY_MS } =
-  await import(`${WWW}/native-effect-catalog.js`);
-const { loadBuiltinPixelArts, BUILTIN_PIXEL_ARTS_RETRY_MS } = await import(
-  `${WWW}/pixel-art-utils.js`
+const { nativeEffectCatalog, withNativeEffectCatalog } = await import(
+  `${WWW}/native-effect-catalog.js`
+);
+const { loadBuiltinPixelArts } = await import(`${WWW}/pixel-art-utils.js`);
+const { NATIVE_EFFECT_CATALOG_RETRY_MS, BUILTIN_PIXEL_ARTS_RETRY_MS } = await import(
+  `${WWW}/retry-delays.js`
 );
 const { lookupNativeClockFont } = await import(`${WWW}/clock-preview-utils.js`);
 
@@ -346,7 +348,7 @@ test("a failed catalogue request is tried again after a delay", async (t) => {
     // Every update meanwhile: no new request.
     nativeEffectCatalog(hass, "light.failing", card);
     assert.equal(requests.length, 1);
-    t.mock.timers.tick(CATALOG_RETRY_MS);
+    t.mock.timers.tick(NATIVE_EFFECT_CATALOG_RETRY_MS);
     // The card is told, renders and asks again.
     assert.equal(card.updates, 1);
     nativeEffectCatalog(hass, "light.failing", card);

@@ -23,7 +23,7 @@ from .const import (
 )
 from .lamp_protocol import check_tcp, send_once
 from .device_profile import CUBEMATRIX, model_key
-from .matter_link import usable_address
+from .matter_link import entry_moved_to, usable_address
 from .discovery import is_cube_device, parse_service_name, normalize_device_id
 from .mount_profile import (
     STAR_CHECK_PARAMS,
@@ -235,15 +235,14 @@ class YeelightCubeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(ip)
         self._abort_if_unique_id_configured()
         for entry in self._async_current_entries():
-            if (
-                mac and entry.data.get(CONF_MATTER_MAC) == mac and entry.data.get(CONF_IP) != ip
-                and usable_address(ip)
-            ):
+            if mac and entry.data.get(CONF_MATTER_MAC) == mac and entry.data.get(CONF_IP) != ip:
                 # The same lamp on a new address (DHCP): the entry follows it,
                 # only when the lamp no longer answers at its own address and
                 # does at this one (a server's cached address can be stale).
                 if not await _lamp_answers(entry.data.get(CONF_IP) or "") and await _lamp_answers(ip):
-                    self.hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_IP: ip})
+                    self.hass.config_entries.async_update_entry(
+                        entry, **entry_moved_to(entry, ip, self._async_current_entries())
+                    )
                 return self.async_abort(reason="already_configured")
             if entry.data.get(CONF_IP) == ip or (mac and entry.data.get(CONF_MATTER_MAC) == mac):
                 return self.async_abort(reason="already_configured")

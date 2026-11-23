@@ -76,7 +76,7 @@ BLOCK_LEDS = MODULE_SIZE * MODULE_SIZE
 SPOT_LEDS = 5
 # Modules a Cube Matrix takes: the Yeelight app offers 6, the lamp keeps 8
 # (its list has 8 slots, read back at every start; 7 and 8 written over
-# Matter and read back, 2026-11-21).
+# Matter are read back).
 TOPOLOGY_SLOTS = 8
 # The widest panel: 5 columns a module.
 MAX_COLS = MODULE_SIZE * TOPOLOGY_SLOTS

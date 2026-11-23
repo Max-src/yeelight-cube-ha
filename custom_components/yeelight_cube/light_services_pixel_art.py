@@ -20,10 +20,11 @@ from .pixel_art_storage import (
     pixel_art_width,
     stored_pixel_art,
 )
-from .light import _entity_id_or_list
 from .errors import invalid
 from .storage import async_collection_changed, collection
 from .light_services_common import (
+    BYPASS_LOCK_FIELD,
+    LAMP_TARGET_FIELDS,
     MAX_PIXEL_ARTS,
     NAME_SCHEMA,
     PIXEL_LIST_SCHEMA,
@@ -35,6 +36,7 @@ from .light_services_common import (
     _locate_item,
     _move_item,
     make_lamp_runner,
+    require_admin,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,11 +86,11 @@ def async_register_pixel_art_services(hass: HomeAssistant) -> None:
     # (This was previously nested inside handle_update_pixel_arts by mistake:
     # the command only existed after that service was first called, and every
     # subsequent call re-registered it.)
-    ws_schema_v2 = vol.Schema({vol.Optional("idx"): object}, extra=vol.ALLOW_EXTRA)
-
+    # The message's own fields (a "schema" key here was taken for one, and
+    # every request with an idx was refused); the handler checks idx itself.
     @websocket_api.websocket_command({
-        "type": "yeelight_cube/ws_get_pixel_art_v2",
-        "schema": ws_schema_v2,
+        vol.Required("type"): "yeelight_cube/ws_get_pixel_art_v2",
+        vol.Optional("idx"): object,
     })
     @websocket_api.async_response
     async def ws_get_pixel_art_v2(hass, connection, msg):
@@ -106,8 +108,10 @@ def async_register_pixel_art_services(hass: HomeAssistant) -> None:
                 "name": art.get("name", "Unnamed"), "pixels": art.get("pixels", []),
                 "width": pixel_art_width(art),
             })
-        except (KeyError, TypeError) as e:  # a malformed message or stored pixel art
+        except (KeyError, TypeError, ValueError) as e:  # a malformed message or stored pixel art
             _LOGGER.error("[pixelart-debug] Exception in ws_get_pixel_art_v2: %s", e)
+            # Answered: the card waits for every request it sends.
+            connection.send_error(msg["id"], "invalid_pixel_art", f"Pixel art {msg.get('idx')} cannot be read")
 
     websocket_api.async_register_command(hass, ws_get_pixel_art_v2)
 
@@ -216,7 +220,9 @@ def async_register_pixel_art_services(hass: HomeAssistant) -> None:
 
     async def handle_apply_custom_pixels(service_call):
         pixels = service_call.data.get("pixels")
-        bypass_lock = bool(service_call.data.get("bypass_lock", False))
+        bypass_lock = service_call.data.get("bypass_lock", False)
+        if bypass_lock:
+            await require_admin(hass, service_call)
         _LOGGER.debug("[pixelart-backend] apply_custom_pixels: pixels=%s", len(pixels) if pixels else 0)
         if not pixels:
             raise invalid("pixels_required")
@@ -258,7 +264,7 @@ def async_register_pixel_art_services(hass: HomeAssistant) -> None:
     "get_pixel_art",
     handle_get_pixel_art,
     schema=vol.Schema({
-        vol.Required("idx", default=0): vol.All(int, vol.Range(min=0)),
+        vol.Required("idx", default=0): cv.positive_int,
         vol.Optional("group_by_color", default=False): bool,
     }),
     supports_response=SupportsResponse.ONLY,
@@ -281,7 +287,7 @@ def async_register_pixel_art_services(hass: HomeAssistant) -> None:
         "remove_pixel_art",
         handle_remove_pixel_art,
         schema=vol.Schema({
-            vol.Required("idx"): vol.All(int, vol.Range(min=0)),
+            vol.Required("idx"): cv.positive_int,
             vol.Optional("expected_name"): vol.Any(None, cv.string),
         }, extra=vol.ALLOW_EXTRA)
     )
@@ -291,7 +297,7 @@ def async_register_pixel_art_services(hass: HomeAssistant) -> None:
         "rename_pixel_art",
         handle_rename_pixel_art,
         schema=vol.Schema({
-            vol.Required("idx"): vol.All(int, vol.Range(min=0)),
+            vol.Required("idx"): cv.positive_int,
             vol.Required("name"): NAME_SCHEMA,
             vol.Optional("expected_name"): vol.Any(None, cv.string),
         }, extra=vol.ALLOW_EXTRA)
@@ -302,10 +308,10 @@ def async_register_pixel_art_services(hass: HomeAssistant) -> None:
         "apply_pixel_art",
         handle_apply_pixel_art,
         schema=vol.Schema({
-            vol.Optional("idx"): vol.All(int, vol.Range(min=0)),
+            vol.Optional("idx"): cv.positive_int,
             vol.Optional("name"): cv.string,
             vol.Optional("expected_name"): vol.Any(None, cv.string),
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         }, extra=vol.ALLOW_EXTRA)
     )
 
@@ -317,7 +323,8 @@ def async_register_pixel_art_services(hass: HomeAssistant) -> None:
             vol.Required("pixels", description="Array of {position, color} entries (position row * width + column, row 0 at the bottom: 0-99 on the 20x5 matrix; or a list of positions, color [R, G, B]); missing positions stay black"): PIXEL_LIST_SCHEMA,
             vol.Optional("name"): vol.Any(None, cv.string),
             vol.Optional("width", description="The drawing's width in columns (default 20; a Cube Matrix of more than 4 modules: 5 a module)"): PIXEL_ART_WIDTH_SCHEMA,
-            vol.Required("entity_id", description="Target lamp entity (e.g. light.cubelite_192_168_1_102)"): _entity_id_or_list,
+            **BYPASS_LOCK_FIELD,
+            **LAMP_TARGET_FIELDS,
         }, extra=vol.ALLOW_EXTRA)
     )
 
@@ -326,8 +333,8 @@ def async_register_pixel_art_services(hass: HomeAssistant) -> None:
         "move_pixel_art",
         handle_move_pixel_art,
         schema=vol.Schema({
-            vol.Required("from_idx"): vol.All(int, vol.Range(min=0)),
-            vol.Required("to_idx"): vol.All(int, vol.Range(min=0)),
+            vol.Required("from_idx"): cv.positive_int,
+            vol.Required("to_idx"): cv.positive_int,
             vol.Optional("expected_name"): vol.Any(None, cv.string),
         }),
     )

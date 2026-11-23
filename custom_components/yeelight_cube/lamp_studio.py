@@ -531,14 +531,14 @@ class _Palette:
 
 _PALETTES: dict[tuple, _Palette] = {}
 _SEEN_LIMIT = 4096
-_PALETTES_LIMIT = 32
+_PALETTE_CACHE_SIZE = 32
 
 
 def _prepared(colours) -> _Palette:
     key = tuple(colours)
     prepared = _PALETTES.get(key)
     if prepared is None:
-        if len(_PALETTES) >= _PALETTES_LIMIT:
+        if len(_PALETTES) >= _PALETTE_CACHE_SIZE:
             _PALETTES.clear()
         prepared = _PALETTES[key] = _Palette(colours)
     return prepared

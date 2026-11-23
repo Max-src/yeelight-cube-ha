@@ -21,7 +21,7 @@
  */
 
 import { LitElement, html } from "./lib/lit-all.js";
-import { normalizeButtonShape } from "./carousel-utils.js";
+import { claimHorizontalSwipe, normalizeButtonShape } from "./carousel-utils.js";
 import { roundedCardsRadius } from "./card-config.js";
 import { defineOnce } from "./card-registration.js";
 
@@ -212,13 +212,7 @@ class YcAlbum extends LitElement {
     this._onTouchMove = {
       handleEvent: (event) => {
         const swipe = this._swipe;
-        const touch = event.touches[0];
-        if (!swipe || !touch) return;
-        const dx = touch.clientX - swipe.x;
-        if (Math.abs(dx) > 20 && Math.abs(dx) > Math.abs(touch.clientY - swipe.y) * 1.5) {
-          swipe.moved = true;
-          event.preventDefault();
-        }
+        if (swipe && claimHorizontalSwipe(swipe, event)) swipe.moved = true;
       },
       passive: false,
     };

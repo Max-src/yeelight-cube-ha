@@ -243,6 +243,19 @@ async def test_a_lamp_found_in_matter_on_a_new_address_is_followed(hass, lamp_an
     assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "no_address")
 
 
+async def test_a_lamp_added_from_matter_takes_its_new_address_as_its_id(hass, lamp_answers):
+    # Identified by its address (added from Matter): the id moves with it,
+    # so another lamp given the old address later can be added.
+    known = entry(hass, unique_id="192.168.1.20", data={CONF_IP: "192.168.1.20", CONF_MATTER_MAC: "cc:ba:97:44:38:98"})
+    lamp_answers.side_effect = lambda ip, *args: (_ for _ in ()).throw(OSError()) if ip == "192.168.1.20" else None
+    result = await start(hass, MATTER, dict(MATTER_LAMP))
+    assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "already_configured")
+    assert (known.data[CONF_IP], known.unique_id) == ("192.168.1.139", "192.168.1.139")
+    lamp_answers.side_effect = None
+    result = await start(hass, MATTER, {CONF_IP: "192.168.1.20", CONF_MATTER_MAC: "aa:bb:cc:dd:ee:ff"})
+    assert (result["type"], result["step_id"]) == (FlowResultType.FORM, "matter_confirm")
+
+
 async def test_zeroconf_offers_a_cube_and_ignores_other_lamps(hass):
     result = await start(hass, config_entries.SOURCE_ZEROCONF,
                          zeroconf("yeelink-light-cubelite-0x1a2b._miio._udp.local.", {}))

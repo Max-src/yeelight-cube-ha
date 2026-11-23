@@ -112,20 +112,20 @@ class EntrySetupTests(unittest.TestCase):
             self.assertFalse(run(LIGHT.async_setup_entry(None, entry, add)))
         add.assert_not_called()
         light._lamp_client.close.assert_called_once_with()
+        # Not set up for the services either: they find lamps there.
         self.assertIsNone(entry.runtime_data.light)
-        self.assertNotIn(light, LIGHT._ENTITY_REGISTRY.values())
 
     def test_the_light_platform_registers_the_light_it_creates(self):
         entry = FakeEntry("e1")
         entry.runtime_data = INIT.CubeRuntimeData(active_ip="192.0.2.10")
         light = SimpleNamespace(_ip="192.0.2.77", _lamp_client=Mock())
         add = Mock()
-        with patch.object(LIGHT, "_async_create_light", AsyncMock(return_value=light)), \
-                patch.dict(LIGHT._ENTITY_REGISTRY):
+        with patch.object(LIGHT, "_async_create_light", AsyncMock(return_value=light)):
             self.assertTrue(run(LIGHT.async_setup_entry(None, entry, add)))
-            self.assertIs(light, LIGHT._ENTITY_REGISTRY["192.0.2.77"])
         add.assert_called_once_with([light], update_before_add=True)
+        # Where the services and the other platforms find it.
         self.assertIs(light, entry.runtime_data.light)
+        self.assertFalse(hasattr(LIGHT, "_ENTITY_REGISTRY"))
 
 
 if __name__ == "__main__":

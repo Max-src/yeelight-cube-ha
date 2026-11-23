@@ -60,6 +60,9 @@ export function createPendingValue({
       value = next;
       at = Date.now();
       sent = false;
+      // An earlier value's expiry would drop this one (it waits to be sent).
+      clearTimeout(timer);
+      timer = null;
     },
     set(next) {
       value = next;

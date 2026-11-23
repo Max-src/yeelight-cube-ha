@@ -33,7 +33,6 @@ from .effect_catalog import (
     canonical_clock_style_name,
     canonical_effect_name,
 )
-from .light import _entity_id_or_list
 from .light_rotation import (
     FAVOURITE_KINDS,
     MAX_ROTATION_INTERVAL,
@@ -42,6 +41,7 @@ from .light_rotation import (
 from .errors import failed, invalid, invalid_input
 from .input_error import InputError
 from .light_services_common import (
+    LAMP_TARGET_FIELDS,
     FAVOURITE_LIST_SCHEMA,
     _resolve_entities,
     make_lamp_runner,
@@ -122,7 +122,7 @@ def async_register_native_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, "start_effect_rotation", handle_start_effect_rotation,
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
             vol.Required("items"): [
                 vol.Any(
                     cv.string,
@@ -166,7 +166,7 @@ def async_register_native_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, "set_rotation_interval", handle_set_rotation_interval,
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
             vol.Required("kind"): vol.In(list(FAVOURITE_KINDS)),
             vol.Required("interval"): vol.All(
                 vol.Coerce(int), vol.Range(min=MIN_ROTATION_INTERVAL, max=MAX_ROTATION_INTERVAL)
@@ -177,7 +177,7 @@ def async_register_native_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, "set_favourites", handle_set_favourites,
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
             vol.Required("kind"): vol.In(list(FAVOURITE_KINDS)),
             vol.Required("favourites"): FAVOURITE_LIST_SCHEMA,
         }),
@@ -196,7 +196,7 @@ def async_register_native_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, "set_matrix_modules", handle_set_matrix_modules,
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
             vol.Required("modules"): vol.All(
                 cv.ensure_list, [vol.In(("matrix", "spot", "panel"))], vol.Length(min=1, max=6),
             ),
@@ -205,12 +205,12 @@ def async_register_native_services(hass: HomeAssistant) -> None:
 
     hass.services.async_register(
         DOMAIN, "stop_effect_rotation", handle_stop_effect_rotation,
-        schema=vol.Schema({vol.Required("entity_id"): _entity_id_or_list}),
+        schema=vol.Schema(LAMP_TARGET_FIELDS),
     )
 
     hass.services.async_register(
         DOMAIN, "skip_effect_rotation", handle_skip_effect_rotation,
-        schema=vol.Schema({vol.Required("entity_id"): _entity_id_or_list}),
+        schema=vol.Schema(LAMP_TARGET_FIELDS),
     )
 
     async def handle_set_native_effect(service_call):
@@ -285,7 +285,7 @@ def async_register_native_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, "set_native_effect", handle_set_native_effect,
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
             vol.Optional("effect"): cv.string,
             vol.Optional("speed"): vol.All(vol.Coerce(int), vol.Range(min=SPEED_RANGE[0], max=SPEED_RANGE[1])),
             vol.Optional("intensity"): _INTENSITY_SCHEMA,
@@ -373,7 +373,7 @@ def async_register_native_services(hass: HomeAssistant) -> None:
         "set_clock_style",
         handle_set_clock_style,
         schema=vol.Schema({
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
             vol.Optional("style"): vol.Any(cv.string, vol.Coerce(int)),
             vol.Optional("color"): vol.Any(
                 None,
@@ -429,6 +429,6 @@ def async_register_native_services(hass: HomeAssistant) -> None:
                 [vol.All(cv.string, canonical_button_effect_name, vol.In(button_effect_options))],
                 vol.Length(min=1, max=8),
             ),
-            vol.Required("entity_id"): _entity_id_or_list,
+            **LAMP_TARGET_FIELDS,
         }),
     )

@@ -17,6 +17,7 @@ from homeassistant.core import callback  # type: ignore
 from .const import (
     CONF_RESTORE_MUSIC_CHANGES,
     CONF_IP,
+    DOMAIN,
     LAN_PORT,
     PROBE_TIMEOUT,
     CONF_MATTER_MAC,
@@ -38,7 +39,7 @@ from .matter_commands import (
     MatterCommands,
 )
 from .matter_discovery import async_offer_matter_lamps
-from .matter_link import MATRIX_REPORTED, MatterLink
+from .matter_link import MATRIX_REPORTED, MatterLink, entry_moved_to
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -115,8 +116,8 @@ REMOTE_PRESS_MUSIC_OFF = 2.0
 
 # Seconds after the lamp's network chip started again (RebootCount up)
 # during which what it reports is its start-up state, not a change by a
-# button or an app: seen 2026-11-16, a Cube Lite's chip restarting mid-stream
-# reported effect 0 and colour 0/0, taken for the Yeelight app's colour.
+# button or an app: a Cube Lite's chip restarting mid-stream reports effect 0
+# and colour 0/0, which would be taken for the Yeelight app's colour.
 LAMP_START_DEFAULTS_SECONDS = 10.0
 
 # Seconds a direction write may take before the orientation change goes on
@@ -260,13 +261,23 @@ class MatterMixin:
         stale or wrong report, so it cannot go back and forth with
         discovery. True when moved (the entry's update reloads it)."""
         try:
+            entries = self.hass.config_entries.async_entries(DOMAIN)
+            if any(other is not entry and other.data.get(CONF_IP) == address for other in entries):
+                # Another lamp's entry has that address: the report is not
+                # this lamp's to follow (its node's stale address, or two
+                # lamps swapped); its own discovery sorts it out.
+                _LOGGER.debug(
+                    "[MATTER] [%s] Not following the node to %s: another lamp's address",
+                    self._ip, address,
+                )
+                return False
             if await lamp_answers(self._ip) or not await lamp_answers(address):
                 return False
             _LOGGER.info(
                 "[MATTER] [%s] The lamp answers at %s now (its Matter node's address): the entry follows it",
                 self._ip, address,
             )
-            self.hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_IP: address})
+            self.hass.config_entries.async_update_entry(entry, **entry_moved_to(entry, address, entries))
             return True
         finally:
             self._address_check = None
@@ -386,7 +397,12 @@ class MatterMixin:
         """A command to the lamp starts (light_connection._execute_hardware_op):
         remember what the lamp showed until now (_effect_echo)."""
         self._lamp_command_at = time.monotonic()
-        self._effect_before_command = self._expected_effect()
+        # Only read against effects a Matter node reports: without one, not
+        # worked out at every command (clock parameters, a palette...).
+        link = self._matter
+        self._effect_before_command = (
+            self._expected_effect() if link is not None and link.linked else None
+        )
 
     def _expected_effect(self) -> int | None:
         """The effect a Cube Lite reports for the light's state: Music Flow's,
@@ -463,7 +479,9 @@ class MatterMixin:
         except TimeoutError:
             return False
         finally:
-            self._lamp_music_on_event = None
+            # Only its own: a music mode started meanwhile waits for its own.
+            if self._lamp_music_on_event is event:
+                self._lamp_music_on_event = None
 
     def _music_echo(self, on: bool) -> bool:
         if (

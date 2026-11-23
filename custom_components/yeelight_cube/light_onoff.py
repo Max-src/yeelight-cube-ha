@@ -51,7 +51,7 @@ class OnOffMixin:
         cm = self._lamp_client
 
         _LOGGER.debug(
-            "[ENSURE_FX] [%s] Activating FX mode via raw TCP "
+            "[ENSURE_FX] [%s] Activating FX mode (UDP session, else a fresh TCP connection) "
             "[%s]",
             self._ip, cm.summary
         )
@@ -75,7 +75,8 @@ class OnOffMixin:
             )
             await asyncio.sleep(ACTIVATION_TIMING[cm.transport]["native_exit_settle"])
 
-        # Step 3: activate_fx_mode on a SINGLE fresh TCP (RST close)
+        # Step 3: activate_fx_mode over the UDP session, else on a SINGLE
+        # fresh TCP connection (RST close): send_raw_command
         await cm.send_raw_command("activate_fx_mode", [{"mode": "direct"}])
 
         # Step 4: Let the lamp fully enter direct mode before the first
@@ -256,7 +257,7 @@ class OnOffMixin:
         # (light_matrix.draws_over_matter), which direct mode would replace.
         draws = getattr(self, "draws_over_matter", None)
         if not self._fx_mode_is_direct and not (draws is not None and draws()):
-            _LOGGER.debug("[TURN_ON] Activating FX mode via raw TCP")
+            _LOGGER.debug("[TURN_ON] Activating FX mode (UDP session, else a fresh TCP connection)")
             await self.ensure_fx_ready()
         
         self._is_on = True

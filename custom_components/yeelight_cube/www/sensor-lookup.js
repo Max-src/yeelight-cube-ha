@@ -6,6 +6,7 @@
 // sensor.saved_drawings, older ones sensor.yeelight_cube_color_palettes and
 // sensor.yeelight_cube_saved_pixel_arts) and the user can rename them
 // (docs/ENTITY_IDS.md).
+import { COLLECTION_SENSOR_RETRY_MS, SENSOR_RETRY_MS } from "./retry-delays.js";
 
 /** The attributes holding each collection (the first present wins). */
 export const COLLECTION_ATTRIBUTES = Object.freeze({
@@ -17,25 +18,17 @@ export const COLLECTION_ATTRIBUTES = Object.freeze({
 // yet (unavailable while Home Assistant starts).
 const LEGACY_FRAGMENTS = { palettes: "color_palettes", pixel_arts: "pixel_art" };
 
-// After a failed lookup, the next scan of every entity waits this long, so a
-// card without its sensor does not rescan all of hass.states on every Home
-// Assistant update. A sensor added later is still found.
-const RETRY_MS = 30000;
-
 // The sensor found per collection, used while it exists (one Home Assistant
 // per page): found again once it is gone (renamed or removed).
 let found = {};
 
-// A sensor the cards look for by its attributes (clock presets, the clock
-// font) and did not find: the next scan of every entity waits for a new
-// entity (Home Assistant's entity registry, hass.entities, changes) or this
-// long (ms, its attributes may come later). Home Assistant pushes new states
-// several times a second: a card must not rescan them all each time.
-export const SENSOR_RETRY_MS = 10000;
-
 /** Whether a scan of `hass` for a sensor found missing (`miss`: the
- * registry and time of that scan) can wait. Without a registry (an older
- * Home Assistant), every new states object is scanned. */
+ * registry and time of that scan) can wait. A sensor the cards look for by
+ * its attributes (clock presets, the clock font) and did not find: the next
+ * scan of every entity waits for a new entity (Home Assistant's entity
+ * registry, hass.entities, changes) or SENSOR_RETRY_MS (its attributes may
+ * come later). Without a registry (an older Home Assistant), every new
+ * states object is scanned. */
 export function missStillValid(miss, hass) {
   return (
     !!miss &&
@@ -60,7 +53,7 @@ const ours = (hass, id) => {
 /**
  * The sensor holding the `kind` collection ("palettes", "pixel_arts"), or
  * undefined. With `card`, a miss is remembered on it (per kind) and the next
- * scan waits RETRY_MS; without it, a miss always scans again.
+ * scan waits COLLECTION_SENSOR_RETRY_MS; without it, a miss always scans again.
  */
 export function findCollectionSensor(hass, kind, card = null) {
   const states = hass?.states;
@@ -69,7 +62,7 @@ export function findCollectionSensor(hass, kind, card = null) {
   if (found[kind] && states[found[kind]]) return found[kind];
   const memo = card ? ((card._sensorLookups ||= {})[kind] ||= {}) : null;
   const now = Date.now();
-  if (memo?.missedAt && now - memo.missedAt < RETRY_MS) return undefined;
+  if (memo?.missedAt && now - memo.missedAt < COLLECTION_SENSOR_RETRY_MS) return undefined;
   const sensors = Object.keys(states).filter(
     (id) => id.startsWith("sensor.") && ours(hass, id),
   );

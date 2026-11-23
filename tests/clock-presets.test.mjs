@@ -165,8 +165,13 @@ test("A clock background runs at the speed the lamp gets", (context) => {
 });
 
 function cardMethods(names, dependencies) {
-  // The clock card and its preview mixin.
-  const source = ["yeelight-cube-clock-card.js", "clock-card-preview.js"]
+  // The clock card and its mixins (previews, controls, presets).
+  const source = [
+    "yeelight-cube-clock-card.js",
+    "clock-card-preview.js",
+    "clock-card-controls.js",
+    "clock-card-presets.js",
+  ]
     .map((file) =>
       readFileSync(
         new URL(`../custom_components/yeelight_cube/www/${file}`, import.meta.url),
@@ -1335,4 +1340,38 @@ test("the clock card and its editor read its older options alike", () => {
     );
     assert.doesNotMatch(source, /show_color_override|show_save_preset_button/, file);
   }
+});
+
+// Wheel moves made while one is applied: the item it stops on is applied
+// once that one is done (they were lost: the lamp stayed on the first).
+test("the wheel applies where it stops after a move in flight", async () => {
+  const source = readFileSync(
+    new URL("../custom_components/yeelight_cube/www/wheel-picker.js", import.meta.url),
+    "utf8",
+  );
+  const method = source.match(/  _sendMove\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(method, "_sendMove exists");
+  const wheel = new Function(`return ({${method[0]}})`)();
+  const sent = [];
+  let finish;
+  Object.assign(wheel, {
+    items: ["a", "b", "c", "d"].map((dataMode) => ({ dataMode })),
+    center: 1,
+    onMove: (key) => {
+      sent.push(key);
+      return new Promise((resolve) => (finish = resolve));
+    },
+  });
+  wheel._sendMove();
+  wheel.center = 2;
+  wheel._sendMove();
+  wheel.center = 3;
+  wheel._sendMove();
+  assert.deepEqual(sent, ["b"]);
+  finish();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(sent, ["b", "d"]);
+  finish();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(sent, ["b", "d"]); // nothing newer
 });
