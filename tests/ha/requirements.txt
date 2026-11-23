@@ -6,6 +6,6 @@
 # Home Assistant's Python: on Python 3.14 (CI and the dev venv) Home Assistant
 # 2026.10; an older Python gets the last release it can run (2026.2).
 # yeelight: the range of manifest.json's requirements.
-pytest-homeassistant-custom-component==0.13.373; python_version >= "3.14"
+pytest-homeassistant-custom-component==0.13.375; python_version >= "3.14"
 pytest-homeassistant-custom-component==0.13.316; python_version < "3.14"
 yeelight>=0.7.16,<0.8
