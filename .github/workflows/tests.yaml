@@ -25,7 +25,7 @@ jobs:
           cache: npm
       # Home Assistant's own Python: its current releases need 3.14, so the
       # Home Assistant tests run on a current one (tests/ha/requirements.txt).
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
       - run: npm ci
