@@ -8,4 +8,4 @@
 # yeelight: the range of manifest.json's requirements.
 pytest-homeassistant-custom-component==0.13.375; python_version >= "3.14"
 pytest-homeassistant-custom-component==0.13.316; python_version < "3.14"
-yeelight>=0.7.16,<0.8
+yeelight>=0.7.17,<0.8
