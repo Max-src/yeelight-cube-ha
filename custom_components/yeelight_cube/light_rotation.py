@@ -828,6 +828,9 @@ class RotationMixin:
 
     async def _apply_rotation_clock(self, item) -> bool:
         name = canonical_item_name("clock", item["name"])
+        if getattr(self, "matrix_clock_refused", False):
+            _LOGGER.debug("[ROTATION] [%s] No clock on fewer than 4 Matrix modules -- skipped", self._ip)
+            return True
         color_mode = item.get("color_mode", "normal")
         color = item.get("color")
         if name.startswith(CLOCK_PRESET_PREFIX):

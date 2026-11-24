@@ -41,6 +41,7 @@ import asyncio
 import logging
 import time
 
+from .clock_face import CLOCK_MODULES
 from .color_utils import argb_to_rgb
 from .const import (
     MODE_CLOCK,
@@ -54,6 +55,7 @@ from .effect_catalog import (
     effect_direction_value,
 )
 from .device_profile import CUBEMATRIX, TOPOLOGY_MATRIX, TOPOLOGY_SLOTS
+from .errors import invalid
 from .lamp_core import drawn_in_full, raw_colours
 from .lamp_renderers import palette_fits, palette_words
 from .lamp_studio import studio_render
@@ -133,8 +135,6 @@ MATTER_RETRY_LEAST = 10.0
 CONTROLLER_CHECK_TIMEOUT = 3.0
 # How often the demo mode is read again over the LAN (s).
 DEMO_READ_INTERVAL = 30 * 60
-# The clock needs this many Matrix modules (topology type 2, TOPOLOGY_MATRIX).
-CLOCK_MODULES = 4
 
 
 def _sent_effect_id(name: str, payload: dict) -> int | None:
@@ -253,6 +253,21 @@ class MatrixMixin:
         show and its rotation says nothing of how it is mounted (the
         factory_modules repair)."""
         return self.is_cube_matrix and self.device_profile.factory_modules
+
+    @property
+    def matrix_clock_refused(self) -> bool:
+        """A Cube Matrix with fewer than CLOCK_MODULES Matrix modules: no
+        clock, as in the Yeelight app (its factory list, whose modules are
+        not known yet, keeps Home Assistant's streamed clock)."""
+        if not self.is_cube_matrix or self.device_profile.factory_modules:
+            return False
+        types = self.device_profile.module_types
+        return sum(1 for kind in types if kind == TOPOLOGY_MATRIX) < CLOCK_MODULES
+
+    def check_clock_allowed(self) -> None:
+        """Raise when the clock can't be shown (matrix_clock_refused)."""
+        if self.matrix_clock_refused:
+            raise invalid("clock_needs_matrix_modules", count=str(CLOCK_MODULES))
 
     @property
     def matrix_demo_mode(self) -> bool:

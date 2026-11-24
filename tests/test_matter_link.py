@@ -635,6 +635,60 @@ class FollowedReportTests(unittest.TestCase):
         )
         self.assertNotIn("remote_saved_playlist", entry.options)
 
+    def test_a_failed_playlist_write_is_tried_again_within_seconds(self):
+        # The switch turned on while the Matter link is down a moment: the
+        # write fails, and is tried again 5 s later, not at the minute check.
+        entry, sent = self.remote_lamp([(39, 39), (42, 42)])
+        retries = []
+        self.light._create_tracked_task = lambda coroutine, name=None: (
+            asyncio.run(coroutine) if name.startswith("yeelight_cube_remote_playlist")
+            else retries.append(coroutine)
+        )
+        command = self.light._matter_commands.async_command
+
+        async def link_down(cluster, name, payload=None):
+            raise TimeoutError
+
+        self.light._matter_commands.async_command = link_down
+        self.light.sync_remote_playlist()
+        self.assertFalse(self.light.remote_playlist_active)
+        self.assertEqual(1, len(retries))
+
+        self.light._matter_commands.async_command = command  # the link is back
+        slept = []
+
+        async def no_wait(delay):
+            slept.append(delay)
+
+        real_sleep, REMOTE.asyncio.sleep = REMOTE.asyncio.sleep, no_wait
+        try:
+            # Stepped by hand: the retry's own write runs as the other tasks do.
+            with self.assertRaises(StopIteration):
+                retries.pop().send(None)
+        finally:
+            REMOTE.asyncio.sleep = real_sleep
+        self.assertEqual([REMOTE.REMOTE_RETRY_DELAYS[0]], slept)
+        self.assertTrue(self.light.remote_playlist_active)
+        self.assertTrue(entry.options["remote_playlist_installed"])
+        self.assertEqual([], retries)  # written: no more retries
+        self.assertEqual(0, self.light._remote_retries)
+
+    def test_quick_retries_stop_after_their_delays(self):
+        self.remote_lamp([(39, 39)])
+        retries = []
+        self.light._create_tracked_task = lambda coroutine, name=None: (
+            asyncio.run(coroutine) if name.startswith("yeelight_cube_remote_playlist")
+            else (retries.append(name), coroutine.close())
+        )
+
+        async def link_down(cluster, name, payload=None):
+            raise TimeoutError
+
+        self.light._matter_commands.async_command = link_down
+        for _ in range(len(REMOTE.REMOTE_RETRY_DELAYS) + 2):
+            self.light.sync_remote_playlist()  # the retries, then the minute check
+        self.assertEqual(len(REMOTE.REMOTE_RETRY_DELAYS), len(retries))
+
     def test_external_effect_does_not_restore_or_rewrite_playlist(self):
         entry, sent = self.remote_lamp([(39, 39), (42, 42)])
         self.light.sync_remote_playlist()

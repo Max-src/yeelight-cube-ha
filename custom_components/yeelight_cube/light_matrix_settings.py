@@ -94,6 +94,9 @@ class MatrixSettingsMixin:
         if getattr(self, "_custom_pixels", None) and rebuilt.width != old_width:
             self._custom_pixels = pixels_at_width(self._custom_pixels, old_width, rebuilt.width)
         self._matrix_shown = None
+        # The content select offers the clock from 4 Matrix modules.
+        if notify := getattr(self, "_notify", None):
+            notify("content_mode")
         self._matrix_rotated(rebuilt.rotation, start=True)
         if self._is_on and self.hass is not None:
             self._async_check_problems()

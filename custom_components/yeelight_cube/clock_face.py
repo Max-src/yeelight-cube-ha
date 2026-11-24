@@ -8,6 +8,10 @@ Mirrored by renderClockFrame in www/clock-preview-utils.js.
 from __future__ import annotations
 
 from .device_profile import MODULE_SIZE
+
+# The Matrix modules a Cube Matrix draws its clock face on (the Yeelight
+# app offers the clock from 4 of them).
+CLOCK_MODULES = 4
 from .lamp_core import COLS, ROWS, clock_digit_targets
 from .layout import FONT_MAPS, char_advance
 
@@ -43,21 +47,36 @@ def clock_geometry(profile) -> dict:
     """Where a lamp (its device_profile) shows the clock, as
     clock_digit_pixels' keyword arguments: ``columns`` (the columns it
     shows), ``width`` (the frame's stride) and ``blocks`` (the frame columns
-    the digits may take: those of its 5 x 5 blocks, Matrix and Panel modules,
-    in chain order; a Spot's 5 columns are left to the background). A Cube
-    Lite, or a Cube Matrix without a Spot: every column shown."""
+    the digits take). A Cube Matrix draws its clock face on its first
+    CLOCK_MODULES Matrix modules in chain order (a Panel or a Spot between
+    them skipped); every other module shows the clock's background
+    (clock_face_columns). A Cube Lite, a Cube Matrix of exactly 4 Matrix
+    modules, or one listing none (its factory list): every column shown
+    (None)."""
     columns = getattr(profile, "columns", COLS) or COLS
     width = getattr(profile, "width", max(COLS, columns)) or COLS
     layout = getattr(profile, "layout", None) or []
     blocks = None
-    if any(module.get("type") == "spot" for module in layout):
-        blocks = [
+    matrices = [module for module in layout if module.get("type") == "matrix"]
+    if matrices:
+        face = [
             module["column"] + step
-            for module in layout if module.get("type") != "spot"
+            for module in matrices[:CLOCK_MODULES]
             for step in range(MODULE_SIZE)
             if module["column"] + step < columns
         ]
+        if face != list(range(columns)):
+            blocks = face
     return {"columns": columns, "width": width, "blocks": blocks}
+
+
+def clock_face_columns(geometry: dict) -> set:
+    """The frame columns of the clock's face (clock_geometry): black there
+    but for the digits. The others show the clock's background."""
+    blocks = geometry.get("blocks")
+    if blocks is None:
+        return set(range(geometry.get("columns") or COLS))
+    return set(blocks)
 
 
 def clock_digit_pixels(

@@ -914,6 +914,30 @@ class ModuleListTests(unittest.TestCase):
         run(light._matrix_read_modules())
         self.assertEqual((2, 2, 1, 3, 2), light.device_profile.module_types)
 
+    def test_a_list_changed_in_the_app_is_followed_within_a_minute(self):
+        # 24 Nov: the lamp reports no change made in the Yeelight app; the
+        # minute read (light_lifecycle) finds it over Matter.
+        light = FakeLight()
+        light._on_matrix_report("topology", [2, 2, 1, 3, 2, 2, 0, 0], True)
+        reads = []
+
+        class Link:
+            linked = True
+            values = {"topology": [2, 2, 1, 3, 2, 2, 0, 0]}
+
+            async def async_read_live(self, name):
+                reads.append(name)
+                return [2, 2, 1, 3, 2, 0, 0, 0]
+
+        light._matter = Link()
+        run(light._async_poll_matrix_modules())
+        self.assertEqual(["topology"], reads)
+        self.assertEqual((2, 2, 1, 3, 2), light.device_profile.module_types)
+        # Not linked: nothing read.
+        Link.linked = False
+        run(light._async_poll_matrix_modules())
+        self.assertEqual(["topology"], reads)
+
     def test_a_list_it_cannot_take_is_refused_before_anything_is_sent(self):
         light = FakeLight()
         for modules in ([], ["matrix"] * 9, ["matrix", "lamp"]):

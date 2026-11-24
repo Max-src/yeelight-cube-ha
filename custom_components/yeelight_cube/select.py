@@ -378,14 +378,26 @@ class YeelightCubeContentModeSelect(CubeSelect):
 
     def __init__(self, light_entity, config_entry: ConfigEntry):
         super().__init__(light_entity, config_entry, "content_mode_select")
-        self._attr_options = list(CONTENT_MODES)
+
+    @property
+    def options(self) -> list[str]:
+        """Music Flow listens to the lamp's own microphone: a Cube Matrix
+        has none. The clock needs 4 Matrix modules on a Cube Matrix (its
+        module list can change while it runs)."""
+        light = self._light_entity
+        matrix = getattr(light, "is_cube_matrix", False)
+        no_clock = getattr(light, "matrix_clock_refused", False)
+        return [
+            mode for mode in CONTENT_MODES
+            if not (mode == "Music Flow" and matrix) and not (mode == "Clock" and no_clock)
+        ]
 
     @property
     def current_option(self) -> str | None:
         return self._light_entity.content_mode
 
     async def async_select_option(self, option: str) -> None:
-        if option not in CONTENT_MODES:
+        if option not in self.options:
             raise invalid("unknown_option", option=option)
         await self._light_entity.async_select_content_mode(option)
 

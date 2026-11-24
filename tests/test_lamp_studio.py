@@ -237,7 +237,7 @@ class StudioRuleTests(unittest.TestCase):
             f"const cases = {json.dumps(cases)};"
             "process.stdout.write(JSON.stringify({"
             " frames: cases.map(([e, t, d, v, o, i, p]) => s.studioFrame(e, t, d, v, o, i, palettes[p])),"
-            " start: [0, 1, 40].map((r) => s.studioFrameAt('Building Blocks', r, 'Right', 128, null, null, palettes[1], true)),"
+            " start: [0, 1, 40, 15003, 30001].map((r) => s.studioFrameAt('Building Blocks', r, 'Right', 128, null, null, palettes[1], true)),"
             " looks: s.STUDIO_LOOKS }));"
         )
         result = subprocess.run(
@@ -252,10 +252,35 @@ class StudioRuleTests(unittest.TestCase):
         self.assertEqual(expected, out["frames"])
         self.assertEqual(
             [[list(pixel) for pixel in studio_frame_at("Building Blocks", r, "Right", 128, None, None, palettes[1], True)]
-             for r in (0, 1, 40)],
+             for r in (0, 1, 40, 15003, 30001)],
             out["start"],
         )
         self.assertEqual({name: list(look) for name, look in LOOKS.items()}, out["looks"])
+
+
+class TrackRestartTests(unittest.TestCase):
+    """The objects are counted again every TRACK_RESTART renders (10 minutes):
+    a look first followed late is worked out from the last restart, and is the
+    same as one followed all along."""
+
+    def test_a_late_start_is_the_same_as_one_followed_all_along(self):
+        restart = STUDIO["TRACK_RESTART"]
+        self.assertEqual(15000, restart)  # 10 minutes of 40 ms renders
+        Track = STUDIO["StudioTrack"]
+        step = lambda state, frame: state + [frame]  # what each render added
+        all_along, late = Track(), Track()
+        for render in range(restart - 3, restart + 4):  # across the restart
+            followed = all_along.state_at(render, lambda at: at, step, [])
+        self.assertEqual(list(range(restart, restart + 4)), followed)
+        self.assertEqual(followed, late.state_at(restart + 3, lambda at: at, step, []))
+
+    def test_a_late_start_replays_only_since_the_restart(self):
+        restart = STUDIO["TRACK_RESTART"]
+        asked = []
+        STUDIO["StudioTrack"]().state_at(
+            4 * restart + 10, lambda at: asked.append(at) or at, lambda state, frame: frame, None,
+        )
+        self.assertEqual(list(range(4 * restart, 4 * restart + 11)), asked)
 
 
 class PaletteRuleParityTests(unittest.TestCase):

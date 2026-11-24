@@ -85,6 +85,10 @@ REMOTE_BLACK = base64.b64encode(bytes((0xFF, 0, 0, 0)) * 100).decode("ascii")
 # Seconds after the playlist is written during which the lamp's reports are
 # that write's, not presses (the lamp may switch to a written slot).
 REMOTE_WRITE_SETTLE = 5.0
+# A playlist write that failed (the Matter link down a moment, as when the
+# switch is turned on) is tried again after these seconds, before the
+# minute check takes over: the remote works within seconds, not a minute.
+REMOTE_RETRY_DELAYS = (5.0, 15.0, 30.0)
 # Seconds a report of effect 0, 36, 40 or 71 waits for the values that tell
 # what it shows (a Cube Lite reports them within a millisecond, in either
 # order) before it is read.
@@ -168,6 +172,8 @@ class MatterMixin:
         # and when it was last written (REMOTE_WRITE_SETTLE).
         self._remote_playlist_busy = False
         self._remote_playlist_written_at = -REMOTE_WRITE_SETTLE
+        # How many quick retries of a failed playlist write ran (REMOTE_RETRY_DELAYS).
+        self._remote_retries = 0
         # When a black slot was last pressed (REMOTE_PRESS_MUSIC_OFF).
         self._remote_press_at = -REMOTE_PRESS_MUSIC_OFF
         # Why the black playlist cannot be installed ("no_playlist",

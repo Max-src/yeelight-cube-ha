@@ -390,6 +390,46 @@ async def test_closing_the_options_during_the_check_brings_the_content_back(hass
     lamp._async_end_mount_check.assert_awaited_once()
 
 
+async def test_closing_the_setup_during_the_check_stops_the_stars(hass, lamp_answers):
+    from unittest.mock import AsyncMock, patch
+
+    result = await start(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.1.96"})
+    with patch("custom_components.yeelight_cube.config_flow.send_once", new=AsyncMock()) as send:
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"mount_profile": "check"})
+        assert result["step_id"] == "orientation_check"
+        hass.config_entries.flow.async_abort(result["flow_id"])
+        await hass.async_block_till_done()
+        stop = send.await_args.args
+        assert stop[:3] == ("192.168.1.96", 55443, "set_fx_effect")
+        assert (stop[3][0], stop[3][3]["mode"], stop[3][3]["onoff"]) == (47, 47, 0)
+        assert send.await_count == 2
+
+
+async def test_a_lamp_gone_when_the_setup_closes_is_no_error(hass, lamp_answers):
+    from unittest.mock import AsyncMock, patch
+
+    result = await start(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.1.98"})
+    with patch("custom_components.yeelight_cube.config_flow.send_once", new=AsyncMock()) as send:
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"mount_profile": "check"})
+        send.side_effect = OSError("unplugged")
+        hass.config_entries.flow.async_abort(result["flow_id"])
+        await hass.async_block_till_done()
+        assert send.await_count == 2
+
+
+async def test_setup_closed_without_a_check_sends_nothing(hass, lamp_answers):
+    from unittest.mock import AsyncMock, patch
+
+    result = await start(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_IP: "192.168.1.97"})
+    with patch("custom_components.yeelight_cube.config_flow.send_once", new=AsyncMock()) as send:
+        hass.config_entries.flow.async_abort(result["flow_id"])
+        await hass.async_block_till_done()
+        send.assert_not_awaited()
+
+
 async def test_setup_checks_the_orientation_on_the_lamp(hass, lamp_answers):
     from unittest.mock import AsyncMock, patch
 

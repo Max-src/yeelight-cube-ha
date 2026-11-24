@@ -842,11 +842,24 @@ class WideMatrixCameraTests(unittest.TestCase):
             five = camera_of(self.wide_light("2,2,2,3,1", _mode="Clock"))._get_clock_preview()
             self.assertEqual(125, len(five))
             columns = {index % 25 for index in lit(five)}
-            self.assertFalse(columns & set(range(15, 20)), sorted(columns))
-            self.assertTrue(columns & set(range(20, 25)), sorted(columns))
-            # Four blocks, no spot: the Cube Lite's clock.
-            four = camera_of(self.wide_light("2,1,2,2", _mode="Clock"))._get_clock_preview()
+            self.assertTrue(columns)
+            self.assertFalse(columns & set(range(15, 25)), sorted(columns))
+            # Four Matrix modules: the Cube Lite's clock.
+            four = camera_of(self.wide_light("2,2,2,2", _mode="Clock"))._get_clock_preview()
             self.assertEqual(camera_of(light_state(_mode="Clock"))._get_clock_preview(), four)
+
+    def test_over_a_background_the_panel_and_spot_show_it(self):
+        with patch.object(camera_module(), "dt_util", types.SimpleNamespace(
+                now=lambda: datetime(2026, 11, 21, 12, 34, 56))):
+            frame = camera_of(self.wide_light(
+                "2,2,1,3,2,2", _mode="Clock", _native_clock_style=1,
+            ))._get_clock_preview()
+            self.assertEqual(150, len(frame))
+            lit_at = set(lit(frame))
+            panel = {row * 30 + column for row in range(5) for column in range(10, 15)}
+            self.assertLessEqual(panel, lit_at)
+            face = {index for index in lit_at if index % 30 < 10 or index % 30 >= 20}
+            self.assertTrue(0 < len(face) < 100)
 
 
 if __name__ == "__main__":

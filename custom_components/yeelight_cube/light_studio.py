@@ -468,7 +468,7 @@ class StudioStreamMixin:
                                          bool(self._native_clock_colon_blink))
         colour = self._resolve_native_clock_color(self._clock_style()) or 0xFFFFFF
         rgb = ((colour >> 16) & 255, (colour >> 8) & 255, colour & 255)
-        # On the lamp's blocks only (a Spot shows the background:
+        # On the lamp's clock face only (its first 4 Matrix modules:
         # clock_face.clock_geometry), centred across them.
         for index, _char, _col in clock_digit_pixels(
             text, colon_visible, 0, False, **clock_geometry(self.device_profile),

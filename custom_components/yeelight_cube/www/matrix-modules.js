@@ -473,22 +473,31 @@ export function fitLampFrame(frame, attributes, kind = "lamp", blank) {
   return fitFrame(frame, lampWidth(attributes), { fromEnd, blank });
 }
 
+// The Matrix modules a Cube Matrix draws its clock face on (clock_face.py
+// CLOCK_MODULES).
+export const CLOCK_MODULES = 4;
+
 /**
- * The frame columns a streamed clock's digits go on, in chain order: the
- * 5 x 5 blocks' (matrix and panel), never a spot's (its 5 columns show the
- * background only). The digits are centred across them as one strip, a
- * spot between blocks skipped (clock_face.py). Without spots: the columns
- * shown, 0 to columns - 1 (a Cube Lite: all 20).
+ * The frame columns a clock's digits go on, in chain order: those of the
+ * lamp's first CLOCK_MODULES Matrix modules (a panel or a spot between them
+ * skipped). Every other module shows the clock's background. The digits
+ * are centred across them as one strip (clock_face.py clock_geometry).
+ * A Cube Lite, exactly 4 Matrix modules, or none listed (a factory list):
+ * the columns shown, 0 to columns - 1.
  */
 export function clockColumns(attributes) {
   const columns = shownColumns(attributes);
+  const all = Array.from({ length: columns }, (_, column) => column);
   const modules = Array.isArray(attributes?.matrix_modules) ? attributes.matrix_modules : [];
-  if (!spotsOf(attributes).length) return Array.from({ length: columns }, (_, column) => column);
+  const matrices = modules.filter(
+    (module) => module?.type === "matrix" && Number.isInteger(module?.column),
+  );
+  if (!matrices.length) return all;
   const out = [];
-  for (const module of modules) {
-    if (module?.type === "spot" || !Number.isInteger(module?.column)) continue;
-    if (module.column + MODULE_SIZE > columns) continue;
-    for (let k = 0; k < MODULE_SIZE; k++) out.push(module.column + k);
+  for (const module of matrices.slice(0, CLOCK_MODULES)) {
+    for (let k = 0; k < MODULE_SIZE; k++) {
+      if (module.column + k < columns) out.push(module.column + k);
+    }
   }
-  return out;
+  return out.length === columns && out.every((column, at) => column === at) ? all : out;
 }

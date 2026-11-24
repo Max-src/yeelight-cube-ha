@@ -260,6 +260,9 @@ export function trackStep([labelsBefore, levelsBefore, countBefore], frame, floo
 
 const EMPTY = [new Array(LENGTH).fill(-1), new Array(LENGTH).fill(0), 0];
 const TRACK_STATES = 64;
+// The objects are counted again from nothing every 10 minutes of an effect,
+// at the same renders as lamp_studio.py TRACK_RESTART.
+export const TRACK_RESTART = 15000;
 const TRACKS_LIMIT = 16;
 const tracks = new Map();
 
@@ -299,7 +302,7 @@ function stepper(look) {
 
 const followedOf = (look, state) => (look[0] === "object" ? state[0] : state);
 
-// A followed look of one source at `render`, from its first render: the
+// A followed look of one source at `render`, from its last restart: the
 // latest states worked out are kept (the oldest dropped first), so each
 // preview goes on from where it was, on its own clock (StudioTrack).
 function stateAt(key, render, frameOf, step, empty) {
@@ -315,9 +318,10 @@ function stateAt(key, render, frameOf, step, empty) {
   let state = states.get(render);
   if (states.has(render)) states.delete(render);
   else {
-    let start = -1;
-    for (const known of states.keys()) if (known < render && known > start) start = known;
-    state = start >= 0 ? states.get(start) : empty;
+    const first = render - (render % TRACK_RESTART);
+    let start = first - 1;
+    for (const known of states.keys()) if (known >= first && known < render && known > start) start = known;
+    state = start >= first ? states.get(start) : empty;
     for (let at = start + 1; at < render; at++) {
       state = step(state, frameOf(at));
       keep(at, state);

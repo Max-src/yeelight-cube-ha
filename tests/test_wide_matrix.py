@@ -145,7 +145,7 @@ class ClockFaceTests(unittest.TestCase):
         return CLOCK_FACE.clock_digit_pixels(text, True, 0, turned, **CLOCK_FACE.clock_geometry(profile))
 
     def test_without_a_spot_and_up_to_4_modules_as_before(self):
-        for topology in ("2,2,2,2", "2,2,2", "1,2,1", None):
+        for topology in ("2,2,2,2", "2,2,2", "1,1,1", None):
             profile = matrix(topology)
             for turned in (False, True):
                 self.assertEqual(
@@ -155,24 +155,52 @@ class ClockFaceTests(unittest.TestCase):
         self.assertEqual(CLOCK_FACE.clock_digit_pixels("21:05", True, 0, False),
                          self.digits(PROFILES.CUBE_LITE_PROFILE, "21:05"))
 
-    def test_digits_never_on_a_spot_and_centred_across_the_blocks(self):
+    def test_digits_only_on_the_first_4_matrix_modules_centred_across_them(self):
         for name, topology in CHAINS.items():
             profile = matrix(topology)
-            spots = {module["column"] + step for module in profile.layout if module["type"] == "spot"
-                     for step in range(5)}
-            blocks = [col for col in range(profile.columns) if col not in spots]
+            face = [
+                module["column"] + step
+                for module in [m for m in profile.layout if m["type"] == "matrix"][:4]
+                for step in range(5)
+            ]
             for turned in (False, True):
                 pixels = self.digits(profile, turned=turned)
                 columns = {index % profile.width for index, _char, _col in pixels}
                 with self.subTest(name, turned=turned):
                     self.assertTrue(pixels)
-                    self.assertFalse(columns & spots)
+                    self.assertLessEqual(columns, set(face))
                     self.assertTrue(all(index < profile.pixels for index, *_ in pixels))
-                    # Centred across the blocks' columns in chain order: the
+                    # Centred across the face's columns in chain order: the
                     # same space before the first digit and after the last.
-                    lanes = sorted(blocks.index(col) for col in columns)
-                    before, after = lanes[0], len(blocks) - 1 - lanes[-1]
+                    lanes = sorted(face.index(col) for col in columns)
+                    before, after = lanes[0], len(face) - 1 - lanes[-1]
                     self.assertLessEqual(abs(before - after), 1)
+
+    def test_the_face_columns_match_the_cards(self):
+        # The same lists as wide-matrix.test.mjs's clockColumns.
+        cases = {
+            "2,2,2,3,1": list(range(15)),
+            "2,1,2,2,2,2": [*range(5), *range(10, 25)],
+            "2,3,2,1,2,2,3,1": [*range(5), *range(10, 15), *range(20, 30)],
+            "2,2,1,3,2,2": [*range(10), *range(20, 30)],
+        }
+        for topology, face in cases.items():
+            with self.subTest(topology):
+                self.assertEqual(face, CLOCK_FACE.clock_geometry(matrix(topology))["blocks"])
+        for topology in ("2,2,2,2", "1,1,1,1,3,3"):
+            self.assertIsNone(CLOCK_FACE.clock_geometry(matrix(topology))["blocks"])
+
+    def test_the_real_layout_shows_the_cube_lites_face_on_its_matrix_modules(self):
+        # matrix, matrix, panel, spot, matrix, matrix (the Yeelight app's
+        # clock, filmed 24 Nov): digits at the 20-wide face's fixed columns.
+        profile = matrix("2,2,1,3,2,2")
+        face = [*range(10), *range(20, 30)]
+        lite = CLOCK_FACE.clock_digit_pixels("12:34", True, 0, False)
+        expected = sorted(
+            (index // 20 * profile.width + face[index % 20], char, face[col])
+            for index, char, col in lite
+        )
+        self.assertEqual(expected, sorted(self.digits(profile, "12:34")))
 
     def test_a_spot_between_blocks_splits_the_time(self):
         profile = matrix("2,2,3,2,2")  # columns 10-14 are the spot
@@ -193,6 +221,30 @@ class ClockFaceTests(unittest.TestCase):
         light._matrix_native_refused = False
         self.assertEqual(3, sum(1 for kind in light.device_profile.module_types if kind == 2))
         self.assertIsNone(light._matrix_clock_command())
+
+    def test_fewer_than_4_matrix_modules_refuse_the_clock(self):
+        # As the Yeelight app: no clock under 4 Matrix modules.
+        for topology, refused in (("2,2,2,3,1", True), ("2,2,1,3,2,2", False), ("2,2,2,2", False),
+                                  ("1,1,1,1,3,3", False)):
+            light = light_on(matrix(topology), _mode="Matrix")
+            with self.subTest(topology):
+                self.assertEqual(refused, light.matrix_clock_refused)
+                if not refused:
+                    continue
+                for attempt in (
+                    lambda: light.async_select_content_mode("Clock"),
+                    lambda: light.async_set_display_mode("Clock"),
+                    lambda: light.async_set_clock_settings(style_id=4),
+                ):
+                    with self.assertRaises(Exception) as caught:
+                        run(attempt())
+                    self.assertEqual("clock_needs_matrix_modules",
+                                     getattr(caught.exception, "translation_key", None))
+                    self.assertEqual("Matrix", light._mode)
+                # Settings alone (not shown) are still kept.
+                run(light.async_set_clock_settings(style_id=4, activate=False))
+                self.assertEqual(4, light._native_clock_style)
+        self.assertFalse(light_on(PROFILES.CUBE_LITE_PROFILE).matrix_clock_refused)
 
 
 class PixelArtTests(unittest.TestCase):

@@ -58,7 +58,7 @@ class PreviewState:
     # Matrix of more than 4 modules): frames are width x 5.
     width: int = 20
     # Where the clock's digits go (clock_face.clock_geometry: columns, width
-    # and the blocks' columns, a Spot's left out): clock_digit_pixels'
+    # and the clock face's columns: a Cube Matrix's first 4 Matrix modules): clock_digit_pixels'
     # keyword arguments.
     clock_geometry: dict | None = None
 

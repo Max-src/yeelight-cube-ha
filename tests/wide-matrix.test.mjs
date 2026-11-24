@@ -227,7 +227,7 @@ test("a stored drawing of another size never breaks the card", () => {
     assert.ok(!isDrawing(data));
 });
 
-test("the clock's digits go on the blocks only, never a spot", () => {
+test("the clock's digits go on the first 4 Matrix modules, the others show the background", () => {
   const time = new Date(2026, 10, 21, 12, 34, 56);
   const RealDate = Date;
   globalThis.Date = class extends RealDate {
@@ -239,32 +239,42 @@ test("the clock's digits go on the blocks only, never a spot", () => {
     const attrs = { clock_style_id: 6, clock_content: "time" };
     const columnsLit = (frame, width) =>
       new Set(frame.flatMap((pixel, index) => (pixel.some(Boolean) ? [index % width] : [])));
-    // A spot fourth: the digits across columns 0-14 and 20-24.
-    assert.deepEqual(clockColumns(FIVE), [...Array(15).keys(), 20, 21, 22, 23, 24]);
+    // Three Matrix modules, a spot, a panel: the digits on columns 0-14.
+    assert.deepEqual(clockColumns(FIVE), [...Array(15).keys()]);
     const five = renderClockFrame({ ...attrs, ...FIVE }, null, null);
     assert.equal(five.length, 125);
     const lit = columnsLit(five, 25);
-    for (const column of [15, 16, 17, 18, 19]) assert.ok(!lit.has(column), column);
-    assert.ok([...lit].some((column) => column >= 20));
-    // Six blocks: centred in 30 columns, on the frame's stride.
-    const six = renderClockFrame({ ...attrs, ...SIX }, null, null);
-    assert.equal(six.length, 150);
-    const sixLit = [...columnsLit(six, 30)];
-    assert.ok(Math.min(...sixLit) >= 5 && Math.max(...sixLit) <= 24, sixLit.join());
-    // Eight with two spots: never on columns 5-9 or 30-34.
-    const eight = renderClockFrame({ ...attrs, ...EIGHT }, null, null);
-    assert.equal(eight.length, 200);
-    const eightLit = columnsLit(eight, 40);
-    for (const column of [5, 9, 30, 34]) assert.ok(!eightLit.has(column), column);
-    // Four blocks, no spot: the Cube Lite's clock, exactly.
-    const four = renderClockFrame({ ...attrs, ...lamp(["matrix", "panel", "matrix", "matrix"]) }, null, null);
+    for (const column of lit) assert.ok(column < 15, column);
+    // A panel second: the first 4 Matrix modules are those from column 10.
+    assert.deepEqual(clockColumns(SIX), [...Array(5).keys(), 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]);
+    // Eight with two spots and a panel: modules 1, 3, 5, 6 (a fifth Matrix one shows the background).
+    assert.deepEqual(clockColumns(EIGHT), [0, 1, 2, 3, 4, 10, 11, 12, 13, 14, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]);
+    // Four Matrix modules only: the Cube Lite's clock, exactly.
+    const four = renderClockFrame({ ...attrs, ...lamp(["matrix", "matrix", "matrix", "matrix"]) }, null, null);
     assert.deepEqual(four, renderClockFrame(attrs, null, null));
-    // Turned: a half turn across the blocks' columns, still none on the spot.
+    // The real layout (matrix, matrix, panel, spot, matrix, matrix) over a
+    // background: the face's digits at the fixed columns of a 20-wide face,
+    // the panel and the spot lit with the background in full.
+    const REAL = lamp(["matrix", "matrix", "panel", "spot", "matrix", "matrix"]);
+    const face = [...Array(10).keys(), 20, 21, 22, 23, 24, 25, 26, 27, 28, 29];
+    assert.deepEqual(clockColumns(REAL), face);
+    const plain = renderClockFrame({ ...attrs, ...REAL }, null, null);
+    const strip = renderClockFrame(attrs, null, null);
+    for (let row = 0; row < 5; row++)
+      for (let lane = 0; lane < 20; lane++)
+        assert.deepEqual(plain[row * 30 + face[lane]], strip[row * 20 + lane], `${row},${lane}`);
+    for (const column of columnsLit(plain, 30)) assert.ok(face.includes(column), column);
+    const rainbow = renderClockFrame({ ...attrs, ...REAL, clock_style_id: 1 }, null, null, 3);
+    for (let row = 0; row < 5; row++)
+      for (let column = 10; column < 15; column++)
+        assert.ok(rainbow[row * 30 + column].some(Boolean), `panel ${row},${column}`);
+    const faceLit = rainbow.filter((pixel, index) => face.includes(index % 30) && pixel.some(Boolean)).length;
+    assert.ok(faceLit > 0 && faceLit < 100, String(faceLit));
+    // Turned: a half turn across the face's columns, still on the face.
     const turned = renderClockFrame(
       { ...attrs, ...FIVE, mount_profile: { clock_turned: true } }, null, null,
     );
-    const turnedLit = columnsLit(turned, 25);
-    for (const column of [15, 16, 17, 18, 19]) assert.ok(!turnedLit.has(column), column);
+    for (const column of columnsLit(turned, 25)) assert.ok(column < 15, column);
   } finally {
     globalThis.Date = RealDate;
   }

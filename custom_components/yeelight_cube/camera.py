@@ -44,7 +44,7 @@ from .lamp_renderers import (
     lamp_effect_frame,
     led_appearance,
 )
-from .clock_face import clock_digit_pixels, clock_geometry, clock_text
+from .clock_face import clock_digit_pixels, clock_face_columns, clock_geometry, clock_text
 from .device_profile import _spot_colour
 from .lamp_studio import clock_studio_runs, studio_clock_background_at, studio_drive, studio_render
 from .matrix_view import (
@@ -769,8 +769,9 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
     def _get_clock_preview(self, state=None) -> list[tuple[int, int, int]]:
         """Render the active built-in clock face into the lamp's frame (20 x
         5, or a longer Cube Matrix's width x 5): its digits (clock_face, as
-        the lamp lays them out: on its 5 x 5 blocks, never a spot) showing the
-        style's color, or its background effect through them."""
+        the lamp lays them out: on its first 4 Matrix modules) showing the
+        style's color, or its background effect through them; a Cube
+        Matrix's other modules show the background itself."""
         state = self._state(state)
         text, colon_visible = clock_text(
             dt_util.now(), state.clock_content,
@@ -848,8 +849,8 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
         digit_flags = clock_digit_flags(style.get("mixer", 0), clock_style_direct(style))
         turned = bool(state.lamp_turns_clock)
         # Within the columns the lamp shows (a Cube Matrix with fewer than 4
-        # blocks streams this frame: device_profile.columns), on its blocks
-        # (a spot's columns left to the background: clock_geometry).
+        # blocks streams this frame: device_profile.columns), on its clock
+        # face (its first 4 Matrix modules: clock_geometry).
         geometry = self._clock_geometry(state)
         for index, char_index, col in clock_digit_pixels(text, colon_visible, digit_flags, turned, **geometry):
             if not 0 <= index < len(matrix):
@@ -862,6 +863,15 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
                 matrix[index] = flat_override
             else:
                 matrix[index] = self._clock_pixel_color(style_id, char_index, col, width)
+        # A Cube Matrix's modules off the face (Panels, Spots, a fifth Matrix
+        # module: clock_face_columns) show the background itself.
+        if effect_frame is not None and geometry.get("blocks") is not None:
+            face = clock_face_columns(geometry)
+            columns = geometry.get("columns") or width
+            for index in range(min(len(matrix), len(effect_frame))):
+                col = index % width
+                if col < columns and col not in face:
+                    matrix[index] = effect_frame[index]
 
         # Lamp order, like every frame (_view_frame turns it for the viewer).
         return matrix

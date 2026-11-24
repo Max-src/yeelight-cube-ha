@@ -204,6 +204,8 @@ class NativeActionsMixin:
     ) -> None:
         """set_clock_style: the given clock settings (``clock_color`` None with
         ``has_color``: the style's own), shown when the clock is."""
+        if activate and (check := getattr(self, "check_clock_allowed", None)):
+            check()
         if style_id is not None:
             self._native_clock_style = style_id
         if has_color:

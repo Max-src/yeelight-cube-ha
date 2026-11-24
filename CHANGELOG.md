@@ -14,6 +14,14 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - **`send_fx_effect` shows its `effect_id` and `rate` fields** in the action editor.
 
 ### Changed
+- **The Cube Matrix clock follows the Yeelight app's layout.** Its digits go on the first four Matrix modules in
+  chain order (a Panel or a Spot between them is skipped), exactly where the lamp's own clock puts them; the Panels,
+  the Spots and any further Matrix module show the clock's background. The previews and the camera show the same.
+- **No clock on a Cube Matrix with fewer than four Matrix modules**, as in the Yeelight app: the content dropdown
+  leaves it out and the actions refuse it with a clear message. A lamp still on its factory module list keeps
+  Home Assistant's clock.
+- **A Cube Matrix's module list changed in the Yeelight app is picked up within a minute.** The lamp does not report
+  the change, so Home Assistant now reads the list over Matter every minute and redraws what is shown for it.
 - **A wrong choice in a dropdown is refused with a clear message** (an unknown option, palette or pixel art)
   instead of being ignored silently.
 - **Importing pixel arts refuses files over 16 MB**, as importing palettes refuses large files; a full collection
@@ -131,6 +139,17 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   waiting for the effect list.
 - **Gallery edits are saved together**: a burst of renames, moves or deletes is one write of the storage file, a
   moment later (Home Assistant writes it when it stops).
+- **Right as Remote works within seconds of being turned on.** When the lamp's Matter link was down a moment as the
+  switch was turned on, the remote's slots were written only at the next minute check, and right-button presses
+  meanwhile changed the lamp's effect. A failed write is now tried again after 5, 15 and 30 seconds.
+- **A Cube Matrix no longer offers Music Flow** in its content modes: Music Flow listens to the lamp's own
+  microphone, and a Cube Matrix has none.
+- **Closing the setup during the orientation check stops the shooting stars.** The lamp being added kept playing
+  them; it is now left black.
+- **A Palette effect followed late no longer freezes its image.** Building Blocks, Hacking and the other effects that
+  colour their objects by count were worked out from the effect's start when the camera or a card first showed them
+  (about a second per 10 minutes the effect had run). The count now restarts every 10 minutes, the same on the lamp,
+  the camera and the cards.
 
 ## [2.0.0] - 2026-11-21
 

@@ -62,6 +62,9 @@ LITE_ORIENTATION_ROTATIONS = {
 # arrow points on every profile (the table turns a flat lamp's effects
 # lengthwise), so the answer is translated into the arrow (star_check_profile).
 STAR_CHECK_PARAMS = [47, 0, 4, {"mode": 47, "onoff": 1, "rate": 50, "direction": 3}]
+# The same effect turned off: the stars stop and the lamp is left black
+# (checked on a Cube Lite, 24 Nov 2026).
+STAR_STOP_PARAMS = [47, 0, 4, {"mode": 47, "onoff": 0, "rate": 50, "direction": 3}]
 STAR_DRAWN_MOTION = ("right", "left", "up", "down")
 # The four ways, clockwise, and how many quarter turns clockwise a Device
 # Orientation turns what the viewer sees (the previews' rule, matrix_view.py:

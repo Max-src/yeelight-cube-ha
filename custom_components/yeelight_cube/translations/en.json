@@ -362,6 +362,9 @@
         "lamp_not_found": {
             "message": "No matching Yeelight Cube Lite lamp for {entity_id}: it is not one, or it is not set up (still starting, or unreachable since Home Assistant started)."
         },
+        "clock_needs_matrix_modules": {
+            "message": "This Cube Matrix has fewer than {count} Matrix modules: the clock needs {count}, as in the Yeelight app."
+        },
         "lamp_off": {
             "message": "The lamp is off and auto-turn-on is disabled (its Auto Turn On switch): turn the lamp on first."
         },

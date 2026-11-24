@@ -44,6 +44,11 @@ class LifecycleMixin:
         self.async_on_remove(async_track_time_interval(
             self.hass, self._async_check_problems, timedelta(minutes=1)
         ))
+        # A Cube Matrix's module list, changed in the Yeelight app: read
+        # over Matter every minute (light_matrix_follow).
+        self.async_on_remove(async_track_time_interval(
+            self.hass, self._async_poll_matrix_modules, timedelta(minutes=1)
+        ))
         self._lamp_client.on_transport_change = self._async_publish_transport
         self.async_on_remove(lambda: setattr(self._lamp_client, "on_transport_change", None))
         self._lamp_client.on_stream_change = self._streams_changed

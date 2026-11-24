@@ -119,6 +119,18 @@ class MatrixFollowMixin:
         if self.hass is not None:
             self.async_write_ha_state()
 
+    async def _async_poll_matrix_modules(self, _now=None) -> None:
+        """Every minute (light_lifecycle): a Cube Matrix's module list read
+        over Matter. The lamp reports no change made in the Yeelight app,
+        so it is read, and the layout follows it (_matrix_modules_changed);
+        also within a minute of the lamp coming back or restarting."""
+        if not getattr(self, "is_cube_matrix", False):
+            return
+        link = self._matter
+        if link is None or not getattr(link, "linked", False):
+            return
+        await self._matrix_read_modules()
+
     async def _matrix_read_modules(self) -> None:
         """The module list read from the lamp over Matter (its LAN not read
         at setup): laid out again when it differs from the server's copy."""

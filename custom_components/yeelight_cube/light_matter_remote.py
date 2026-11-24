@@ -4,6 +4,7 @@ drawings, written to the lamp and told apart from the Yeelight app's).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -19,6 +20,7 @@ from .matter_commands import (
 )
 from .light_matter import (
     REMOTE_BLACK,
+    REMOTE_RETRY_DELAYS,
     REMOTE_DRAWING_EFFECT,
     REMOTE_SLOTS,
     REMOTE_SLOT_BASE,
@@ -93,6 +95,28 @@ class RemoteButtonsMixin:
     def _remote_playlist_settling(self) -> bool:
         return self._remote_playlist_busy or time.monotonic() - self._remote_playlist_written_at < REMOTE_WRITE_SETTLE
 
+    def _remote_playlist_pending(self) -> bool:
+        """The playlist is not yet as Right as Remote asks."""
+        entry = self._config_entry
+        installed = entry is not None and entry.options.get(CONF_REMOTE_PLAYLIST_INSTALLED, False)
+        if self.buttons_as_remote:
+            return not (self.remote_playlist_active and installed)
+        return self.remote_playlist_active
+
+    def _retry_remote_playlist(self) -> None:
+        """A failed write is tried again soon (REMOTE_RETRY_DELAYS), then
+        every minute (the Matter check)."""
+        if self._remote_retries >= len(REMOTE_RETRY_DELAYS) or not self._remote_playlist_pending():
+            return
+        delay = REMOTE_RETRY_DELAYS[self._remote_retries]
+        self._remote_retries += 1
+
+        async def retry() -> None:
+            await asyncio.sleep(delay)
+            self.sync_remote_playlist()
+
+        self._create_tracked_task(retry(), name=f"yeelight_cube_remote_retry_{self._ip}")
+
     def sync_remote_playlist(self) -> None:
         """Right as Remote on: save the lamp's playlist and make every slot
         black (needs Matter settings; until then ordinary changes are
@@ -136,7 +160,12 @@ class RemoteButtonsMixin:
                 self._remote_playlist_busy = False
                 self._matter_status_changed()
                 if requested != self.buttons_as_remote:
+                    self._remote_retries = 0
                     self.sync_remote_playlist()
+                elif self._remote_playlist_pending():
+                    self._retry_remote_playlist()
+                else:
+                    self._remote_retries = 0
 
         self._create_tracked_task(sync(), name=f"yeelight_cube_remote_playlist_{self._ip}")
 

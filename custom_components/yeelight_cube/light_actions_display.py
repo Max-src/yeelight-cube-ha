@@ -61,6 +61,8 @@ class DisplayActionsMixin:
             # content mode is selected (which exits it via async_apply_display_mode).
             # It is sent to the lamp directly, outside the display queue's
             # off-lamp rule: refused like the native-effect action.
+            if getattr(self, "is_cube_matrix", False):  # no microphone
+                raise invalid("unknown_option", option=option)
             if not self.can_take_commands():
                 raise invalid("lamp_off")
             await self.async_set_music_flow(True)
@@ -68,6 +70,8 @@ class DisplayActionsMixin:
             if self.hass is not None:
                 self.async_write_ha_state()
             return
+        if option == MODE_CLOCK and (check := getattr(self, "check_clock_allowed", None)):
+            check()
         if option == "Matrix":
             matrix_mode = self._matrix_mode
             if matrix_mode not in MATRIX_DISPLAY_MODES or (
@@ -290,6 +294,8 @@ class DisplayActionsMixin:
         if full_panel is not None:
             self._full_panel = full_panel
             _LOGGER.debug("[set_mode] Also setting full_panel to %s", full_panel)
+        if mode == MODE_CLOCK and (check := getattr(self, "check_clock_allowed", None)):
+            check()
         if mode in MATRIX_DISPLAY_MODES:
             self._enter_mode(mode, matrix_mode=mode)
         if mode == "Custom Draw":

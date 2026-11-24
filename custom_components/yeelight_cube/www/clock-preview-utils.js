@@ -602,8 +602,9 @@ function _clockPixelColor(styleId, charIndex, col, last = 19) {
  * Render one clock frame as [r,g,b] pixels in lamp order (row-major, row 0
  * = the lamp's bottom row): 100, or a longer Cube Matrix's width x 5
  * (matrix-view.js lampWidth). Mirrors _get_clock_preview() in camera.py,
- * including colon blink. The digits go on the lamp's 5 x 5 blocks only,
- * centred across them, never on a spot (matrix-modules.js clockColumns).
+ * including colon blink. The digits go on the lamp's clock face only (a
+ * Cube Matrix's first 4 Matrix modules: matrix-modules.js clockColumns),
+ * centred across it; its other modules show the background.
  *
  * `attrs` fields used: clock_style_id, clock_style (name), clock_content,
  * clock_show_date, clock_12_hour, clock_colon_blink,
@@ -732,8 +733,8 @@ export function renderClockFrame(attrs, fontMap, metrics, phase = 0, speed = nul
   // half turn round; the background stays where it is on the panel.
   const turned = lampTurnsClock(attrs);
   const matrix = Array.from({ length: width * 5 }, () => [0, 0, 0]);
-  // The columns the digits go on (the blocks', a spot's skipped), as one
-  // strip they are centred across.
+  // The columns the digits go on (the clock face's), as one strip they are
+  // centred across.
   const strip = clockColumns(attrs);
   const stripWidth = strip.length;
   const chars = [...text];
@@ -784,6 +785,15 @@ export function renderClockFrame(attrs, fontMap, metrics, phase = 0, speed = nul
       }
     }
     offset += advance;
+  }
+  // A Cube Matrix's modules off the face (panels, spots, a fifth Matrix
+  // module) show the background itself (camera.py).
+  if (effectFrame && (stripWidth !== columns || strip.some((column, at) => column !== at))) {
+    const face = new Set(strip);
+    for (let index = 0; index < matrix.length && index < effectFrame.length; index++) {
+      const column = index % width;
+      if (column < columns && !face.has(column)) matrix[index] = effectFrame[index] ?? [0, 0, 0];
+    }
   }
   // A Cube Matrix's spots shown as the lamp lights them (matrix-modules.js).
   return withSpotColours(matrix, attrs, "lamp");

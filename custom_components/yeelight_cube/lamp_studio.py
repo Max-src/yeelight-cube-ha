@@ -385,6 +385,11 @@ def track_step(state, frame, floor: int):
 
 _EMPTY = ([-1] * LENGTH, [0] * LENGTH, 0)
 _TRACK_STATES = 64
+# The objects are counted again from nothing every 10 minutes of an effect
+# (renders 0, 15000, 30000...), the same for the lamp, the camera and the
+# cards: a look first followed late is worked out from the last restart, not
+# from the effect's start (at most 10 minutes of renders, about a second).
+TRACK_RESTART = 15000
 
 
 # ── Fields: the brightness around each pixel, followed slowly ───────────
@@ -446,7 +451,7 @@ def _followed(look, state):
 
 class StudioTrack:
     """A followed look of one source (objects, fields), render by render
-    from its first: the latest states worked out are kept (the oldest dropped
+    from its last restart (TRACK_RESTART): the latest states worked out are kept (the oldest dropped
     first), so each preview, the camera and the stream go on from where they
     were, each on its own clock."""
 
@@ -459,8 +464,9 @@ class StudioTrack:
             if render in self.states:
                 state = self.states.pop(render)
             else:
-                start = max((known for known in self.states if known < render), default=-1)
-                state = self.states[start] if start >= 0 else empty
+                first = render - render % TRACK_RESTART
+                start = max((known for known in self.states if first <= known < render), default=first - 1)
+                state = self.states[start] if start >= first else empty
                 for at in range(start + 1, render):
                     state = step(state, frame_of(at))
                     self._keep(at, state)

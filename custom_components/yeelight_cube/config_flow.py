@@ -27,6 +27,7 @@ from .matter_link import entry_moved_to, usable_address
 from .discovery import is_cube_device, parse_service_name, normalize_device_id
 from .mount_profile import (
     STAR_CHECK_PARAMS,
+    STAR_STOP_PARAMS,
     LAMP_DEFAULT_PROFILE,
     PROFILE_DEGREES,
     PROFILES,
@@ -97,6 +98,8 @@ class YeelightCubeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     _discovered_device_id: str = ""
     _discovered_mac: str | None = None
     _discovered_model: str = ""
+    # The lamp plays the orientation check's stars (stopped if the dialog closes).
+    _stars_playing: bool = False
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""
@@ -326,8 +329,10 @@ class YeelightCubeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 except OSError:
                     errors["base"] = "mount_check_failed"
                 else:
+                    self._stars_playing = True
                     return await self.async_step_orientation_check()
             elif choice == MOUNT_FROM_MATTER:
+                self._stars_playing = False  # the lamp's setup draws its content
                 return self.async_create_entry(title=self._new_title, data=self._new_data)
             else:
                 return self._create_with_profile(valid_profile(choice))
@@ -361,11 +366,28 @@ class YeelightCubeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     def _create_with_profile(self, profile: int):
+        self._stars_playing = False  # the lamp's setup draws its content
         return self.async_create_entry(
             title=self._new_title,
             data=self._new_data,
             options={CONF_MOUNT_PROFILE: profile, CONF_MOUNT_PROFILE_SOURCE: SOURCE_USER},
         )
+
+    @callback
+    def async_remove(self) -> None:
+        """Closed while the check's stars play: they are stopped."""
+        if not self._stars_playing:
+            return
+        self._stars_playing = False
+        ip = self._new_data[CONF_IP]
+
+        async def stop() -> None:
+            try:
+                await send_once(ip, LAN_PORT, "set_fx_effect", list(STAR_STOP_PARAMS), PROBE_TIMEOUT)
+            except OSError:
+                pass  # the lamp is gone: nothing to stop
+
+        self.hass.async_create_task(stop())
 
     async def async_step_reconfigure(self, user_input=None):
         """Change a lamp's IP address (Reconfigure, in its entry's menu),

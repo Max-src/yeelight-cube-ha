@@ -192,6 +192,31 @@ class ControlEntityTests(unittest.TestCase):
         self.assertEqual("ServiceValidationError", type(refused.exception).__name__)
         light.async_set_music_flow.assert_not_awaited()
 
+    def test_a_cube_matrix_offers_no_music_flow(self):
+        # Music Flow listens to the lamp's microphone: a Cube Matrix has none.
+        matrix = make_light(is_cube_matrix=True, _music_flow_enabled=False)
+        matrix.async_select_content_mode = AsyncMock()
+        content = SELECT["YeelightCubeContentModeSelect"](matrix, None)
+        self.assertNotIn("Music Flow", content.options)
+        self.assertIn("Clock", content.options)
+        with self.assertRaises(Exception):  # unknown_option
+            asyncio.run(content.async_select_option("Music Flow"))
+        matrix.async_select_content_mode.assert_not_awaited()
+        lite = SELECT["YeelightCubeContentModeSelect"](make_light(is_cube_matrix=False), None)
+        self.assertIn("Music Flow", lite.options)
+
+    def test_the_clock_is_offered_from_4_matrix_modules(self):
+        light = make_light(is_cube_matrix=True, matrix_clock_refused=True)
+        light.async_select_content_mode = AsyncMock()
+        content = SELECT["YeelightCubeContentModeSelect"](light, None)
+        self.assertNotIn("Clock", content.options)
+        with self.assertRaises(Exception):  # unknown_option
+            asyncio.run(content.async_select_option("Clock"))
+        light.async_select_content_mode.assert_not_awaited()
+        # The module list changed (4 Matrix modules again): offered at once.
+        light.matrix_clock_refused = False
+        self.assertIn("Clock", content.options)
+
 
     def test_every_slider_keeps_its_id_and_name(self):
         light = make_light()
