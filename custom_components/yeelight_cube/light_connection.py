@@ -558,9 +558,18 @@ class ConnectionMixin:
                 )
                 stream = getattr(self, "_studio_task", None)
                 streaming = getattr(self, "studio_streaming", None)
+                # Only a Cube Matrix (its frames go over Matter): a Cube Lite
+                # streams over its LAN, where probes mid-stream hang it.
+                link = getattr(self, "_matter", None) if getattr(self, "is_cube_matrix", False) else None
+                node_gone = bool(link is not None and getattr(link, "node_unavailable", None) and link.node_unavailable())
                 if (
                     silent_mode and stream is not None and not stream.done() and streaming and streaming()
                     and not getattr(self._lamp_client, "stream_silent", False)
+                    # A Cube Matrix its Matter server no longer reaches (night
+                    # 25 Nov: switched off at the wall while its stream had
+                    # fallen back to a stuck LAN, still "on" after 6 min):
+                    # probed, so it is published unavailable.
+                    and not node_gone
                 ):
                     # A streamed effect or clock sends frames: not silent.
                     # Its own check asks the lamp (light_studio._stream_watchdog;

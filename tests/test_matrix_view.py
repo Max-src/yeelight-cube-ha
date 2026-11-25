@@ -841,12 +841,37 @@ class WideMatrixCameraTests(unittest.TestCase):
                 now=lambda: datetime(2026, 11, 21, 12, 34, 56))):
             five = camera_of(self.wide_light("2,2,2,3,1", _mode="Clock"))._get_clock_preview()
             self.assertEqual(125, len(five))
-            columns = {index % 25 for index in lit(five)}
-            self.assertTrue(columns)
-            self.assertFalse(columns & set(range(15, 25)), sorted(columns))
+            # The digits on the face (columns 0-14); a plain style lights the
+            # spot and the panel in full in its colour (filmed 25 Nov).
+            dark = {index % 25 for index in range(125)} - {index for index in lit(five)}
+            off_face = {index for index in range(125) if index % 25 >= 15}
+            self.assertLessEqual(off_face, set(lit(five)))
+            self.assertTrue({index for index in range(125) if index % 25 < 15} - set(lit(five)))
+            self.assertTrue(dark)
             # Four Matrix modules: the Cube Lite's clock.
             four = camera_of(self.wide_light("2,2,2,2", _mode="Clock"))._get_clock_preview()
             self.assertEqual(camera_of(light_state(_mode="Clock"))._get_clock_preview(), four)
+
+    def test_the_lamps_own_effect_is_drawn_on_its_canvas(self):
+        # Night 25 Nov (matrix, matrix, panel, spot, matrix, matrix): the lamp
+        # draws its own effects on 26 canvas columns (a Spot one, showing its
+        # first LED), not 30: Sine plotter's dots at canvas column 23 were on
+        # the sixth module, the preview had them on the fifth.
+        light = self.wide_light("2,2,1,3,2,2", _mode="Native Effect", _native_effect="Rainbow",
+                                matrix_native_command=lambda: ("setEffect", {}))
+        self.assertEqual(26, light.preview_state().lamp_canvas)
+        camera = camera_of(light)
+        with patch.object(camera_module()._time, "monotonic", return_value=100.0):
+            frame = camera._get_native_effect_preview()
+        self.assertEqual(150, len(frame))
+        spot = {frame[row * 30 + column] for row in range(5) for column in range(15, 20)}
+        self.assertEqual(1, len(spot))   # one light
+        # Home Assistant drawing it (streamed): on the 30 columns as before.
+        light.matrix_native_command = lambda: None
+        self.assertIsNone(light.preview_state().lamp_canvas)
+        # Without a Spot: no canvas of its own.
+        plain = self.wide_light("2,2,2,2,2", _mode="Native Effect", matrix_native_command=lambda: ("setEffect", {}))
+        self.assertIsNone(plain.preview_state().lamp_canvas)
 
     def test_over_a_background_the_panel_and_spot_show_it(self):
         with patch.object(camera_module(), "dt_util", types.SimpleNamespace(

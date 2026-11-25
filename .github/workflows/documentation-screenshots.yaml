@@ -11,6 +11,7 @@ on:
       - "README.md"
       - "SERVICES.md"
       - "docs/DOCUMENTATION_SCREENSHOTS.md"
+      - "docs/DISPLAY_MODES.md"
       - "images/Cards/generated/**"
       - ".github/workflows/documentation-screenshots.yaml"
   pull_request:
@@ -22,6 +23,7 @@ on:
       - "README.md"
       - "SERVICES.md"
       - "docs/DOCUMENTATION_SCREENSHOTS.md"
+      - "docs/DISPLAY_MODES.md"
       - "images/Cards/generated/**"
       - ".github/workflows/documentation-screenshots.yaml"
   workflow_dispatch:
@@ -118,7 +120,7 @@ jobs:
         run: |
           node tests/card-docs-readme.cjs
           node tests/card-docs-readme.cjs --check
-          git add -- README.md images/Cards/generated
+          git add -- README.md docs/DISPLAY_MODES.md images/Cards/generated
           if git diff --cached --quiet; then exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

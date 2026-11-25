@@ -247,7 +247,7 @@ RESTORED_APART = frozenset({
 NOT_RESTORED = frozenset({
     "_yeelight_cube_component", "light_entity_id", "ip_address",
     "content_mode", "display_frozen", "clock_style", "last_command_error",
-    "matrix_own_versions", "matrix_modules", "matrix_module_list",
+    "matrix_own_versions", "matrix_modules", "matrix_module_list", "matrix_lamp_canvas",
     "matrix_columns", "native_effect_catalog_key", "connection", "matter",
     "matrix_colors",
     # Kept elsewhere.

@@ -57,6 +57,67 @@
                     "show_lamp_status": true,
                     "show_card_background": false
                 }
+            },
+            "display-animated": {
+                "title": "An animated style (Night-sky waves): the effect through the digits",
+                "gallery": "gallery:display-clock",
+                "attributes": {
+                    "clock_style": "Night-sky waves",
+                    "clock_style_id": 13
+                },
+                "sliders": [
+                    "brightness"
+                ],
+                "config": {
+                    "show_gallery": false,
+                    "show_favourites": false,
+                    "show_rotation": false
+                }
+            },
+            "display-solid": {
+                "title": "A solid style (Yellow)",
+                "gallery": "gallery:display-clock",
+                "attributes": {
+                    "clock_style": "Yellow",
+                    "clock_style_id": 6
+                },
+                "sliders": [
+                    "brightness"
+                ],
+                "config": {
+                    "show_gallery": false,
+                    "show_favourites": false,
+                    "show_rotation": false
+                }
+            },
+            "display-date": {
+                "title": "The date instead of the time (Cyan)",
+                "gallery": "gallery:display-clock",
+                "attributes": {
+                    "clock_style": "Cyan",
+                    "clock_style_id": 9,
+                    "clock_content": "date"
+                },
+                "sliders": [
+                    "brightness"
+                ],
+                "config": {
+                    "show_gallery": false,
+                    "show_favourites": false,
+                    "show_rotation": false
+                }
+            },
+            "display-palette": {
+                "title": "Palette color mode: Rainbow in the lamp's palette",
+                "gallery": "gallery:display-clock",
+                "attributes": {
+                    "clock_color_mode": "palette"
+                },
+                "config": {
+                    "show_gallery": false,
+                    "show_favourites": false,
+                    "show_rotation": false
+                }
             }
         },
         "editors": {
@@ -151,6 +212,43 @@
                         "shadow": false,
                         "ignoreBlack": false
                     }
+                }
+            },
+            "display-fire": {
+                "title": "Fire in its own colors",
+                "gallery": "gallery:display-native-effects",
+                "attributes": {
+                    "native_effect": "Fire"
+                },
+                "config": {
+                    "show_gallery": false,
+                    "show_favourites": false,
+                    "show_rotation": false
+                }
+            },
+            "display-retro": {
+                "title": "Rainbow in a color mode (Retro Orange)",
+                "gallery": "gallery:display-native-effects",
+                "attributes": {
+                    "native_effect_color_mode": "white_orange"
+                },
+                "config": {
+                    "show_gallery": false,
+                    "show_favourites": false,
+                    "show_rotation": false
+                }
+            },
+            "display-palette": {
+                "title": "Palette color mode: Starry Sky in the lamp's palette",
+                "gallery": "gallery:display-native-effects",
+                "attributes": {
+                    "native_effect": "Starry Sky",
+                    "native_effect_color_mode": "palette"
+                },
+                "config": {
+                    "show_gallery": false,
+                    "show_favourites": false,
+                    "show_rotation": false
                 }
             }
         },
@@ -473,6 +571,86 @@
                 "title": "Cube Matrix of six modules: its Matrix, Panel and Spot faces",
                 "config": {
                     "entity": "camera.documentation_cube_matrix"
+                }
+            },
+            "display-art-nature": {
+                "title": "Nature, lying flat (Built-in: Horizontal 01)",
+                "gallery": "gallery:display-pixel-art",
+                "config": {
+                    "entity": "camera.documentation_round_landscape"
+                }
+            },
+            "display-art-geometry": {
+                "title": "Geometry, lying flat (Built-in: Horizontal 24)",
+                "gallery": "gallery:display-pixel-art",
+                "config": {
+                    "entity": "camera.documentation_art_geometry"
+                }
+            },
+            "display-art-nature-vertical": {
+                "title": "Nature, standing up (Built-in: Vertical 01)",
+                "gallery": "gallery:display-pixel-art",
+                "width": 120,
+                "galleryWidth": 110,
+                "config": {
+                    "entity": "camera.documentation_round_vertical"
+                }
+            },
+            "display-art-geometry-vertical": {
+                "title": "Geometry, standing up (Built-in: Vertical 22)",
+                "gallery": "gallery:display-pixel-art",
+                "width": 120,
+                "galleryWidth": 110,
+                "config": {
+                    "entity": "camera.documentation_art_geometry_vertical"
+                }
+            },
+            "display-music-gather": {
+                "title": "Gather",
+                "gallery": "gallery:display-music-flow",
+                "galleryWidth": 220,
+                "config": {
+                    "entity": "camera.documentation_music_gather"
+                }
+            },
+            "display-music-breathing": {
+                "title": "Breathing",
+                "gallery": "gallery:display-music-flow",
+                "galleryWidth": 220,
+                "config": {
+                    "entity": "camera.documentation_music_breathing"
+                }
+            },
+            "display-music-blossom": {
+                "title": "Blossom",
+                "gallery": "gallery:display-music-flow",
+                "galleryWidth": 220,
+                "config": {
+                    "entity": "camera.documentation_music_blossom"
+                }
+            },
+            "display-music-spectrum": {
+                "title": "Spectrum",
+                "gallery": "gallery:display-music-flow",
+                "galleryWidth": 220,
+                "config": {
+                    "entity": "camera.documentation_music_spectrum"
+                }
+            },
+            "display-music-music-note": {
+                "title": "Music Note",
+                "gallery": "gallery:display-music-flow",
+                "galleryWidth": 220,
+                "config": {
+                    "entity": "camera.documentation_music_music_note"
+                }
+            },
+            "display-music-impact": {
+                "title": "Impact",
+                "gallery": "gallery:display-music-flow",
+                "galleryWidth": 220,
+                "config": {
+                    "entity": "camera.documentation_music_impact"
                 }
             }
         },

@@ -30,6 +30,18 @@ An editor entry is either its caption (`"general": "Global Settings"`) or
 with a non-default option, such as `show_device_orientation: true`. Every
 foldable editor section of the three cards is registered.
 
+Other pages hold **named galleries**: a scenario with
+`"gallery": "gallery:NAME"` goes to `<!-- card-docs:gallery:NAME:start -->`
+(and its `end`) instead of its card's gallery, in any document the gallery
+script lists (`DOCUMENTS` in
+[card-docs-readme.cjs](../tests/card-docs-readme.cjs): the README and
+[DISPLAY_MODES.md](DISPLAY_MODES.md)), with image paths from that page. A
+named gallery is in exactly one document. A scenario can also set the lamp's
+state (`attributes`, e.g. another clock style or color mode), the sliders it
+shows when its style or effect has no speed (`sliders`) and its image width
+in the gallery (`galleryWidth`). With `show_gallery: false` the card's
+gallery is not required, so a scenario can show one mode on its own.
+
 A new scenario has no screenshot until the Documentation Screenshots workflow
 captures it, so `npm run docs:check` (and `npm run check`) lists it as
 "pending capture" instead of failing. A scenario already in the README whose
@@ -127,7 +139,7 @@ HA credentials or physical lamps are required.
 PR runs have read-only access and publish screenshot artifacts, not commits.
 After successful main/scheduled/manual runs, a separate contents-write job
 downloads the verified images and regenerates galleries against the checked-out
-README. It commits **only README gallery changes and generated images** directly
+README. It commits **only gallery changes (README, DISPLAY_MODES) and generated images** directly
 to main. It never changes prose, versions, tags or releases. Unchanged output
 produces no commit. Runs whose source revision is no longer main are skipped;
 a concurrent push also causes the normal non-force git push to fail safely.

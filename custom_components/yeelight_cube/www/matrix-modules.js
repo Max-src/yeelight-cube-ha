@@ -473,6 +473,50 @@ export function fitLampFrame(frame, attributes, kind = "lamp", blank) {
   return fitFrame(frame, lampWidth(attributes), { fromEnd, blank });
 }
 
+/**
+ * The canvas a Cube Matrix draws the selected effect or clock on itself
+ * (its matrix_lamp_canvas attribute: 5 a block, 1 a spot), or null when
+ * Home Assistant draws it (on the columns shown).
+ */
+export function lampCanvas(attributes) {
+  const canvas = attributes?.matrix_lamp_canvas;
+  return Number.isInteger(canvas) && canvas > 0 ? canvas : null;
+}
+
+/**
+ * A frame the lamp draws on its canvas (lamp order, its stride
+ * frame.length / 5) laid out on the lamp's modules: a block's 5 canvas
+ * columns on its 5 columns; a spot, one canvas column, shows the colour of
+ * its first LED (row 0) over its 5 columns (device_profile.py
+ * canvas_to_frame).
+ */
+export function canvasToFrame(frame, attributes) {
+  const modules = Array.isArray(attributes?.matrix_modules) ? attributes.matrix_modules : [];
+  if (!Array.isArray(frame) || !modules.some((module) => module?.type === "spot")) return frame;
+  const stride = Math.floor(frame.length / MATRIX_ROWS);
+  const width = lampWidth(attributes);
+  const black = [0, 0, 0];
+  const out = Array.from({ length: width * MATRIX_ROWS }, () => black);
+  let at = 0;
+  for (const module of modules) {
+    if (!Number.isInteger(module?.column)) continue;
+    const { column } = module;
+    if (module.type === "spot") {
+      const colour = at < stride ? frame[at] : black;
+      for (let row = 0; row < MATRIX_ROWS; row++)
+        for (let step = 0; step < MODULE_SIZE; step++) out[row * width + column + step] = colour;
+      at += 1;
+      continue;
+    }
+    for (let step = 0; step < MODULE_SIZE; step++)
+      if (at + step < stride)
+        for (let row = 0; row < MATRIX_ROWS; row++)
+          out[row * width + column + step] = frame[row * stride + at + step];
+    at += MODULE_SIZE;
+  }
+  return out;
+}
+
 // The Matrix modules a Cube Matrix draws its clock face on (clock_face.py
 // CLOCK_MODULES).
 export const CLOCK_MODULES = 4;

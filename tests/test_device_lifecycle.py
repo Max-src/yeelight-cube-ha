@@ -88,6 +88,24 @@ class DeviceLifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({"auto_turn_on": True}, light._config_entry.options)
         light.async_apply_display_mode.assert_awaited()
 
+    async def test_a_refused_clock_is_an_error_for_the_caller(self):
+        # Night 25 Nov: a Cube Matrix of 3 Matrix modules refused the clock in
+        # the background only (the log); the action now fails at once.
+        light = SimpleNamespace(check_clock_allowed=Mock(side_effect=ValueError("clock_needs_matrix_modules")))
+        pending = []
+        handler = _load_standalone_functions(
+            SERVICES_SOURCE,
+            {"handle_set_clock_style"},
+            {**CONSTANTS, "_resolve_entities": lambda *args: [light],
+             "run_on_lamps": lambda label, lamps, apply: pending.append(label)},
+        )["handle_set_clock_style"]
+        with self.assertRaisesRegex(ValueError, "clock_needs_matrix_modules"):
+            await handler(SimpleNamespace(data={"style": "White"}))
+        self.assertEqual([], pending)
+        # Settings only (not shown): kept, no refusal.
+        await handler(SimpleNamespace(data={"style": "White", "activate": False}))
+        self.assertEqual(["SET_CLOCK_STYLE"], pending)
+
     async def test_manual_setup_checks_existing_ip_before_creating_entry(self):
         step = _load_standalone_functions(
             (ROOT / "config_flow.py").read_text(encoding="utf-8"),

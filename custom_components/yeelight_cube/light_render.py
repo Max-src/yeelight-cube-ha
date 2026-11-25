@@ -15,6 +15,7 @@ import traceback
 from homeassistant.exceptions import HomeAssistantError  # type: ignore
 
 from .color_utils import rgb_to_hex
+from .device_profile import MODULE_SIZE
 from .lamp_protocol import is_connection_error, is_quota_error
 from .const import (
     DEFAULT_DEVICE_ORIENTATION,
@@ -165,6 +166,25 @@ class MatrixRenderMixin:
         profile = getattr(self, "device_profile", None)
         return getattr(profile, "width", TOTAL_COLUMNS) or TOTAL_COLUMNS
 
+    def _text_lanes(self) -> list | None:
+        """The frame columns a text is laid out on: a Cube Matrix's Matrix
+        modules' (a Panel lights as one face, a Spot as one light: a letter
+        there cannot be read), in chain order; None when every column shown
+        takes it (a Cube Lite, a Cube Matrix of Matrix modules only, or one
+        listing none: its factory list). Night 25 Nov: "HI", centred on 30
+        columns, fell on the panel and the spot and showed nothing."""
+        profile = getattr(self, "device_profile", None)
+        layout = getattr(profile, "layout", None) or []
+        columns = self._shown_columns()
+        matrices = [module for module in layout if module.get("type") == "matrix"]
+        if not matrices or len(matrices) == len(layout):
+            return None
+        lanes = [
+            module["column"] + step for module in matrices for step in range(MODULE_SIZE)
+            if module["column"] + step < columns
+        ]
+        return lanes or None
+
     def _flip_positions(self, positions, total_columns=None, total_rows=TOTAL_ROWS):
         return [self._flip_position(pos, total_columns, total_rows) for pos in positions]
 
@@ -307,8 +327,10 @@ class MatrixRenderMixin:
             )
         else:
             effective_text = self._custom_text
-            # Laid out and scrolled within the columns the lamp shows.
-            total_columns = self._shown_columns()
+            # Laid out and scrolled within the columns the lamp shows (a
+            # Cube Matrix's Matrix modules: _text_lanes).
+            lanes = self._text_lanes()
+            total_columns = len(lanes) if lanes else self._shown_columns()
             total_text_width = sum(self._char_advance(letter) for letter in self._custom_text) - 1
             current_offset = self.calculate_text_offset(total_text_width, total_columns)
         _LOGGER.debug(
@@ -321,6 +343,7 @@ class MatrixRenderMixin:
         self._place_frame(self._text_mode_frame(
             self._mode, effective_text, self._text_colors,
             self._angle, current_offset, total_text_width,
+            lanes=None if self._full_panel else self._text_lanes(),
         ))
 
         # Every scroll step comes here: no log per module (up to 100 calls a
@@ -388,7 +411,32 @@ class MatrixRenderMixin:
             for pos in range(self._panel_width() * TOTAL_ROWS)
         ]
 
-    def _text_mode_frame(self, mode, text, colors, angle, offset, text_width):
+    def _text_mode_frame(self, mode, text, colors, angle, offset, text_width, lanes=None):
+        """_text_mode_frame_on the frame's columns, or with ``lanes``
+        (_text_lanes) on those columns only, as one strip: drawn on a strip
+        that wide, each of its columns then placed on its frame column."""
+        if not lanes:
+            return self._text_mode_frame_on(
+                mode, text, colors, angle, offset, text_width,
+                self._panel_width(), min(self._panel_width(), self._shown_columns()),
+            )
+        span = len(lanes)
+        strip = self._text_mode_frame_on(mode, text, colors, angle, offset, text_width, span, span)
+        width = self._panel_width()
+        frame = [None] * (width * TOTAL_ROWS)
+        # Turned round (a flipped text: _place_frame turns the whole frame
+        # round), each column is placed where that turn brings it onto the
+        # strip turned round, so the letters stay on the Matrix modules.
+        turned = self._orientation != ORIENTATION_NORMAL
+        shown = min(width, self._shown_columns())
+        for row in range(TOTAL_ROWS):
+            for lane, column in enumerate(lanes):
+                if turned:
+                    column = shown - 1 - lanes[span - 1 - lane]
+                frame[row * width + column] = strip[row * span + lane]
+        return frame
+
+    def _text_mode_frame_on(self, mode, text, colors, angle, offset, text_width, width, columns):
         """The frame's pixels (device_profile.pixels) of ``text`` in a text
         mode, before the orientation flip: an RGB tuple where the text
         lights, else None (the background). ``offset`` is the text's first
@@ -396,13 +444,11 @@ class MatrixRenderMixin:
         The glyphs are placed cell by cell (layout.glyph_cells) at the
         frame's stride (device_profile.width). The lamp
         (_apply_display_mode_internal) and the gallery previews
-        (preview_gradient_modes) both draw from it."""
-        width = self._panel_width()
+        (preview_gradient_modes) both draw from it. ``width``: the stride;
+        ``columns``: the columns shown (device_profile.columns: 15 on a Cube
+        Matrix with 3 blocks, 30 with 6), the gradients span them, and
+        nothing is drawn past them."""
         frame = [None] * (width * TOTAL_ROWS)
-        # The columns the lamp shows (device_profile.columns: 15 on a Cube
-        # Matrix with 3 blocks, 30 with 6): the gradients span them, and
-        # nothing is drawn past them.
-        columns = min(width, self._shown_columns())
         if not colors:
             colors = (
                 [(255, 0, 0), (0, 0, 255)]

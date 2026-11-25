@@ -8,7 +8,7 @@ import json
 import logging
 import time
 import unittest
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import fakes
 from fakes import FakeEntry, FakeHass, instant_sleeps, make_light, module, run
@@ -64,6 +64,26 @@ class HealthCheckTests(unittest.TestCase):
                 light._studio_task.cancel()
 
         self.assertEqual([], run(scenario()))
+
+    def test_a_stream_to_a_matrix_its_matter_server_lost_is_pinged(self):
+        # Night 25 Nov: a Cube Matrix switched off at the wall while streamed
+        # (its frames fallen back to a stuck LAN) stayed "on" for 6 min; its
+        # Matter server had listed it unavailable within a minute.
+        async def scenario(gone, matrix=True):
+            light = light_in_effect()
+            light.studio_streaming = lambda: True
+            light._studio_task = asyncio.ensure_future(asyncio.sleep(10))
+            light._matter = Mock(node_unavailable=Mock(return_value=gone))
+            try:
+                with patch.object(type(light), "is_cube_matrix", new=property(lambda _self: matrix)):
+                    return await health_probes(light)
+            finally:
+                light._studio_task.cancel()
+
+        self.assertTrue(run(scenario(True)))
+        self.assertEqual([], run(scenario(False)))
+        # A Cube Lite streams over its LAN: never probed mid-stream.
+        self.assertEqual([], run(scenario(True, matrix=False)))
 
     def test_a_stream_paused_for_a_silent_lamp_is_pinged_and_goes_unavailable(self):
         # 2026-11-19: a streaming Cube Lite switched off at the wall stayed

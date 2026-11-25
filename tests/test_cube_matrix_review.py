@@ -273,10 +273,18 @@ class SendingTests(unittest.TestCase):
         self.assertTrue(self.run(light._activate_matrix_content()))
         self.assertEqual(2, self.matter(light)[-1][1]["apply"])   # the priority effect
         light.log.clear()
+        light._matrix_command_at -= 60   # the clock started a minute ago
         light._mode, light._native_effect = "Native Effect", "Magic"   # streamed
         self.assertTrue(self.run(light._activate_matrix_content()))
         self.assertEqual([("resetEffect", {})], self.matter(light))
         self.assertIsNone(light._matrix_shown)
+        # The lamp reports its saved effect for a moment after resetEffect
+        # (night 25 Nov: 42 for 0.4 s): Home Assistant's own doing, not
+        # its button.
+        light._mode, light._native_clock_style = "Clock", 15
+        light._matrix_sent_id = 36
+        light._on_matrix_report("running_effect", 42, False)
+        self.assertEqual("Clock", light._mode)
 
     def test_a_clock_style_over_a_background(self):
         light = self.FakeLight()
@@ -1022,6 +1030,18 @@ class MatterStreamTests(unittest.TestCase):
         light._mode = "Native Effect"
         light._native_effect, light._native_effect_color_mode = "Rainbow", "white_orange"
         run(light._activate_matrix_content())
+        self.assertTrue(light.matrix_streams_over_matter())
+
+    def test_while_home_assistant_stops_failed_frames_do_not_go_to_the_lan(self):
+        # Night 25 Nov: each restart, its Matter client closed first and the
+        # stream started over the LAN while Home Assistant stopped.
+        from test_cube_matrix_matter import run
+        light = self.light(refuse=MATRIX_TESTS.MATTER_STREAM_FAILURES)
+        light.hass = types.SimpleNamespace(is_stopping=True)
+        for _ in range(MATRIX_TESTS.MATTER_STREAM_FAILURES):
+            with self.assertRaises(RuntimeError):
+                run(light._send_matrix_stream_frame([(1, 2, 3)] * 100))
+        self.assertEqual(0, light._matrix_stream_failures)
         self.assertTrue(light.matrix_streams_over_matter())
 
     def test_a_frame_that_goes_resets_the_wait_before_matter_is_tried_again(self):

@@ -33,6 +33,34 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   discoveries of your lamps works as before (from your configured lamps).
 
 ### Fixed
+- **The Native Effects card's current preview follows the lamp's brightness,** like the Clock and Lamp Preview
+  cards: dimmed from its own slider or from anywhere else (another card, an automation). Before, it stayed at full
+  brightness unless "Match Lamp Brightness" was on; that option, now "Gallery Matches Lamp Brightness", still dims
+  the gallery too.
+- **Cube Matrix previews now match a lamp with a Spot.** The lamp draws its own effects and its clock's background
+  on its own canvas, where a Spot is one column (not five) and shows the colour of its first LED: the modules after
+  a Spot were shown four columns off, and a Spot lit in the preview while it was dark on the lamp. The camera and
+  the cards now draw them the lamp's way (checked on camera with matrix, matrix, panel, spot, matrix, matrix).
+- **A Cube Matrix clock with a plain colour lights its Panels and Spots in that colour**, as the lamp's own clock
+  does; they were left dark when Home Assistant drew the clock.
+- **The Cube Matrix no longer switches by itself to "Waves"** (or the effect it has saved) when a clock drawn by
+  Home Assistant replaced one it drew itself: the lamp reports its saved effect for a moment, which was taken for a
+  press of its button.
+- **The clock dropdown no longer reads "unknown"** when a Cube Matrix's module list drops under four Matrix modules
+  while the clock shows; and asking for the clock then fails with the reason instead of only logging it.
+- **A Cube Matrix switched off at the wall is shown unavailable** while Home Assistant streamed to it: it could stay
+  "on" for minutes when its stream had fallen back to a LAN that no longer answered; its Matter server's word that
+  the lamp is gone is now used.
+- **Text on a Cube Matrix with a Panel or a Spot goes on its Matrix modules only.** A Panel lights as one face and a
+  Spot as one light, so a letter there could not be read: a short text centred on the whole lamp could even land on
+  them and show nothing. The text is now laid out, centred and scrolled across the Matrix modules, skipping the
+  others (the full panel still covers every module).
+- **White and pale colours on the Cube Matrix's own effects show as chosen.** Its effects from the Yeelight app
+  (Rainbow, Waves...) keep only the hue of the colour they are given: white or grey showed red, a pale pink deep
+  red. Such a colour (or a one-colour palette of it) is now drawn by Home Assistant and streamed; strong colours
+  still run on the lamp itself.
+- **Restarting Home Assistant no longer moves a Cube Matrix's stream to its LAN** for the last seconds before it
+  stops, and no longer logs a failed frame then: its Matter connection closing is not the lamp's failure.
 - **A long text no longer keeps scrolling under a drawing.** Showing an image or a pixel art, or turning the full
   panel on, after a text too long for the lamp left its scroll running: the lamp was redrawn five times a second
   with the same picture. The scroll now stops with the text; the card previews no longer change it either.

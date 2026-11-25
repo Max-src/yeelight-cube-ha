@@ -340,6 +340,20 @@ class MatterLink:
             self._on_report(name, self.values[name], True)
         return True
 
+    def node_unavailable(self) -> bool:
+        """The linked node is listed by its server as unavailable (the lamp
+        is gone: switched off at the wall, off its network); False when it is
+        available or not known."""
+        if self._client is None or self.node_id is None:
+            return False
+        try:
+            node = next(
+                (node for node in self._client.get_nodes() if node.node_id == self.node_id), None
+            )
+        except Exception:  # noqa: BLE001 -- the client is not ours
+            return False
+        return node is not None and not node_available(node)
+
     def address(self) -> str | None:
         """The linked node's IPv4 address on the lamp's interface (its MAC),
         as its server reports it now; None when not known."""

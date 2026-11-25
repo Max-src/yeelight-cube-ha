@@ -21,9 +21,11 @@ const {
   viewerFrame,
 } = await import(`${www}matrix-view.js`);
 const {
+  canvasToFrame,
   clockColumns,
   fitFrame,
   fitLampFrame,
+  lampCanvas,
   moduleGrid,
   shownColumns,
   shownMask,
@@ -237,14 +239,15 @@ test("the clock's digits go on the first 4 Matrix modules, the others show the b
   };
   try {
     const attrs = { clock_style_id: 6, clock_content: "time" };
-    const columnsLit = (frame, width) =>
-      new Set(frame.flatMap((pixel, index) => (pixel.some(Boolean) ? [index % width] : [])));
     // Three Matrix modules, a spot, a panel: the digits on columns 0-14.
     assert.deepEqual(clockColumns(FIVE), [...Array(15).keys()]);
     const five = renderClockFrame({ ...attrs, ...FIVE }, null, null);
     assert.equal(five.length, 125);
-    const lit = columnsLit(five, 25);
-    for (const column of lit) assert.ok(column < 15, column);
+    // A plain style: the spot and the panel lit in full in its colour.
+    const offFace = (frame, width, from) =>
+      frame.every((pixel, index) => index % width < from || pixel.some(Boolean));
+    assert.ok(offFace(five, 25, 15));
+    assert.ok(five.some((pixel, index) => index % 25 < 15 && !pixel.some(Boolean)));
     // A panel second: the first 4 Matrix modules are those from column 10.
     assert.deepEqual(clockColumns(SIX), [...Array(5).keys(), 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]);
     // Eight with two spots and a panel: modules 1, 3, 5, 6 (a fifth Matrix one shows the background).
@@ -263,7 +266,8 @@ test("the clock's digits go on the first 4 Matrix modules, the others show the b
     for (let row = 0; row < 5; row++)
       for (let lane = 0; lane < 20; lane++)
         assert.deepEqual(plain[row * 30 + face[lane]], strip[row * 20 + lane], `${row},${lane}`);
-    for (const column of columnsLit(plain, 30)) assert.ok(face.includes(column), column);
+    // A plain style lights the panel and the spot in full in its colour.
+    assert.ok(plain.every((pixel, index) => index % 30 < 10 || index % 30 >= 20 || pixel.some(Boolean)));
     const rainbow = renderClockFrame({ ...attrs, ...REAL, clock_style_id: 1 }, null, null, 3);
     for (let row = 0; row < 5; row++)
       for (let column = 10; column < 15; column++)
@@ -274,8 +278,25 @@ test("the clock's digits go on the first 4 Matrix modules, the others show the b
     const turned = renderClockFrame(
       { ...attrs, ...FIVE, mount_profile: { clock_turned: true } }, null, null,
     );
-    for (const column of columnsLit(turned, 25)) assert.ok(column < 15, column);
+    assert.ok(offFace(turned, 25, 15));
+    assert.ok(turned.some((pixel, index) => index % 25 < 15 && !pixel.some(Boolean)));
   } finally {
     globalThis.Date = RealDate;
   }
+});
+
+test("the lamp's own frames: drawn on its canvas, a spot one column (device_profile.canvas_to_frame)", () => {
+  const REAL = lamp(["matrix", "matrix", "panel", "spot", "matrix", "matrix"], { matrix_lamp_canvas: 26 });
+  assert.equal(lampCanvas(REAL), 26);
+  assert.equal(lampCanvas({ ...REAL, matrix_lamp_canvas: null }), null);
+  const canvas = Array.from({ length: 130 }, (_, index) => [Math.floor(index / 26), index % 26, 0]);
+  const frame = canvasToFrame(canvas, REAL);
+  assert.equal(frame.length, 150);
+  for (let row = 0; row < 5; row++) {
+    for (let column = 0; column < 15; column++) assert.deepEqual(frame[row * 30 + column], [row, column, 0]);
+    for (let column = 15; column < 20; column++) assert.deepEqual(frame[row * 30 + column], [0, 15, 0]);
+    for (let column = 20; column < 30; column++) assert.deepEqual(frame[row * 30 + column], [row, column - 4, 0]);
+  }
+  // No spot: as it is.
+  assert.equal(canvasToFrame(canvas, SIX), canvas);
 });

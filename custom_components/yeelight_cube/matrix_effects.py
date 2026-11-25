@@ -176,6 +176,21 @@ def colour_word(rgb) -> int:
     return (red << 16) | (green << 8) | blue
 
 
+# The colour of one of the Yeelight app's effects (setPresetsEffect): the
+# lamp keeps only its hue, fully saturated (filmed 25 Nov: white and grey
+# show red, pale pink deep red, warm white orange). A colour paler than this
+# saturation is streamed instead (light_matrix), where it shows as chosen.
+PRESET_MIN_SATURATION = 0.85
+
+
+def preset_shows_colour(rgb) -> bool:
+    """Whether the lamp shows ``rgb`` as chosen in one of the Yeelight app's
+    effects (PRESET_MIN_SATURATION). Black: none is sent (the preset's own)."""
+    channels = [max(0, min(255, int(channel))) for channel in tuple(rgb)[:3]]
+    high = max(channels)
+    return high == 0 or (high - min(channels)) / high >= PRESET_MIN_SATURATION
+
+
 def padded_colours(words) -> list[int]:
     """Exactly MAX_COLOURS colour words, 0 after the given ones (the lamp
     reads 4; Home Assistant's server sends 4). More is refused."""

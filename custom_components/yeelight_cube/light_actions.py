@@ -61,6 +61,10 @@ class PreviewState:
     # and the clock face's columns: a Cube Matrix's first 4 Matrix modules): clock_digit_pixels'
     # keyword arguments.
     clock_geometry: dict | None = None
+    # A Cube Matrix with a Spot drawing the selected effect or clock itself:
+    # the length of the canvas it draws on (device_profile.canvas_columns,
+    # a Spot one column); None otherwise (drawn on ``columns``).
+    lamp_canvas: int | None = None
 
 
 class ActionsMixin(DisplayActionsMixin, NativeActionsMixin, DiagnosticActionsMixin):
@@ -205,7 +209,21 @@ class ActionsMixin(DisplayActionsMixin, NativeActionsMixin, DiagnosticActionsMix
             columns=self.device_profile.columns,
             width=self.device_profile.width,
             clock_geometry=clock_geometry(self.device_profile),
+            lamp_canvas=self._lamp_canvas(),
         )
+
+    def _lamp_canvas(self) -> int | None:
+        """PreviewState.lamp_canvas: the canvas a Cube Matrix draws on when
+        it shows the selected effect or clock itself (over Matter)."""
+        profile = self.device_profile
+        canvas = getattr(profile, "canvas_columns", None)
+        if not isinstance(canvas, int) or canvas == profile.columns:
+            return None
+        native = getattr(self, "matrix_native_command", None)
+        try:
+            return canvas if native is not None and native() is not None else None
+        except Exception:  # noqa: BLE001 -- a preview never fails on it
+            return None
 
     def setting(self, attr: str, default=None):
         """A setting a control shows by its attribute name (select.py's

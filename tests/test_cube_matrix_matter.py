@@ -560,6 +560,22 @@ class NativeTests(unittest.TestCase):
         light._native_effect_color_mode, light._text_colors = "palette", [[0, 255, 0]]
         self.assertEqual([0x00FF00, 0, 0, 0], light.matrix_native_command()[1]["color"])
 
+    def test_a_white_or_pale_colour_is_streamed(self):
+        """Night 25 Nov, filmed: Rainbow sent white showed red, grey dim
+        red, pale pink deep red: the lamp keeps a colour's hue only."""
+        light = FakeLight()
+        light._native_effect_color_mode = "palette"
+        for colour in ([255, 255, 255], [128, 128, 128], [255, 128, 128], [255, 220, 180]):
+            light._text_colors = [colour]
+            self.assertIsNone(light.matrix_native_command(), colour)
+        for colour, word in (([0, 0, 255], 0x0000FF), ([224, 26, 79], 0xE01A4F)):
+            light._text_colors = [colour]
+            self.assertEqual([word, 0, 0, 0], light.matrix_native_command()[1]["color"])
+        light._native_effect_color_mode, light._native_effect_color = "normal", (255, 255, 255)
+        self.assertIsNone(light.matrix_native_command())
+        light._native_effect_color = (0, 0, 0)  # none sent: the preset's own
+        self.assertNotIn("color", light.matrix_native_command()[1])
+
     def test_its_other_built_in_effects_are_its_own_too(self):
         light = FakeLight()
         light._native_effect, light._native_effect_direction = "Fireworks", "Down"

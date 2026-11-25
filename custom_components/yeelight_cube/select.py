@@ -383,10 +383,11 @@ class YeelightCubeContentModeSelect(CubeSelect):
     def options(self) -> list[str]:
         """Music Flow listens to the lamp's own microphone: a Cube Matrix
         has none. The clock needs 4 Matrix modules on a Cube Matrix (its
-        module list can change while it runs)."""
+        module list can change while it runs: a clock already shown stays
+        listed, so the select still shows it)."""
         light = self._light_entity
         matrix = getattr(light, "is_cube_matrix", False)
-        no_clock = getattr(light, "matrix_clock_refused", False)
+        no_clock = getattr(light, "matrix_clock_refused", False) and getattr(light, "content_mode", None) != "Clock"
         return [
             mode for mode in CONTENT_MODES
             if not (mode == "Music Flow" and matrix) and not (mode == "Clock" and no_clock)

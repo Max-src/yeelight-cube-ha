@@ -216,6 +216,11 @@ class ControlEntityTests(unittest.TestCase):
         # The module list changed (4 Matrix modules again): offered at once.
         light.matrix_clock_refused = False
         self.assertIn("Clock", content.options)
+        # A clock already shown when the list drops under 4 stays listed (the
+        # select would read "unknown" otherwise, night 25 Nov).
+        light.matrix_clock_refused = True
+        light.content_mode = "Clock"
+        self.assertIn("Clock", content.options)
 
 
     def test_every_slider_keeps_its_id_and_name(self):

@@ -346,6 +346,12 @@ def async_register_display_services(hass: HomeAssistant) -> None:
         
 
         targets = _resolve_entities(service_call, "SET_MODE")
+        if mode == MODE_CLOCK:
+            # Refused at once (a Cube Matrix of fewer than 4 Matrix
+            # modules): the caller sees why, not only the log.
+            for target in targets:
+                if check := getattr(target, "check_clock_allowed", None):
+                    check()
 
         async def _apply_one(target_entity):
             await target_entity.async_set_display_mode(mode, full_panel)

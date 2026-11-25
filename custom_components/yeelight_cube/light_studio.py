@@ -53,7 +53,7 @@ import time
 
 from homeassistant.util import dt as dt_util  # type: ignore
 
-from .clock_face import clock_content, clock_digit_pixels, clock_geometry, clock_text
+from .clock_face import clock_content, clock_digit_pixels, clock_face_columns, clock_geometry, clock_text
 from .const import (
     CONF_KEEP_STREAMING_WHEN_OFF,
     CONF_SKIP_UNCHANGED_FRAMES,
@@ -470,11 +470,17 @@ class StudioStreamMixin:
         rgb = ((colour >> 16) & 255, (colour >> 8) & 255, colour & 255)
         # On the lamp's clock face only (its first 4 Matrix modules:
         # clock_face.clock_geometry), centred across them.
-        for index, _char, _col in clock_digit_pixels(
-            text, colon_visible, 0, False, **clock_geometry(self.device_profile),
-        ):
+        geometry = clock_geometry(self.device_profile)
+        for index, _char, _col in clock_digit_pixels(text, colon_visible, 0, False, **geometry):
             if index < len(frame):
                 frame[index] = rgb
+        if geometry["blocks"] is not None:
+            # Its other modules lit in the style's colour, as the lamp does.
+            face = clock_face_columns(geometry)
+            width = self.device_profile.width
+            for index in range(len(frame)):
+                if index % width < geometry["columns"] and index % width not in face:
+                    frame[index] = rgb
         return frame
 
     def _chosen_effect_intensity(self) -> int:
@@ -553,8 +559,12 @@ class StudioStreamMixin:
             pixels = await self._matrix_stream_pixels(self._studio_render_at(loop.time()))
             await self._send_matrix_stream_frame(pixels)
         except Exception as err:  # noqa: BLE001 -- streamed over the LAN instead
+            if getattr(self.hass, "is_stopping", False):
+                # Home Assistant stopping: nothing streamed, over the LAN
+                # neither (its Matter client closes first).
+                return True
             _LOGGER.warning(
-                "[STUDIO] [%s] First frame over Matter failed (%s): streamed over the LAN", self._ip, err,
+                "[STUDIO] [%s] First frame over Matter failed (%s): streamed over the LAN", self._ip, str(err) or type(err).__name__,
             )
             self._refuse_matrix_native()
             return False
@@ -691,7 +701,12 @@ class StudioStreamMixin:
                         send_started = loop.time()
                         await route.send(payload, held)
                     except route.errors as err:  # tried again shortly
-                        diag.failed(route.name, client.transport, err)
+                        if getattr(self.hass, "is_stopping", False):
+                            # Home Assistant stopping (its Matter client
+                            # closes first): not the lamp's failure.
+                            diag.count("errors")
+                        else:
+                            diag.failed(route.name, client.transport, err)
                         held = True
                         route.failed()
                         due = loop.time() + STUDIO_RETRY_SECONDS

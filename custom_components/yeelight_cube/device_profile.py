@@ -271,6 +271,48 @@ class DeviceProfile:
             return None
         return MATRIX_ROTATION_ORIENTATIONS.get(self.rotation)
 
+    @property
+    def canvas_columns(self) -> int:
+        """The length of the canvas a Cube Matrix draws its own effects and
+        its clock's background on: 5 a block, 1 a Spot (its 5 LEDs are one
+        canvas row), the modules shown (layout). Without a Spot: columns."""
+        layout = self.layout
+        if not any(module["type"] == "spot" for module in layout):
+            return self.columns
+        return sum(1 if module["type"] == "spot" else MODULE_SIZE for module in layout)
+
+    def canvas_to_frame(self, frame):
+        """A frame drawn on the lamp's own canvas (canvas_columns long, lamp
+        order, its stride len(frame) // 5) laid out on this profile's frame:
+        a block's 5 canvas columns on its 5 columns; a Spot, one canvas
+        column, shows the colour of its first LED (row 0) over its 5 columns,
+        as the lamp lights it. A profile without a Spot: the frame as it is.
+        Filmed 25 Nov (6 modules, a Spot fourth: the lamp's own effects run
+        on 26 canvas columns, not 30)."""
+        layout = self.layout
+        if not any(module["type"] == "spot" for module in layout) or not frame:
+            return frame
+        stride = len(frame) // ROWS
+        width = self.width
+        black = (0, 0, 0)
+        out = [black] * (width * ROWS)
+        at = 0
+        for module in layout:
+            column = module["column"]
+            if module["type"] == "spot":
+                colour = frame[at] if at < stride else black
+                for row in range(ROWS):
+                    for step in range(MODULE_SIZE):
+                        out[row * width + column + step] = colour
+                at += 1
+                continue
+            for step in range(MODULE_SIZE):
+                if at + step < stride:
+                    for row in range(ROWS):
+                        out[row * width + column + step] = frame[row * stride + at + step]
+            at += MODULE_SIZE
+        return out
+
     def to_wire(self, frame):
         """A lamp-order frame (COLS x ROWS) as this model's update_leds takes it
         (also the order of a Cube Matrix drawing's data, light_matrix)."""

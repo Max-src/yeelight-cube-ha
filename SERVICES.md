@@ -29,7 +29,7 @@ while direct service calls use `entity_id`.
 | `target_entities` | Both | List of target light entities for multi-lamp commands (an empty list falls back to `entity`) |
 | `title`, `show_card_background` | Both | Card title and `ha-card` background |
 | `show_current_preview` | Clock | Show the current clock preview |
-| `show_preview`, `lamp_preview_size`, `preview_brightness` | Native Effects | Show the current animation preview, its size (30–100 %) and whether it follows lamp brightness |
+| `show_preview`, `lamp_preview_size`, `preview_brightness` | Native Effects | Show the current animation preview, its size (30–100 %) and whether the gallery also follows lamp brightness (the current preview always does) |
 | `show_actions`, `action_buttons`, `actions_buttons_style`, `actions_buttons_content_mode` | Both | Actions row (Previous, Next, Random, Freeze display, Refresh, Power), its order and button styling |
 | `show_brightness`, `show_animation_speed`, `show_intensity`, `slider_grey_out_unused`, `slider_style`, `slider_value`, `slider_ends`, `slider_step_size`, `slider_snap`, `slider_width`, `slider_thickness`, `slider_theme` | Both | Lamp sliders and their shared settings: unused speed/intensity greyed out instead of hidden, style, value (`none`, `percent`, `raw` device units), tappable ends (`icons`, `plus_minus`, `none`), step size, snap, width, thickness (`thin`, `medium`, `thick`) and card background (see [Lamp Sliders](#lamp-sliders)) |
 | `show_content_toggle`, `show_format_toggles` | Clock | Time/date content and time-format controls |

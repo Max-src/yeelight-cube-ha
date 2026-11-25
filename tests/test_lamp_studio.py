@@ -1168,6 +1168,41 @@ class StreamTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(("activate_fx_mode", None), self.sent)  # direct mode first
         self.assertTrue(self.frames())
 
+    async def test_frames_failing_while_home_assistant_stops_are_not_warned(self):
+        """Night 25 Nov: each restart logged "Matter frame failed (udp):
+        Not connected" (its Matter client closes first)."""
+        self.over_matter(fail=1000)
+        self.light.hass = SimpleNamespace(
+            async_add_executor_job=self.light.hass.async_add_executor_job, is_stopping=True,
+        )
+        warnings = []
+        timing = self.light._studio_loop.__func__.__globals__
+        logger = timing["_LOGGER"]
+        timing["_LOGGER"] = SimpleNamespace(
+            warning=lambda *args, **kw: warnings.append(args), debug=logger.debug,
+            info=logger.info, exception=logger.exception,
+        )
+        try:
+            await self.light._start_studio_stream()
+            await self.run_for(0.03)
+            self.light.stop_studio_stream()
+            # A stream running when it stops: its frames fail from then on.
+            self.over_matter()
+            await self.light._start_studio_stream()
+            await self.run_for(0.02)
+
+            async def refused(pixels):
+                raise RuntimeError("Not connected")
+
+            self.light._send_matrix_stream_frame = refused
+            await self.run_for(0.03)
+            self.light.stop_studio_stream()
+        finally:
+            timing["_LOGGER"] = logger
+        self.assertEqual([], [args for args in warnings if "failed" in str(args[0])])
+        self.assertFalse(self.light._matrix_native_refused)
+        self.assertEqual([], self.frames())  # nothing over the LAN
+
     async def test_a_running_stream_is_kept(self):
         await self.light._start_studio_stream()
         task = self.light._studio_task

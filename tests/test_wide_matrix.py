@@ -90,19 +90,27 @@ class FrameSizeTests(unittest.TestCase):
 
 
 class TextTests(unittest.TestCase):
-    def test_text_is_centred_across_every_column(self):
-        for name, topology in CHAINS.items():
+    def test_text_is_centred_across_the_matrix_modules(self):
+        # Night 25 Nov: "HI", centred on 30 columns, fell on the panel and the
+        # spot (matrix, matrix, panel, spot, matrix, matrix) and showed nothing.
+        for name, topology in {**CHAINS, "real": "2,2,1,3,2,2"}.items():
             profile = matrix(topology)
+            lanes = [module["column"] + step for module in profile.layout
+                     if module["type"] == "matrix" for step in range(5)]
+            if len(lanes) == profile.columns:
+                lanes = list(range(profile.columns))
             light = light_on(profile, _custom_text="HI", _mode="Solid Color", _text_colors=[(255, 0, 0)])
             run(light._apply_display_mode_internal())
             frame = shown(light)
             lit = sorted({index % profile.width for index, rgb in enumerate(frame) if rgb != (0, 0, 0)})
             with self.subTest(name):
                 self.assertEqual(profile.pixels, len(frame))
-                # Centred in the columns (the same space on both sides, or
-                # one more on the right).
-                before, after = lit[0], profile.columns - 1 - lit[-1]
+                self.assertTrue(set(lit) <= set(lanes), lit)
+                # Centred across them (the same space on both sides, or one
+                # more on the right).
+                before, after = lanes.index(lit[0]), len(lanes) - 1 - lanes.index(lit[-1])
                 self.assertIn(after - before, (0, 1))
+                self.assertEqual(frame, [tuple(c) if c else (0, 0, 0) for c in light.gradient_preview("Solid Color")])
 
     def test_a_full_panel_gradient_spans_every_column(self):
         profile = matrix("2,2,2,3,1,2")
@@ -129,7 +137,16 @@ class TextTests(unittest.TestCase):
         run(normal._apply_display_mode_internal())
         flipped = light_on(profile, _orientation="flipped", **state)
         run(flipped._apply_display_mode_internal())
-        self.assertEqual(shown(normal)[::-1], shown(flipped))
+        # Turned round on the Matrix modules' columns (the text's strip).
+        lanes = [module["column"] + step for module in profile.layout
+                 if module["type"] == "matrix" for step in range(5)]
+        width = profile.width
+        expected = [(0, 0, 0)] * profile.pixels
+        for index, rgb in enumerate(shown(normal)):
+            if rgb != (0, 0, 0):
+                row, col = divmod(index, width)
+                expected[(4 - row) * width + lanes[len(lanes) - 1 - lanes.index(col)]] = rgb
+        self.assertEqual(expected, shown(flipped))
 
     def test_panel_color_sequence_fills_the_whole_frame(self):
         light = light_on(matrix("2,2,2,2,3"), _mode="Panel Color Sequence",
@@ -212,9 +229,11 @@ class ClockFaceTests(unittest.TestCase):
         light = light_on(profile, _mode="Clock", _camera_entities=[])
         frame = light._own_effect_frame_drawn(0)
         self.assertEqual(profile.pixels, len(frame))
-        lit = {index % profile.width for index, rgb in enumerate(frame) if rgb != (0, 0, 0)}
-        self.assertTrue(lit)
-        self.assertFalse(lit & set(range(15, 20)))  # the spot
+        dark = {index % profile.width for index, rgb in enumerate(frame) if rgb == (0, 0, 0)}
+        # The digits on the 3 Matrix modules (columns 0-14, gaps dark); the
+        # spot and the panel lit in full in the style's colour, as the lamp.
+        self.assertTrue(dark)
+        self.assertFalse(dark & set(range(15, 25)))
 
     def test_the_lamps_own_clock_needs_4_matrix_modules(self):
         light = light_on(matrix("2,2,2,3,1"))
@@ -245,6 +264,24 @@ class ClockFaceTests(unittest.TestCase):
                 run(light.async_set_clock_settings(style_id=4, activate=False))
                 self.assertEqual(4, light._native_clock_style)
         self.assertFalse(light_on(PROFILES.CUBE_LITE_PROFILE).matrix_clock_refused)
+
+
+class LampCanvasTests(unittest.TestCase):
+    def test_a_spot_is_one_canvas_column_showing_its_first_led(self):
+        profile = matrix("2,2,1,3,2,2")
+        self.assertEqual((30, 26), (profile.columns, profile.canvas_columns))
+        canvas = [(row, column, 0) for row in range(5) for column in range(26)]
+        frame = profile.canvas_to_frame(canvas)
+        self.assertEqual(150, len(frame))
+        for row in range(5):
+            self.assertEqual([(row, column, 0) for column in range(15)], frame[row * 30:row * 30 + 15])
+            self.assertEqual([(0, 15, 0)] * 5, frame[row * 30 + 15:row * 30 + 20])   # the spot: row 0
+            self.assertEqual([(row, column, 0) for column in range(16, 26)], frame[row * 30 + 20:row * 30 + 30])
+        # No spot: the canvas is the columns, the frame as it is.
+        plain = matrix("2,1,2,2,2")
+        self.assertEqual(plain.columns, plain.canvas_columns)
+        self.assertIs(canvas, plain.canvas_to_frame(canvas))
+        self.assertEqual(13, matrix("2,3,3,3,2").canvas_columns)
 
 
 class PixelArtTests(unittest.TestCase):

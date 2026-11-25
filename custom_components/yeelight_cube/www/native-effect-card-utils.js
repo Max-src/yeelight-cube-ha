@@ -1,6 +1,6 @@
 import { renderNativeEffect } from "./native-effect-preview.js";
 import { LAMP_EFFECTS, effectDisplayFrame } from "./lamp-renderers.js";
-import { withSpotColours } from "./matrix-modules.js";
+import { canvasToFrame, lampCanvas, withSpotColours } from "./matrix-modules.js";
 import { previewContext } from "./preview-context.js";
 import { effectFamilyOfName } from "./effect-families.js";
 import { FORMERLY_NUMBERED_EFFECT_NAMES, effectSlotRank } from "./effect-names.js";
@@ -215,24 +215,25 @@ function viewedFrame(frame, orientation) {
  */
 export function nativeEffectLampFrame(effect, context, elapsed = 0) {
   const { speed } = context;
-  return effectDisplayFrame(
+  // The selected effect a Cube Matrix draws itself: on its canvas (a spot
+  // one column), laid out on its modules (matrix-modules.js canvasToFrame).
+  const canvas = effect.name === context.attrs?.native_effect ? lampCanvas(context.attrs) : null;
+  const drawn = renderNativeEffect(
     effect.name,
-    renderNativeEffect(
-      effect.name,
-      elapsed * (0.25 + speed / 55),
-      nativeEffectDirection(effect, context.attrs),
-      context.color,
-      context.colorMode,
-      speed,
-      context.orientation,
-      context.intensity,
-      context.palette,
-      context.stored,
-      context.layout,
-      context.adjustments,
-      context.columns,
-    ),
+    elapsed * (0.25 + speed / 55),
+    nativeEffectDirection(effect, context.attrs),
+    context.color,
+    context.colorMode,
+    speed,
+    context.orientation,
+    context.intensity,
+    context.palette,
+    context.stored,
+    context.layout,
+    context.adjustments,
+    canvas ?? context.columns,
   );
+  return effectDisplayFrame(effect.name, canvas ? canvasToFrame(drawn, context.attrs) : drawn);
 }
 
 /** nativeEffectLampFrame for the lamp of `attrs` as the viewer sees it

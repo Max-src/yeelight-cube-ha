@@ -358,6 +358,13 @@ def async_register_native_services(hass: HomeAssistant) -> None:
             else:
                 raise invalid("color_invalid")
 
+        if activate:
+            # Refused at once (a Cube Matrix of fewer than 4 Matrix
+            # modules): the caller sees why, not only the log.
+            for target in targets:
+                if check := getattr(target, "check_clock_allowed", None):
+                    check()
+
         async def _apply_one(target):
             await target.async_set_clock_settings(
                 style_id=style_id, has_color=has_color,

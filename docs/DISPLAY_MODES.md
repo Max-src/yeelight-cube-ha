@@ -17,6 +17,21 @@ local, read-only presets, in two collections: **Nature** and **Geometry** (35
 drawn for a lamp lying flat, 33 for a lamp stood on its end). They are never
 imported into, written to, or allowed to overwrite your own drawings.
 
+Some of them, as the Matrix Preview camera shows them:
+
+<!-- card-docs:gallery:display-pixel-art:start -->
+<table>
+  <tr>
+    <td valign="top"><img src="../images/Cards/generated/camera-display-art-nature.png" alt="Matrix Preview cameras - Nature, lying flat (Built-in: Horizontal 01)" width="280"><br>Nature, lying flat (Built-in: Horizontal 01)</td>
+    <td valign="top"><img src="../images/Cards/generated/camera-display-art-geometry.png" alt="Matrix Preview cameras - Geometry, lying flat (Built-in: Horizontal 24)" width="280"><br>Geometry, lying flat (Built-in: Horizontal 24)</td>
+    <td valign="top"><img src="../images/Cards/generated/camera-display-art-nature-vertical.png" alt="Matrix Preview cameras - Nature, standing up (Built-in: Vertical 01)" width="110"><br>Nature, standing up (Built-in: Vertical 01)</td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="../images/Cards/generated/camera-display-art-geometry-vertical.png" alt="Matrix Preview cameras - Geometry, standing up (Built-in: Vertical 22)" width="110"><br>Geometry, standing up (Built-in: Vertical 22)</td>
+  </tr>
+</table>
+<!-- card-docs:gallery:display-pixel-art:end -->
+
 - **Pixel Art entity:** your drawings first, then the official ones.
 - **Draw card:** the drawings in groups, **All · My drawings · Nature ·
   Geometry**, shown as tabs by default; the editor offers the same layouts as
@@ -46,6 +61,19 @@ previews remain available while Clock mode is active. Time/date content,
 clock format and the saved clock-style library are clock-only. The style
 names are listed under
 [`set_clock_style`](../SERVICES.md#set_clock_style).
+
+<!-- card-docs:gallery:display-clock:start -->
+<table>
+  <tr>
+    <td valign="top"><img src="../images/Cards/generated/clock-display-animated.png" alt="Clock - An animated style (Night-sky waves): the effect through the digits" width="280"><br>An animated style (Night-sky waves): the effect through the digits</td>
+    <td valign="top"><img src="../images/Cards/generated/clock-display-solid.png" alt="Clock - A solid style (Yellow)" width="280"><br>A solid style (Yellow)</td>
+    <td valign="top"><img src="../images/Cards/generated/clock-display-date.png" alt="Clock - The date instead of the time (Cyan)" width="280"><br>The date instead of the time (Cyan)</td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="../images/Cards/generated/clock-display-palette.png" alt="Clock - Palette color mode: Rainbow in the lamp&#39;s palette" width="280"><br>Palette color mode: Rainbow in the lamp&#39;s palette</td>
+  </tr>
+</table>
+<!-- card-docs:gallery:display-clock:end -->
 
 The clock command uses the Cube Lite's private LAN protocol. The lamp does
 not report the active clock configuration back to Home Assistant, so entity
@@ -144,6 +172,16 @@ clock colors and persists with the lamp state. An incompatible effect uses
 its original colors. Restart Home Assistant after updating before using
 this feature; an older backend does not expose the palette controls.
 
+<!-- card-docs:gallery:display-native-effects:start -->
+<table>
+  <tr>
+    <td valign="top"><img src="../images/Cards/generated/native-effects-display-fire.png" alt="Native Effects - Fire in its own colors" width="280"><br>Fire in its own colors</td>
+    <td valign="top"><img src="../images/Cards/generated/native-effects-display-retro.png" alt="Native Effects - Rainbow in a color mode (Retro Orange)" width="280"><br>Rainbow in a color mode (Retro Orange)</td>
+    <td valign="top"><img src="../images/Cards/generated/native-effects-display-palette.png" alt="Native Effects - Palette color mode: Starry Sky in the lamp&#39;s palette" width="280"><br>Palette color mode: Starry Sky in the lamp&#39;s palette</td>
+  </tr>
+</table>
+<!-- card-docs:gallery:display-native-effects:end -->
+
 **Palette** shows effects and clock styles in the colors of the lamp's
 palette, the one loaded from the Palette card (`load_palette`) or set with
 `set_text_colors`, and follows it: load another palette and they change with
@@ -225,6 +263,21 @@ from the lamp:
 | Spectrum | Rainbow equalizer bars |
 | Music Note | Musical-note glyph |
 | Impact | Center burst |
+
+<!-- card-docs:gallery:display-music-flow:start -->
+<table>
+  <tr>
+    <td valign="top"><img src="../images/Cards/generated/camera-display-music-gather.png" alt="Matrix Preview cameras - Gather" width="220"><br>Gather</td>
+    <td valign="top"><img src="../images/Cards/generated/camera-display-music-breathing.png" alt="Matrix Preview cameras - Breathing" width="220"><br>Breathing</td>
+    <td valign="top"><img src="../images/Cards/generated/camera-display-music-blossom.png" alt="Matrix Preview cameras - Blossom" width="220"><br>Blossom</td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="../images/Cards/generated/camera-display-music-spectrum.png" alt="Matrix Preview cameras - Spectrum" width="220"><br>Spectrum</td>
+    <td valign="top"><img src="../images/Cards/generated/camera-display-music-music-note.png" alt="Matrix Preview cameras - Music Note" width="220"><br>Music Note</td>
+    <td valign="top"><img src="../images/Cards/generated/camera-display-music-impact.png" alt="Matrix Preview cameras - Impact" width="220"><br>Impact</td>
+  </tr>
+</table>
+<!-- card-docs:gallery:display-music-flow:end -->
 
 Round and Square previews use the same RGB pixels and differ only in pixel
 shape. Brightness and device orientation are applied locally. Generating or

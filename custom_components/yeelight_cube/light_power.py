@@ -95,6 +95,10 @@ class PowerEstimateMixin:
         )
         if camera is None or self._lamp_power_pending:
             return
+        if getattr(self.hass, "is_stopping", False):
+            # Its executor may already be shut down (night 25 Nov: an
+            # error logged at a restart).
+            return
         # Not what the camera displays: the lamp's own LED drive for every
         # named effect, an illustration for Music Flow
         # (camera.simulated_lamp_frame). In an executor: this runs every

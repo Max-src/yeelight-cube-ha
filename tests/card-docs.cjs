@@ -61,6 +61,12 @@ async function onboard(context) {
     );
     assert.ok(result.ok(), `Disposable HA onboarding step failed: ${step}`);
   }
+  return tokens;
+}
+
+// A browser context signed in with the onboarding's tokens (each capture has
+// its own: an HA is onboarded once, even when the first capture fails).
+async function signIn(context, tokens) {
   await context.addInitScript(
     ({ tokens, origin }) => {
       if (location.origin === origin)
@@ -212,6 +218,7 @@ print(json.dumps({'font_maps': data['FONT_MAPS'], 'font_metrics': data['FONT_MET
   // Captures that never matched: written to DIAGNOSTICS for the CI artifact.
   const failures = [];
   let onboardState;
+  let onboardTokens;
   for (const [kind, definition] of Object.entries(catalogue)) {
     // Editor entries are either a caption string or { title, config } when the
     // panel needs settings beyond the fixture defaults (e.g. a hidden section).
@@ -260,10 +267,12 @@ print(json.dumps({'font_maps': data['FONT_MAPS'], 'font_metrics': data['FONT_MET
               colorScheme: options.dark ? "dark" : "light",
               reducedMotion: "reduce",
             });
-            if (process.env.DOCS_HA_ONBOARD === "1" && !onboardState)
-              await onboard(context).catch((error) => {
+            if (process.env.DOCS_HA_ONBOARD === "1" && !onboardState) {
+              onboardTokens ||= await onboard(context).catch((error) => {
                 throw new SetupError(error.message);
               });
+              await signIn(context, onboardTokens);
+            }
             await context.route("**/yeelight_cube/**", async (route) => {
               const relative = decodeURIComponent(
                 new URL(route.request().url()).pathname,

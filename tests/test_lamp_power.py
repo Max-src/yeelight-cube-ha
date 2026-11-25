@@ -185,6 +185,22 @@ class LampPowerTests(unittest.TestCase):
         sample(light)
         self.assertEqual(0, len(light._lamp_power_samples))
 
+    def test_no_sample_while_home_assistant_stops(self):
+        # Night 25 Nov: a sample at a restart found the executor shut down.
+        methods = _load_standalone_functions(
+            LIGHT_SOURCE, {"_sample_lamp_power"},
+            {"estimated_power": lamp_power.estimated_power, "callback": lambda f: f},
+        )
+        camera = SimpleNamespace(hass=object(), simulated_lamp_frame=Mock())
+        light = SimpleNamespace(
+            available=True, _is_on=True, lamp_draws_matrix=True, _camera_entities=[camera],
+            _lamp_power_samples=deque(maxlen=6), _lamp_power_key=("Ribbon",), _lamp_power_pending=False,
+            _lamp_power_state=lambda: ("Ribbon",),
+            hass=SimpleNamespace(is_stopping=True, async_add_executor_job=Mock()),
+        )
+        methods["_sample_lamp_power"](light)
+        light.hass.async_add_executor_job.assert_not_called()
+
     def test_a_sample_of_what_changed_meanwhile_is_taken_again(self):
         sample = self._sampler()
         state = ["Ribbon"]

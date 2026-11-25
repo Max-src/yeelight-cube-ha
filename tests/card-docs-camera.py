@@ -38,6 +38,12 @@ IMAGES = {
         camera.YeelightCubeMatrixCameraRound, "Built-in: Vertical 01", "down"),
     "camera.documentation_square_landscape": (
         camera.YeelightCubeMatrixCameraSquare, "Built-in: Horizontal 01", "right"),
+    # docs/DISPLAY_MODES.md: an official pixel art of the Geometry collection,
+    # lying flat and standing up (Horizontal 01 and Vertical 01 are Nature).
+    "camera.documentation_art_geometry": (
+        camera.YeelightCubeMatrixCameraRound, "Built-in: Horizontal 24", "right"),
+    "camera.documentation_art_geometry_vertical": (
+        camera.YeelightCubeMatrixCameraRound, "Built-in: Vertical 22", "down"),
 }
 
 # The Cube Matrix: matrix, matrix, panel, spot, matrix, matrix from the base
@@ -81,4 +87,15 @@ for entity, (camera_class, art, orientation) in IMAGES.items():
 renderer = renderer_for(camera.YeelightCubeMatrixCameraRound, profile, "right")
 png = renderer._render_matrix(view.viewer_frame(matrix_frame(), "right"), False)
 images["camera.documentation_cube_matrix"] = base64.b64encode(png).decode("ascii")
+
+# docs/DISPLAY_MODES.md: each Music Flow effect's still picture, as the
+# cameras show it (camera.py's music-flow preview), on a lamp lying flat.
+music = import_pure_module("native_effect_preview")
+for effect in import_pure_module("effect_catalog").MUSIC_FLOW_EFFECTS:
+    renderer = renderer_for(camera.YeelightCubeMatrixCameraRound, lite, "right")
+    png = renderer._render_matrix(
+        view.viewer_frame(music.render_music_flow_effect(effect), "right"), False,
+    )
+    slug = effect.lower().replace(" ", "_")
+    images[f"camera.documentation_music_{slug}"] = base64.b64encode(png).decode("ascii")
 print(json.dumps(images))

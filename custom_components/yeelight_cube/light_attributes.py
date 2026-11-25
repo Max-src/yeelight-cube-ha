@@ -220,7 +220,11 @@ class AttributesMixin:
             # by name, as set_matrix_modules takes it (the Modules card).
             **({"matrix_modules": self.device_profile.layout,
                 "matrix_module_list": self.device_profile.module_names,
-                "matrix_columns": self.device_profile.columns} if self.is_cube_matrix else {}),
+                "matrix_columns": self.device_profile.columns,
+                # The canvas it draws the selected effect or clock on itself
+                # (a Spot one column), None when Home Assistant draws it: the
+                # cards lay the lamp's own frames out the same way.
+                "matrix_lamp_canvas": self._lamp_canvas()} if self.is_cube_matrix else {}),
             # The native effect catalogue's key: the cards fetch the
             # catalogue (yeelight_cube/native_effect_catalog) when it changes.
             "native_effect_catalog_key": native_effect_catalog_key(*self._native_effect_catalog_args()),

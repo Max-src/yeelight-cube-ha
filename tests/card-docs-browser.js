@@ -283,6 +283,13 @@ window.cardDocs = {
         }),
       });
     }
+    // The lamp's state for this scenario (options.attributes): another clock
+    // style, effect or color mode...
+    if (options.attributes && !options.offline)
+      Object.assign(
+        card.hass.states["light.documentation_only"].attributes,
+        options.attributes,
+      );
     if (card._controls) card._controls.favourites = favourites;
     // Draw: a drawing on the canvas (the first pixel art, highlighted in
     // its gallery as the one being drawn).
@@ -457,13 +464,15 @@ window.cardDocs = {
       // namespace or add/remove a lamp slider, update this list to match --
       // it is the only place that still hardcodes them, and it only runs in
       // the screenshot capture (needs a real HA), so a stale value here fails
-      // CI but passes `npm run check` without DOCS_HA_URL.
+      // CI but passes `npm run check` without DOCS_HA_URL. A scenario
+      // showing a style or effect without speed lists its own (`sliders`).
       const namespaces =
-        this.kind === "lamp-preview"
+        this.options.sliders ||
+        (this.kind === "lamp-preview"
           ? ["brightness"]
           : STATIC_CARDS.includes(this.kind)
             ? []
-            : ["brightness", "speed"];
+            : ["brightness", "speed"]);
       for (const namespace of namespaces) {
         const slider = card.shadowRoot.querySelector(
           `[data-sl-ns="${namespace}"]`,
@@ -492,7 +501,9 @@ window.cardDocs = {
         ?.getBoundingClientRect().height
     )
       throw Error("Missing colors");
+    // A scenario showing one mode hides the gallery (show_gallery: false).
     if (
+      this.options.config?.show_gallery !== false &&
       !card.shadowRoot
         .querySelector(".original-gallery, yc-collection-gallery, .gc-selector")
         ?.getBoundingClientRect().height

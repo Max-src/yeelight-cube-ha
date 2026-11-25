@@ -131,7 +131,7 @@ class StreamDiag:
         self.counts["errors"] += 1
         log = self._log.debug if self._failures else self._log.warning
         self._failures += 1
-        log("[STREAM DIAG] [%s] %s frame failed (%s): %s; %s", self._ip, route, transport, err, self._report())
+        log("[STREAM DIAG] [%s] %s frame failed (%s): %s; %s", self._ip, route, transport, str(err) or type(err).__name__, self._report())
 
     def status(self, now: float, status: tuple) -> None:
         """``status`` (route, transport, connected, silent, changes only,

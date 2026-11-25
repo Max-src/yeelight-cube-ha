@@ -902,11 +902,12 @@ class YeelightCubeNativeEffectsCard extends NativeEffectColorsMixin(
   _paint(all = true) {
     const attrs = this._previewAttrs();
     const cache = new Map();
-    // The same preview brightness as the other cards (LampSliders).
-    const brightness =
-      this.config.preview_brightness === true
-        ? this._lampSliders.previewScale(attrs)
-        : 1;
+    // The current preview is drawn at the lamp's brightness, as on the Clock
+    // and Lamp Preview cards (LampSliders: a drag here, or a change made
+    // anywhere else); preview_brightness extends it to the gallery.
+    const lampBrightness = this._lampSliders.previewScale(attrs);
+    const galleryBrightness =
+      this.config.preview_brightness === true ? lampBrightness : 1;
     const off = this._state?.state === "off";
     const catalogue = this._catalogue(attrs);
     for (const frame of this._frames) {
@@ -923,7 +924,9 @@ class YeelightCubeNativeEffectsCard extends NativeEffectColorsMixin(
         cache.set(frame.name, nativeEffectFrame(effect, attrs, this._elapsed));
       matrixSurface(frame.grid).paint(
         cache.get(frame.name),
-        brightness,
+        frame.node.classList.contains("current-matrix")
+          ? lampBrightness
+          : galleryBrightness,
         frame.appearance.ignoreBlackPixels ? BLACK_THRESHOLD : null,
         frame.appearance.pixelBoxShadow ? PIXEL_SHADOW : "",
       );

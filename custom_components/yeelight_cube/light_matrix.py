@@ -80,6 +80,7 @@ from .matrix_effects import (
     DemoLoopWatch,
     clock_payload,
     colour_word,
+    preset_shows_colour,
     drawing_payload,
     engine_payload,
     live_change,
@@ -314,6 +315,8 @@ class MatrixMixin:
             rgb = palette[0] if palette else None
         else:
             return None  # a color mode the lamp does not have: streamed
+        if rgb is not None and MATRIX_EFFECTS[effect][2] and not preset_shows_colour(rgb):
+            return None  # white or a pale colour: the lamp would show its hue only, streamed
         intensity = self._native_effect_intensity
         takes_intensity = (ALL_NATIVE_EFFECTS.get(effect) or {}).get("intensity")
         return "setPresetsEffect", preset_payload(
@@ -579,6 +582,10 @@ class MatrixMixin:
         the app's "clock off"), so a power cut does not bring it back."""
         if not self._matrix_clock_saved() or payload.get("apply") in (APPLY_SAVE, APPLY_PRIORITY):
             return
+        # The lamp goes back to its saved effect for a moment (reported,
+        # e.g. 42, before the drawing that follows): Home Assistant's own
+        # doing, not its button (night 25 Nov: followed as "Waves").
+        self._matrix_command_at = time.monotonic()
         await self._matter_commands.async_command(EFFECTS_CLUSTER, "resetEffect", {})
 
     def matrix_draws_over_matter(self) -> bool:
@@ -711,6 +718,11 @@ class MatrixMixin:
                 self._matrix_shown = ("setEffect", payload)
         except Exception:
             self._matrix_shown = None
+            if getattr(self.hass, "is_stopping", False):
+                # Home Assistant is stopping (its Matter client closes
+                # first): not the lamp's failure, and no LAN stream started
+                # while it stops (night 25 Nov, each restart).
+                raise
             self._matrix_stream_failures += 1
             if self._matrix_stream_failures >= MATTER_STREAM_FAILURES:
                 # Streamed over the LAN until Matter is tried again.
@@ -732,7 +744,7 @@ class MatrixMixin:
             await self._draw_matrix_frame(self._lamp_frame(self._prepared_frame()))
         except Exception as err:  # noqa: BLE001 -- drawn over the LAN instead
             _LOGGER.warning(
-                "[MATRIX] [%s] Drawing over Matter failed (%s): sent over the LAN", self._ip, err,
+                "[MATRIX] [%s] Drawing over Matter failed (%s): sent over the LAN", self._ip, str(err) or type(err).__name__,
             )
             return False
         if not self._is_on and not off_frame:

@@ -742,6 +742,7 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
                     self._native_preview_started_at = now - self._frozen_background_seconds
                     self._frozen_background_seconds = None
                 seconds = now - self._native_preview_started_at
+        canvas = getattr(state, "lamp_canvas", None)
         frame = render_native_effect(
             effect,
             seconds * preview_rate(speed),
@@ -756,11 +757,20 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
             layout=state.animation_layout,
             # An animation is uploaded with them (light_native._store_animation).
             adjustments=le.color_adjustments() if hasattr(le, "color_adjustments") else None,
-            columns=self._columns(state),
+            columns=canvas or self._columns(state),
         )
         # Lamp order (row 0 = physical bottom), like every frame: _view_frame
         # turns it the way the viewer sees it, once.
-        return frame
+        return self._from_lamp_canvas(frame) if canvas else frame
+
+    def _from_lamp_canvas(self, frame):
+        """A frame the lamp draws itself on its canvas (PreviewState.
+        lamp_canvas, a Spot one column) laid out on its modules
+        (device_profile.canvas_to_frame)."""
+        profile = getattr(self._light_entity, "device_profile", None)
+        if frame is None or not hasattr(profile, "canvas_to_frame"):
+            return frame
+        return profile.canvas_to_frame(frame)
 
     def _get_music_flow_preview(self, state=None) -> list[tuple[int, int, int]]:
         """Render a fixed illustration of the active Music Flow effect."""
@@ -826,15 +836,18 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
         elif effect_name is not None:
             # The mixer's renderer behind the clock overlay, on the command
             # light_native sends: the user's speed, the mode 40 direction.
+            canvas = getattr(state, "lamp_canvas", None)
             effect_frame = lamp_effect_frame(
                 lamp_clock_settings(
                     effect_name, self._preview_speed(state), override_rgb, color_mode,
                     _chosen_intensity(state), palette,
                     # Handed over or direct: the style's form, as light_native sends it.
-                    clock_style_direct(style), self._columns(state),
+                    clock_style_direct(style), canvas or self._columns(state),
                 ),
                 self._clock_background_seconds(state),
             )
+            if canvas:
+                effect_frame = self._from_lamp_canvas(effect_frame)
         # A palette mode overrides the custom color, so don't flat-fill with it.
         flat_override = None if mode_active else override_rgb
         # Solid styles (no mixer effect) have no animated renderer to remap for
@@ -864,14 +877,23 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
             else:
                 matrix[index] = self._clock_pixel_color(style_id, char_index, col, width)
         # A Cube Matrix's modules off the face (Panels, Spots, a fifth Matrix
-        # module: clock_face_columns) show the background itself.
-        if effect_frame is not None and geometry.get("blocks") is not None:
+        # module: clock_face_columns) show the background itself; a plain
+        # style's background is its colour, lit in full (filmed 25 Nov).
+        if geometry.get("blocks") is not None:
             face = clock_face_columns(geometry)
             columns = geometry.get("columns") or width
-            for index in range(min(len(matrix), len(effect_frame))):
+            for index in range(len(matrix)):
                 col = index % width
-                if col < columns and col not in face:
-                    matrix[index] = effect_frame[index]
+                if col >= columns or col in face:
+                    continue
+                if effect_frame is not None:
+                    matrix[index] = effect_frame[index] if index < len(effect_frame) else (0, 0, 0)
+                elif solo_bw_fallback:
+                    matrix[index] = (255, 255, 255)
+                elif flat_override is not None:
+                    matrix[index] = flat_override
+                else:
+                    matrix[index] = self._clock_pixel_color(style_id, 0, col, width)
 
         # Lamp order, like every frame (_view_frame turns it for the viewer).
         return matrix

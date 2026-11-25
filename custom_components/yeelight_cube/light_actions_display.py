@@ -178,18 +178,21 @@ class DisplayActionsMixin:
         # the lamp. Within the columns the lamp shows (a Cube Matrix with
         # fewer blocks).
         columns = self._shown_columns()
+        lanes = None
         if self._full_panel:
             text, width, offset = PANEL_FULL_CHAR, columns, 0
         else:
             text = self._custom_text or ""
             width = sum(self._char_advance(letter) for letter in text) - 1
-            offset = self.text_offset(width, columns) if text else 0
+            # A Cube Matrix's Matrix modules only (light_render._text_lanes).
+            lanes = self._text_lanes()
+            offset = self.text_offset(width, len(lanes) if lanes else columns) if text else 0
         if mode == "Panel Color Sequence":
             # The whole panel, whatever the text (as on the lamp).
             frame = self._panel_sequence_frame(self._text_colors)
         elif text:
             frame = self._text_mode_frame(
-                mode, text, self._text_colors, self._angle, offset, width
+                mode, text, self._text_colors, self._angle, offset, width, lanes=lanes,
             )
         else:
             frame = [None] * (self._panel_width() * TOTAL_ROWS)

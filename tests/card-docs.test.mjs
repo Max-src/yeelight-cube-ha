@@ -99,6 +99,39 @@ ${end}`,
   );
 });
 
+test("an entry with a gallery goes to that named gallery, in any document", () => {
+  const named = {
+    clock: {
+      title: "Clock",
+      variations: {
+        dark: { title: "Dark" },
+        solid: { title: "Solid style", gallery: "gallery:display-clock" },
+      },
+      editors: {},
+    },
+  };
+  const gallery = `<!-- card-docs:gallery:display-clock:start -->
+<!-- card-docs:gallery:display-clock:end -->`;
+  // The README: the card's own gallery, without the named one's entry.
+  const readme = updateGalleries(`${start}
+${end}`, named, () => true);
+  assert.match(readme, /clock-dark\.png/);
+  assert.ok(!readme.includes("clock-solid"));
+  // Another document (docs/): only its named galleries, paths from there.
+  const page = updateGalleries(`Prose
+${gallery}
+`, named, () => true, {
+    cards: false,
+    base: "../",
+  });
+  assert.match(page, /src="\.\.\/images\/Cards\/generated\/clock-solid\.png" alt="Clock - Solid style"/);
+  assert.ok(!page.includes("clock-dark"));
+  assert.ok(page.startsWith(`Prose
+`));
+  // A README without the named gallery's markers is fine.
+  assert.doesNotThrow(() => updateGalleries(readme, named, () => true));
+});
+
 // Capture comparison (card-docs-compare.cjs). A 448x340 grey image with a
 // "glyph" block, like the editor captures. Assertions compare booleans or
 // identities only: printing two capture buffers exhausts the heap.

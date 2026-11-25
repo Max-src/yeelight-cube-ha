@@ -35,7 +35,17 @@ import {
 } from "./lamp-renderers.js";
 import { flipMatrixVertical, lampTurnsClock } from "./matrix-view.js";
 import { missStillValid } from "./sensor-lookup.js";
-import { clockColumns, lampWidth, shownColumns, withSpotColours } from "./matrix-modules.js";
+import {
+  canvasToFrame,
+  clockColumns,
+  lampCanvas,
+  lampWidth,
+  shownColumns,
+  withSpotColours,
+} from "./matrix-modules.js";
+
+// A frame the lamp drew on its canvas, laid out on its modules (or as it is).
+const fromLampCanvas = (frame, attrs) => (lampCanvas(attrs) ? canvasToFrame(frame, attrs) : frame);
 import { effectFamilyOfName } from "./effect-families.js";
 import {
   FORMERLY_NUMBERED_EFFECT_NAMES,
@@ -710,12 +720,17 @@ export function renderClockFrame(attrs, fontMap, metrics, phase = 0, speed = nul
     : effectName
     ? effectDisplayFrame(
         effectName,
-        lampEffectFrame(
-          lampClockSettings(
-            effectName, rate, override, colorMode, chosenIntensity(attrs), attrs.text_colors,
-            clockStyleDirect(attrs), columns,
+        // A background the lamp draws itself: on its canvas (a spot one
+        // column), laid out on its modules (matrix-modules.js).
+        fromLampCanvas(
+          lampEffectFrame(
+            lampClockSettings(
+              effectName, rate, override, colorMode, chosenIntensity(attrs), attrs.text_colors,
+              clockStyleDirect(attrs), lampCanvas(attrs) ?? columns,
+            ),
+            phase / previewRate(rate),
           ),
-          phase / previewRate(rate),
+          attrs,
         ),
       )
     : null;
@@ -787,12 +802,20 @@ export function renderClockFrame(attrs, fontMap, metrics, phase = 0, speed = nul
     offset += advance;
   }
   // A Cube Matrix's modules off the face (panels, spots, a fifth Matrix
-  // module) show the background itself (camera.py).
-  if (effectFrame && (stripWidth !== columns || strip.some((column, at) => column !== at))) {
+  // module) show the background itself; a plain style's background is its
+  // colour, lit in full (camera.py).
+  if (stripWidth !== columns || strip.some((column, at) => column !== at)) {
     const face = new Set(strip);
-    for (let index = 0; index < matrix.length && index < effectFrame.length; index++) {
+    for (let index = 0; index < matrix.length; index++) {
       const column = index % width;
-      if (column < columns && !face.has(column)) matrix[index] = effectFrame[index] ?? [0, 0, 0];
+      if (column >= columns || face.has(column)) continue;
+      matrix[index] = effectFrame
+        ? effectFrame[index] ?? [0, 0, 0]
+        : soloBwFallback
+          ? [255, 255, 255]
+          : flatOverride
+            ? flatOverride
+            : _clockPixelColor(styleId, 0, column, width - 1);
     }
   }
   // A Cube Matrix's spots shown as the lamp lights them (matrix-modules.js).

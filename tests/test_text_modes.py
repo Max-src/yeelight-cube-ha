@@ -68,10 +68,11 @@ NAMESPACE = {
     "is_connection_error": lambda error: False,
     "is_quota_error": lambda error: False,
     "_MISSING_GLYPHS": set(),
+    "MODULE_SIZE": 5,
     "KEEP": object(),
 }
 METHODS = {
-    "_apply_display_mode_internal", "_text_mode_frame", "_place_frame",
+    "_apply_display_mode_internal", "_text_mode_frame", "_text_mode_frame_on", "_text_lanes", "_place_frame",
     "_panel_gradient_place", "_letter_angle_place",
     # _apply_display_mode_internal's steps, one per kind of content.
     "_show_custom_drawing", "_show_panel_sequence", "_show_text", "_show_background",

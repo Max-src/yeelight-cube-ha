@@ -173,6 +173,16 @@ class MatterLinkTests(unittest.TestCase):
         self.assertEqual({}, self.client.subscriptions)
         self.assertIsNone(self.link.summary())
 
+    def test_a_node_its_server_no_longer_reaches_is_unavailable(self):
+        self.assertFalse(self.link.node_unavailable())   # not linked
+        self.link.refresh(LAMP_IP, None)
+        self.assertFalse(self.link.node_unavailable())
+        # Switched off at the wall: still listed, unavailable (night 25 Nov).
+        self.client.nodes[1].available = False
+        self.assertTrue(self.link.node_unavailable())
+        self.client.nodes[1].available = True
+        self.assertFalse(self.link.node_unavailable())
+
     def test_a_value_is_read_from_the_lamp_not_the_server_s_copy(self):
         # 2026-11-21: after a restart the server's copy held a module list of
         # the night before (a list written over Matter is not reported back);

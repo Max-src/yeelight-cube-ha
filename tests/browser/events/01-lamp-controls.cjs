@@ -427,4 +427,64 @@ module.exports = async (t) => {
     await page.mouse.up();
     await waitForCall("turn_on", `${tag} live drag`);
   }
+
+  // --- A brightness changed elsewhere dims the current preview ---------------
+  // Another card (or an automation) sets it: the lamp reports it, nothing is
+  // dragged here. No preview_brightness: the current preview shows the lamp.
+  const setBrightness = (brightness) =>
+    page.evaluate(async (brightness) => {
+      const light = hass.states["light.a"];
+      hass = {
+        ...hass,
+        states: {
+          ...hass.states,
+          "light.a": {
+            ...light,
+            attributes: { ...light.attributes, brightness },
+          },
+        },
+      };
+      card.hass = hass;
+      await new Promise((resolve) => setTimeout(resolve, 400)); // render debounce
+    }, brightness);
+  const previewLight = () =>
+    page.evaluate(() => {
+      const preview = card.shadowRoot.querySelector(
+        '[data-clock-preview][data-current="1"], .current-matrix',
+      );
+      // An animated preview is on a canvas (matrixSurface).
+      const canvas = preview?.querySelector("canvas");
+      if (canvas) {
+        const { width, height } = canvas;
+        return canvas
+          .getContext("2d")
+          .getImageData(0, 0, width, height)
+          .data.reduce((sum, value, at) => (at % 4 === 3 ? sum : sum + value), 0);
+      }
+      const cells = preview?._cells || Array.from(
+        preview?.querySelectorAll("[style*='background']") || [],
+      );
+      // Total light of the preview: the sum of its cells' channels.
+      return cells.reduce((sum, cell) => {
+        const rgb = (cell.style.backgroundColor.match(/\d+/g) || []).slice(0, 3);
+        return sum + rgb.reduce((a, v) => a + +v, 0);
+      }, 0);
+    });
+  for (const tag of [
+    "yeelight-cube-clock-card",
+    "yeelight-cube-native-effects-card",
+  ]) {
+    await setBrightness(255);
+    await page.evaluate(
+      (tag) => mount(tag, { entity: "light.a", show_brightness: true }),
+      tag,
+    );
+    await setBrightness(255);
+    const before = await previewLight();
+    await setBrightness(10);
+    const after = await previewLight();
+    assert.ok(before > 0, `${tag}: preview painted`);
+    assert.ok(after < before, `${tag}: preview follows a brightness set elsewhere`);
+  }
+  await setBrightness(255);
 };

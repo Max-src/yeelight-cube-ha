@@ -141,7 +141,7 @@ class YeelightCubeNativeEffectsCardEditor extends YeelightEditorMixin(LitElement
                   )}
                   ${this._renderAppearance("lamp")}
                   ${this._toggle(
-                    "Match Lamp Brightness",
+                    "Gallery Matches Lamp Brightness",
                     "preview_brightness",
                     false,
                   )}
