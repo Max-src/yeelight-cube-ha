@@ -21,6 +21,7 @@ import {
   f32,
   fadeGrid,
   fadeTowards,
+  writerDim,
   flaggedTargets,
   inoise8Raw,
   lround,
@@ -199,7 +200,12 @@ function musicStep(state, settings, clockMs, render) {
   else if (low > mid && low > high) target = 0xff0000;
   else if (mid > low && mid > high) target = 0xff00;
   else if (high > low && high > mid) target = 0xff;
-  if (target !== null) fadeTowards(colour, 255, target, 1); // the strip is one colour
+  if (target !== null) {
+    // The colour it last wrote, as the pixel writer stored it (readback
+    // below full brightness: lamp-renderers.js atBrightness).
+    writerDim(colour, settings.writer ?? 255);
+    fadeTowards(colour, 255, target, 1); // the strip is one colour
+  }
   for (let cell = 0; cell < panel.length; cell += 3) panel.set(colour, cell);
   return panel;
 }
@@ -642,10 +648,10 @@ function impactStep(state, settings, clockMs, render) {
 
 export const SLOTS = [
   { mode: 20, init: breathing20Init, step: breathingStep, warmup: BREATHING_20_WARMUP },
-  { mode: 25, init: bars25Init, step: barsStep, warmup: BARS_WARMUP },
-  { mode: 26, init: bars26Init, step: barsStep, warmup: BARS_WARMUP },
+  { mode: 25, init: bars25Init, step: barsStep, warmup: BARS_WARMUP, readback: "strip" },
+  { mode: 26, init: bars26Init, step: barsStep, warmup: BARS_WARMUP, readback: "strip" },
   { mode: 27, init: musicInit, step: musicStep, warmup: MUSIC_WARMUP },
-  { mode: 30, init: bars30Init, step: barsStep, warmup: BARS_WARMUP },
+  { mode: 30, init: bars30Init, step: barsStep, warmup: BARS_WARMUP, readback: "strip" },
   { mode: 41, init: spectrumInit, step: spectrumStep, warmup: SPECTRUM_WARMUP },
   { mode: 43, init: gatherInit, step: gatherStep, warmup: null },
   { mode: 44, init: breathing44Init, step: breathingStep, warmup: BREATHING_44_WARMUP },

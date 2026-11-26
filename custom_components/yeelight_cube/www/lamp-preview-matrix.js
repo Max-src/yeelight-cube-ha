@@ -325,6 +325,15 @@ export const MatrixPreviewMixin = (Base) => class extends Base {
     }
     this._setInstantDots(clockUsesLampRenderer(st.attributes));
 
+    // A new style, color, speed or intensity is a new clock command: the lamp
+    // starts its background again (camera.py _clock_background_seconds; a
+    // slow one, Sunrise and sunset, showed its end otherwise).
+    const a = st.attributes;
+    const clockKey = [a.clock_style, a.clock_color_mode, a.clock_color, a.native_effect_speed, a.native_effect_intensity].join("|");
+    if (clockKey !== this._clockAnimKey) {
+      this._clockAnimKey = clockKey;
+      this._clockTime?.reset();
+    }
     // While frozen, hold the background effect on the frame the lamp holds;
     // the digits/colon (rendered from real time in renderClockFrame) still
     // advance. Resume seamlessly from the held frame.

@@ -512,8 +512,14 @@ class PerformanceTests(unittest.TestCase):
 class SlotInterfaceTests(unittest.TestCase):
     def test_a_slot_has_the_interface(self):
         for slot in LAMP["REGISTRY"].values():
-            self.assertEqual({"mode", "init", "step", "warmup"}, set(slot) - {"lit", "live"})
+            self.assertEqual({"mode", "init", "step", "warmup"}, set(slot) - {"lit", "live", "readback"})
             self.assertGreaterEqual(slot.get("lit", 1), 1)
+            # The strip a dimmed lamp's pixel writer stores (at_brightness):
+            # in the slot's state from its init.
+            if "readback" in slot:
+                settings = LAMP["lamp_settings"]("Rainbow", "Right", 50)
+                state = slot["init"]({**settings, "mode": slot["mode"], "primary": tuple(settings["primary"])})
+                self.assertIsInstance(state[slot["readback"]], bytearray, slot["mode"])
             warmup = slot["warmup"]
             self.assertTrue(warmup is None or (isinstance(warmup, int) and warmup >= 0))
 

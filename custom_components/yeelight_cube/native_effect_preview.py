@@ -16,6 +16,7 @@ try:
         LAMP_RENDERED_EFFECTS,
         effect_supports_color_mode,
         effect_supports_color_override,
+        at_brightness,
         lamp_effect_frame,
         lamp_settings,
     )
@@ -40,6 +41,7 @@ except ImportError:  # loaded standalone (tests use runpy.run_path, no package)
         LAMP_RENDERED_EFFECTS,
         effect_supports_color_mode,
         effect_supports_color_override,
+        at_brightness,
         lamp_effect_frame,
         lamp_settings,
     )
@@ -221,6 +223,7 @@ def render_native_effect(
     layout: str | None = None,
     adjustments: dict | None = None,
     columns: int | None = None,
+    brightness: int | None = None,
 ) -> list[tuple[int, int, int]]:
     """One frame of a native effect, lamp order: what the lamp's renderer
     draws for the command sent, LED drive
@@ -237,7 +240,9 @@ def render_native_effect(
     columns the lamp shows, which its effects are drawn on (a Cube Matrix's
     device_profile.columns; None: all 20, a Cube Lite). More than 20: the
     frame is as wide as them (lamp_core.frame_width_for), an animation from
-    column 0, the rest black."""
+    column 0, the rest black. ``brightness``: the Cube Lite's (1-255), whose
+    trails its renderers shorten below full (lamp_renderers.at_brightness);
+    None: full."""
     speed = DEFAULT_PREVIEW_SPEED if speed is None else speed
     seconds = phase / preview_rate(speed)
     if studio_runs(effect, color_mode, palette):
@@ -268,7 +273,7 @@ def render_native_effect(
         effect, direction, speed, color_override, color_mode, orientation, intensity,
         palette, columns,
     )
-    return lamp_effect_frame(settings, seconds)
+    return lamp_effect_frame(at_brightness(settings, brightness), seconds)
 
 
 def _render_gradient(phase: float, direction: str, columns=None) -> list[tuple[int, int, int]]:

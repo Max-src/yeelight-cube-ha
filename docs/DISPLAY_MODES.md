@@ -83,10 +83,18 @@ Home Assistant (without Matter; with it, a switch to another effect or a music
 mode is followed). An animated clock's preview runs the lamp's own background
 at the speed the lamp gets; a solid style's color is an approximation.
 
+**Sunrise and sunset** behind the clock reads its speed as a mode: 1–60 is a
+sunrise from black lasting that many minutes, 61–120 a sunset to black over
+(speed − 60) minutes, from 121 it cycles. After a sunrise or sunset the lamp
+keeps the last picture, so after a sunset the clock is dark until the style,
+speed or color changes (each starts the background again). The previews show
+the same.
+
 ## Native Effects
 
-Native Effect mode exposes the 18 presets that the Cube Lite accepts directly
-through its private LAN protocol. Speed and direction entities are available
+Native Effect mode runs the lamp's own effects, the Yeelight app's and its
+other built-in ones, through its private LAN protocol (the names are listed under
+[`set_native_effect`](../SERVICES.md#set_native_effect)). Speed and direction entities are available
 only when the selected effect supports them. **Hacking** supports only **Up**
 and **Down**; other directional effects may also offer **Left** and **Right**.
 A direction is what you see, however the lamp is mounted: choose it with the
@@ -116,6 +124,14 @@ moment. Effects that react to sound run on a fixed demo beat, because nothing ca
 hear the lamp's microphone: the preview shows how the effect moves, not what the
 lamp shows now. Native previews and camera previews use the existing shared
 palette renderers.
+
+A Cube Lite below full brightness dims the trail of some effects once more on
+every frame, so their trails are much shorter on a dimmed lamp: Particle path,
+Palette trails, Aqua-lime trails, Palette sparks, Drop and bounce, Dot with
+fading trail and the music bars (at 20 %, Particle path is four lone dots).
+The previews draw them at the lamp's brightness, so they show the same; the
+gallery's other effects too, even when it is shown at full brightness. Clocks
+over these backgrounds can be hard to read on a dimmed lamp.
 
 ### Stored GIF and animations
 

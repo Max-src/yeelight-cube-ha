@@ -65,6 +65,10 @@ class PreviewState:
     # the length of the canvas it draws on (device_profile.canvas_columns,
     # a Spot one column); None otherwise (drawn on ``columns``).
     lamp_canvas: int | None = None
+    # The brightness the lamp's own renderers draw at, whose trails it
+    # shortens (lamp_renderers.at_brightness): a Cube Lite's; None on a Cube
+    # Matrix, not measured.
+    renderer_brightness: int | None = None
 
 
 class ActionsMixin(DisplayActionsMixin, NativeActionsMixin, DiagnosticActionsMixin):
@@ -210,6 +214,7 @@ class ActionsMixin(DisplayActionsMixin, NativeActionsMixin, DiagnosticActionsMix
             width=self.device_profile.width,
             clock_geometry=clock_geometry(self.device_profile),
             lamp_canvas=self._lamp_canvas(),
+            renderer_brightness=None if getattr(self, "is_cube_matrix", False) else self._brightness,
         )
 
     def _lamp_canvas(self) -> int | None:

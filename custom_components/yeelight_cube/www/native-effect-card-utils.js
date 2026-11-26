@@ -232,6 +232,7 @@ export function nativeEffectLampFrame(effect, context, elapsed = 0) {
     context.layout,
     context.adjustments,
     canvas ?? context.columns,
+    context.rendererBrightness,
   );
   return effectDisplayFrame(effect.name, canvas ? canvasToFrame(drawn, context.attrs) : drawn);
 }

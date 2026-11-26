@@ -12,7 +12,7 @@
 // module, up to 40: its frames are `width` x 5).
 import { chosenIntensity, chosenSpeed } from "./lamp-settings.js";
 import { adjustmentsOf } from "./color-adjustments.js";
-import { moduleGrid, moduleKey, shownColumns, spotsOf } from "./matrix-modules.js";
+import { moduleGrid, moduleKey, rendererBrightness, shownColumns, spotsOf } from "./matrix-modules.js";
 import {
   MATRIX_ROWS,
   deviceOrientation,
@@ -43,7 +43,7 @@ const NO_ATTRIBUTES = Object.freeze({});
  * spots, grid (matrix-modules.js moduleGrid for `vertical`, null for the
  * whole frame), moduleKey, speed and intensity (as chosen,
  * 0-255), direction, color, colorMode, palette, stored, layout,
- * adjustments.
+ * adjustments, rendererBrightness (matrix-modules.js).
  */
 export function previewContext(attrs, { pendingOrientation = null, frame = "viewer" } = {}) {
   const source = attrs && typeof attrs === "object" ? attrs : NO_ATTRIBUTES;
@@ -87,6 +87,8 @@ function buildContext(attrs, pendingOrientation, frame) {
     stored: attrs.stored_gif,
     layout: attrs.animation_layout,
     adjustments: adjustmentsOf(attrs),
+    // A Cube Lite's brightness: its renderers' trails are shorter when dimmed.
+    rendererBrightness: rendererBrightness(attrs),
   });
 }
 

@@ -980,6 +980,42 @@ function towardsTable(amount, target) {
 
 /** Fade-towards helper on the displayed strip: each channel towards the word
  * 0xRRGGBB. */
+/** What a Cube Lite's pixel writer scales every stored channel by, for a
+ * Home Assistant brightness (1-255; null: full): the set_bright percent as
+ * its segment byte, remapped to byte * 215 / 255 + 40 (lamp_core.py
+ * writer_level). 255 at full brightness. */
+export function writerLevel(brightness) {
+  if (brightness == null) return 255;
+  const percent = Math.max(1, Math.min(100, pyRound((Math.trunc(Number(brightness)) * 100) / 255)));
+  const byte = Math.trunc((percent * 255) / 100 + 0.49);
+  return Math.floor((byte * 215) / 255) + 40;
+}
+
+// Python's round(): halves to even.
+function pyRound(value) {
+  const floor = Math.floor(value);
+  const rest = value - floor;
+  if (rest > 0.5) return floor + 1;
+  if (rest < 0.5) return floor;
+  return floor % 2 === 0 ? floor : floor + 1;
+}
+
+const writerTables = new Map();
+
+/** What a renderer reads back of `buffer` (r, g, b bytes, changed in place)
+ * once the pixel writer stored it at `level` (writerLevel): each channel
+ * (c * level) >> 8 (lamp_core.py writer_dim). */
+export function writerDim(buffer, level) {
+  if (level >= 255) return;
+  let table = writerTables.get(level);
+  if (!table) {
+    table = new Uint8Array(256);
+    for (let value = 0; value < 256; value++) table[value] = (value * level) >> 8;
+    writerTables.set(level, table);
+  }
+  for (let at = 0; at < buffer.length; at++) buffer[at] = table[buffer[at]];
+}
+
 export function fadeTowards(strip, amount, target = 0, length = LENGTH) {
   const red = towardsTable(amount, (target >> 16) & 255);
   const green = towardsTable(amount, (target >> 8) & 255);

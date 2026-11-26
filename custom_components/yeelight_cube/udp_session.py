@@ -62,6 +62,14 @@ _TOKEN_REFUSED = -1
 # mode (session_setup), at most once every FRAME_REFUSED_REOPEN seconds.
 _FRAME_REFUSED = 6
 FRAME_REFUSED_REOPEN = 2.0
+# A frame still on its way when Home Assistant sent the lamp another command
+# (its own effect after a stream) is refused by the lamp ("illegal request"):
+# expected, not logged as a warning, within this many seconds of it (seen at
+# every stream-to-effect change on both Cube Lites, 26 Nov: up to 0.8 s).
+COMMAND_REFUSES_FRAMES = 2.0
+# Methods the network chip answers itself, or that keep direct mode: not the
+# command a frame in flight is refused after.
+_KEEPS_DIRECT = frozenset({"update_leds", "udp_sess_keep_alive", "udp_sess_new", "udp_sess_token"})
 # Commands the lamp never answers: sent without waiting.
 _UNANSWERED = frozenset({"update_leds"})
 # A command the lamp answers waits until no frame was sent for this long. The
@@ -147,6 +155,9 @@ class UdpSession:
         # An unsolicited error was logged as a WARNING since the lamp last
         # answered without one (the rest of the episode goes at DEBUG).
         self._unsolicited_logged = False
+        # When a command that may leave direct mode was last sent
+        # (COMMAND_REFUSES_FRAMES).
+        self._command_sent_at = float("-inf")
         # (when, ">" sent / "<" received, what): the last TRAIL_LENGTH.
         self._trail: collections.deque = collections.deque(maxlen=TRAIL_LENGTH)
         # The ids of the last answers taken: the lamp may send one twice, and
@@ -183,14 +194,21 @@ class UdpSession:
             if future is None and message.get("id") in self._answered:
                 continue  # a late copy of an answer already taken
             if future is None and isinstance(error, dict):
+                expected = (
+                    error.get("code") == _FRAME_REFUSED
+                    and time.monotonic() - self._command_sent_at < COMMAND_REFUSES_FRAMES
+                )
                 # Refused frames come one per frame: the first of an episode
                 # is a WARNING, the rest DEBUG until the lamp answers again.
+                # A frame refused right after our own command is expected
+                # (DEBUG, no episode).
                 _LOGGER.log(
-                    logging.DEBUG if self._unsolicited_logged else logging.WARNING,
+                    logging.DEBUG if self._unsolicited_logged or expected else logging.WARNING,
                     "[UDP] [%s] Unsolicited error id=%s method=%s error=%s; stats=%s; last datagrams: %s",
                     self._ip, message.get("id"), message.get("method"), error, self.stream_stats(), self.trail(),
                 )
-                self._unsolicited_logged = True
+                if not expected:
+                    self._unsolicited_logged = True
             elif error is None:
                 self._unsolicited_logged = False  # an answer: the episode is over
             if (
@@ -253,6 +271,8 @@ class UdpSession:
             raise UdpUnavailable("session closed")
         self._transport.sendto(data)
         self._last_send = time.monotonic()
+        if message.get("method") not in _KEEPS_DIRECT:
+            self._command_sent_at = self._last_send
         self._trail.append((self._last_send, ">", f"{message.get('method')}#{message.get('id')}"))
 
     async def _answer(

@@ -1244,6 +1244,37 @@ def _towards_table(amount: int, target: int) -> bytes:
     return table
 
 
+def writer_level(brightness) -> int:
+    """What a Cube Lite's pixel writer scales every stored channel by, for a
+    Home Assistant brightness (1-255; None: full): the lamp's set_bright
+    percent (light_color.hardware_brightness_for) as its segment byte
+    (trunc(percent x 2.55 + 0.49)), remapped to byte x 215 // 255 + 40.
+    255 at full brightness, where the writer stores what it is given."""
+    if brightness is None:
+        return 255
+    percent = max(1, min(100, round(int(brightness) * 100 / 255)))
+    byte = int(percent * 255 / 100 + 0.49)
+    return byte * 215 // 255 + 40
+
+
+_WRITER_TABLES: dict[int, bytes] = {}
+
+
+def writer_dim(buffer, level: int) -> None:
+    """What a renderer reads back of ``buffer`` (r, g, b bytes, changed in
+    place) once the pixel writer stored it at ``level`` (writer_level):
+    each channel (c x level) >> 8. Below full brightness a renderer that
+    fades or blurs the strip it reads back (a slot's "readback") dims its
+    trail once more on every frame, so trails are much shorter on a dimmed
+    lamp: modelled per frame by lamp_renderers.Timeline."""
+    if level >= 255:
+        return
+    table = _WRITER_TABLES.get(level)
+    if table is None:
+        table = _WRITER_TABLES[level] = bytes((value * level) >> 8 for value in range(256))
+    buffer[:] = buffer.translate(table)
+
+
 def fade_towards(strip, amount: int, target: int = 0, length: int = LENGTH):
     """Fade-towards helper on the displayed strip (the renderers read it
     back as drawn: at brightness 255, the renderer's own strip):

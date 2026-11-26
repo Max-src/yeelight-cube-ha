@@ -342,3 +342,91 @@ class FireworksLampTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DimmedTrailTests(unittest.TestCase):
+    """A Cube Lite below full brightness: its pixel writer stores each
+    channel (c x B) >> 8 and the renderers that read their strip back dim
+    their trails once more every frame (lamp_renderers.at_brightness)."""
+
+    EFFECTS = ("Particle path", "Palette trails", "Aqua-lime trails", "Palette sparks",
+               "Drop and bounce", "Dot with fading trail", "Music bars from both ends",
+               "Music bass-mid-treble colour")
+
+    def _frames(self, effect, brightness, count=40):
+        settings = LAMP["at_brightness"](LAMP["lamp_settings"](effect, "Right", 66, intensity=161), brightness)
+        return list(LAMP["exact_frames"](settings, 300, count))
+
+    def test_the_writer_level(self):
+        level = LAMP["writer_level"]
+        self.assertEqual(255, level(None))
+        self.assertEqual(255, level(255))
+        self.assertEqual(83, level(51))  # 20 %: byte 51
+        self.assertEqual(40 + 2 * 215 // 255 + 1, level(1))  # 1 %: byte 3
+
+    def test_full_brightness_is_unchanged(self):
+        settings = LAMP["lamp_settings"]("Particle path", "Right", 66, intensity=161)
+        self.assertIs(settings, LAMP["at_brightness"](settings, 255))
+        self.assertIs(settings, LAMP["at_brightness"](settings, None))
+        self.assertEqual(LAMP["writer_level"](254), LAMP["at_brightness"](settings, 254).get("writer", 255))
+        self.assertNotIn("writer", settings)
+
+    def test_a_dimmed_lamp_has_shorter_trails(self):
+        # Seen on camera at 20 %: Particle path is four lone dots, not trails.
+        for effect in ("Particle path", "Palette trails", "Aqua-lime trails"):
+            full = sum(sum(1 for value in frame if value) for frame in self._frames(effect, 255))
+            dimmed = sum(sum(1 for value in frame if value) for frame in self._frames(effect, 51))
+            self.assertLess(dimmed, full / 3, effect)
+
+    def test_an_effect_that_redraws_everything_keeps_its_picture(self):
+        # Rainbow reads nothing back: dimmed once, at display, by the preview.
+        self.assertEqual(self._frames("Rainbow", 255, 10), self._frames("Rainbow", 51, 10))
+
+    def test_the_preview_timeline_is_the_lamps_run(self):
+        # The previews' timeline (cursors, ring) gives the exact replay's frames.
+        for effect in ("Particle path", "Dot with fading trail"):
+            settings = LAMP["at_brightness"](LAMP["lamp_settings"](effect, "Right", 66, intensity=161), 51)
+            timeline = LAMP["timeline_for"](settings)
+            self.assertEqual(
+                [bytes(frame) for frame in LAMP["exact_frames"](settings, 500, 20)],
+                [bytes(timeline.frame_at(render, True)) for render in range(500, 520)],
+                effect,
+            )
+
+    @unittest.skipUnless(shutil.which("node"), "Node is required for the JS port")
+    def test_the_js_port_dims_the_same(self):
+        module = (ROOT / "www" / "lamp-renderers.js").as_uri()
+        core = (ROOT / "www" / "lamp-core.js").as_uri()
+        levels = [None, 1, 51, 128, 200, 254, 255]
+        script = (
+            f"const m = await import({json.dumps(module)});"
+            f"const c = await import({json.dumps(core)});"
+            f"const effects = {json.dumps(self.EFFECTS)};"
+            "const out = {levels: " + json.dumps(levels) + ".map((b) => c.writerLevel(b)), frames: {}};"
+            "for (const effect of effects) for (const b of [255, 51, 128]) {"
+            " const s = m.atBrightness(m.lampSettings(effect, 'Right', 66, null, null, null, 161), b);"
+            " out.frames[effect + ' ' + b] = [...m.exactFrames(s, 300, 40)].map((f) => Array.from(f));"
+            " const t = m.lampEffectFrame(s, 7.3);"
+            " out.frames[effect + ' ' + b + ' preview'] = t;"
+            "}"
+            "process.stdout.write(JSON.stringify(out));"
+        )
+        result = subprocess.run(
+            [shutil.which("node"), "--input-type=module", "-e", script],
+            text=True, capture_output=True, check=True,
+        )
+        out = json.loads(result.stdout)
+        self.assertEqual([LAMP["writer_level"](b) for b in levels], out["levels"])
+        for effect in self.EFFECTS:
+            for brightness in (255, 51, 128):
+                settings = LAMP["at_brightness"](
+                    LAMP["lamp_settings"](effect, "Right", 66, intensity=161), brightness,
+                )
+                self.assertEqual(
+                    [list(frame) for frame in LAMP["exact_frames"](settings, 300, 40)],
+                    out["frames"][f"{effect} {brightness}"], (effect, brightness),
+                )
+                self.assertEqual(
+                    [list(p) for p in LAMP["lamp_effect_frame"](settings, 7.3)],
+                    out["frames"][f"{effect} {brightness} preview"], (effect, brightness),
+                )

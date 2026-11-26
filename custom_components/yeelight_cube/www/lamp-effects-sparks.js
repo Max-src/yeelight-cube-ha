@@ -964,12 +964,12 @@ function paletteStep(state, settings, clockMs) {
 
 export const SLOTS = [
   { mode: 5, init: starryInit, step: starryStep, warmup: null },
-  { mode: 6, init: chaseInit, step: chaseStep, warmup: CHASE_WARMUP },
-  { mode: 14, init: trailInit, step: trailStep, warmup: null },
-  { mode: 16, init: dropInit, step: dropStep, warmup: null, lit: 1 },
+  { mode: 6, init: chaseInit, step: chaseStep, warmup: CHASE_WARMUP, readback: "strip" },
+  { mode: 14, init: trailInit, step: trailStep, warmup: null, readback: "strip" },
+  { mode: 16, init: dropInit, step: dropStep, warmup: null, lit: 1, readback: "strip" },
   { mode: 22, init: prismInit, step: prismStep, warmup: null },
-  { mode: 23, init: trailInit, step: aquaLimeStep, warmup: null },
-  { mode: 24, init: emberInit, step: emberStep, warmup: null },
+  { mode: 23, init: trailInit, step: aquaLimeStep, warmup: null, readback: "strip" },
+  { mode: 24, init: emberInit, step: emberStep, warmup: null, readback: "strip" },
   { mode: 33, init: wispsInit, step: wispsStep, warmup: null },
   { mode: 60, init: crumbleInit, step: crumbleStep, warmup: null },
   { mode: 61, init: driftInit, step: driftStep, warmup: null },

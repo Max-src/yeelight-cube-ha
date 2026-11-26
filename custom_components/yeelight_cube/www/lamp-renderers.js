@@ -47,6 +47,8 @@ import {
   sourceWord,
   stripFrame,
   truncU16,
+  writerDim,
+  writerLevel,
 } from "./lamp-core.js";
 import * as coreEffects from "./lamp-effects-core.js";
 import * as wavesEffects from "./lamp-effects-waves.js";
@@ -259,8 +261,10 @@ export class Timeline {
     const { settings, frames } = this;
     const stop = exact ? Infinity : performance.now() + REPLAY_MS;
     if (this.slot.warmup === 0) cursor.render = target - 1; // a pure function of the render
+    const [readback, level] = readbackOf(this.slot, settings);
     while (cursor.render < target) {
       const render = cursor.render + 1;
+      if (readback !== null) writerDim(cursor.state[readback], level);
       const panel = step(cursor.state, settings, clockAt(settings.rate, render), render);
       const frame = panelToFrame(panel);
       cursor.render = render;
@@ -279,15 +283,34 @@ export class Timeline {
 
 const effectTimelines = new Map();
 
+// [state key, writer level] of a slot that reads its strip back (its
+// `readback`) when the settings' writer level (atBrightness) is under 255:
+// that strip is dimmed once more before each render (lamp_renderers.py
+// _readback). [null, 255] otherwise.
+function readbackOf(slot, settings) {
+  const level = settings.writer ?? 255;
+  return slot.readback != null && level < 255 ? [slot.readback, level] : [null, 255];
+}
+
+/** `settings` as a Cube Lite runs them at a Home Assistant `brightness`
+ * (1-255; null: full): the pixel writer's level under `writer` when below
+ * 255, which the readback renderers' trails follow (lamp_renderers.py
+ * at_brightness). Only for what the lamp renders itself; not given for a
+ * Cube Matrix (not measured). */
+export function atBrightness(settings, brightness) {
+  const level = writerLevel(brightness);
+  return level < 255 ? { ...settings, writer: level } : settings;
+}
+
 export const hasRenderer = (mode) => REGISTRY.has(mode);
 
 /** The run of `settings`, the most recently used last. */
 export function timelineFor(settings) {
-  const { mode, selector, intensity, rate, direction, primary, coloured, colours, handover, variant, palette, seed } = settings;
+  const { mode, selector, intensity, rate, direction, primary, coloured, colours, handover, variant, palette, seed, writer } = settings;
   // palette: a music mode's whole palette (musicPalette), its colour words
   // carry only the first ones; seed: a simulation's run (Lava Lamp), a new
   // one for each; the segment drawn on (a Cube Matrix's columns).
-  const key = `${mode},${selector},${intensity},${rate},${direction},${primary},${Boolean(coloured)},${colours ?? ""},${Boolean(handover)},${variant ?? ""},${palette ?? ""},${seed ?? ""},${settingsLength(settings)}`;
+  const key = `${mode},${selector},${intensity},${rate},${direction},${primary},${Boolean(coloured)},${colours ?? ""},${Boolean(handover)},${variant ?? ""},${palette ?? ""},${seed ?? ""},${settingsLength(settings)},${writer ?? 255}`;
   const timeline = effectTimelines.get(key) ?? new Timeline(slotFor(settings), settings);
   effectTimelines.delete(key);
   effectTimelines.set(key, timeline);
@@ -326,7 +349,9 @@ export function* exactFrames(settings, first, count) {
   const slot = slotFor(settings);
   const start = slot.warmup === null ? 0 : Math.max(0, first - slot.warmup);
   const state = slot.init(settings);
+  const [readback, level] = readbackOf(slot, settings);
   for (let render = start; render < first + count; render += 1) {
+    if (readback !== null) writerDim(state[readback], level);
     const panel = slot.step(state, settings, clockAt(settings.rate, render), render);
     if (render >= first) yield panelToFrame(panel);
   }

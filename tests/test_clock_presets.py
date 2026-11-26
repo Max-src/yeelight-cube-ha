@@ -55,6 +55,7 @@ class ClockPreviewTests(unittest.TestCase):
             # freeze_display state, as set by the camera's constructor
             _frozen_background_seconds=None,
             _clock_preview_started_at=0.0,
+            _clock_preview_key=None,
             _preview_lock=threading.Lock(),
         )
         for name in ("_clock_background_seconds", "_preview_speed", "_columns", "_width", "_clock_geometry", "_state"):
@@ -101,8 +102,10 @@ class ClockPreviewTests(unittest.TestCase):
             self.clock._native_effect_speed = speed
             with self.subTest(speed=speed):
                 self.assertEqual(speed, LAMP["lamp_clock_settings"]("Rainbow", speed)["rate"])
+                # A new speed is a new clock command: the lamp starts its
+                # background again.
                 background = LAMP["lamp_effect_frame"](
-                    LAMP["lamp_clock_settings"]("Rainbow", speed), 2.0
+                    LAMP["lamp_clock_settings"]("Rainbow", speed), 0.0
                 )
                 frame = self.render(self.camera)
                 self.assertEqual(
@@ -149,6 +152,20 @@ class ClockPreviewTests(unittest.TestCase):
         for frame in (upright, turned):
             for index in lit(frame):
                 self.assertEqual(background[index], frame[index])
+
+    def test_a_new_clock_starts_its_background_again(self):
+        # The lamp starts it again with each clock command: a slow one
+        # (Sunrise and sunset, a 6-minute sunset at speed 66) showed its end,
+        # black, for a lamp that had just started it.
+        seconds = lambda: self.camera._clock_background_seconds()
+        self.timer.monotonic = lambda: 600.0
+        self.assertEqual(600.0, seconds())
+        self.clock._native_clock_style = 24 if self.clock._native_clock_style != 24 else 0
+        self.assertEqual(0.0, seconds())
+        self.timer.monotonic = lambda: 605.0
+        self.assertEqual(5.0, seconds())
+        self.clock._native_effect_speed = 200
+        self.assertEqual(0.0, seconds())
 
     def test_a_frozen_clock_holds_its_background_and_resumes_there(self):
         seconds = lambda: self.camera._clock_background_seconds()

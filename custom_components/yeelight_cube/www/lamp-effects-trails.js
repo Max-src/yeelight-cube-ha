@@ -663,5 +663,5 @@ export const SLOTS = [
   { mode: 46, init: hackingInit, step: hackingStep, warmup: HACKING_WARMUP },
   { mode: 47, init: meteorInit, step: meteorStep, warmup: null },
   { mode: 49, init: blocksInit, step: blocksStep, warmup: null },
-  { mode: 62, init: dotTrailInit, step: dotTrailStep, warmup: DOT_TRAIL_WARMUP, lit: 1 },
+  { mode: 62, init: dotTrailInit, step: dotTrailStep, warmup: DOT_TRAIL_WARMUP, lit: 1, readback: "strip" },
 ];

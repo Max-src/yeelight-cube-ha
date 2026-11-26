@@ -40,6 +40,7 @@ from .lamp_renderers import (
     RENDER_SECONDS,
     clock_digit_flags,
     clock_palette_words,
+    at_brightness,
     lamp_clock_settings,
     lamp_effect_frame,
     led_appearance,
@@ -443,6 +444,9 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
         self._native_preview_key: tuple[str, str] | None = None
         self._native_preview_started_at: float | None = None
         self._clock_preview_started_at: float | None = None
+        # The clock command the background started with: the lamp starts it
+        # again from its first render whenever it gets a new one.
+        self._clock_preview_key: tuple | None = None
         # Seconds into the background animation held while the panel is frozen.
         # Cleared on resume so it continues seamlessly from the frozen frame.
         self._frozen_background_seconds: float | None = None
@@ -758,6 +762,8 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
             # An animation is uploaded with them (light_native._store_animation).
             adjustments=le.color_adjustments() if hasattr(le, "color_adjustments") else None,
             columns=canvas or self._columns(state),
+            # A Cube Lite's trails are shorter when dimmed (at_brightness).
+            brightness=getattr(state, "renderer_brightness", None),
         )
         # Lamp order (row 0 = physical bottom), like every frame: _view_frame
         # turns it the way the viewer sees it, once.
@@ -838,11 +844,15 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
             # light_native sends: the user's speed, the mode 40 direction.
             canvas = getattr(state, "lamp_canvas", None)
             effect_frame = lamp_effect_frame(
-                lamp_clock_settings(
-                    effect_name, self._preview_speed(state), override_rgb, color_mode,
-                    _chosen_intensity(state), palette,
-                    # Handed over or direct: the style's form, as light_native sends it.
-                    clock_style_direct(style), canvas or self._columns(state),
+                at_brightness(
+                    lamp_clock_settings(
+                        effect_name, self._preview_speed(state), override_rgb, color_mode,
+                        _chosen_intensity(state), palette,
+                        # Handed over or direct: the style's form, as light_native sends it.
+                        clock_style_direct(style), canvas or self._columns(state),
+                    ),
+                    # A Cube Lite's trails are shorter when dimmed.
+                    getattr(state, "renderer_brightness", None),
                 ),
                 self._clock_background_seconds(state),
             )
@@ -913,10 +923,21 @@ class _YeelightCubeMatrixCameraBase(CubeDeviceEntity, Camera):
         real time) still advance. Anchored to the freeze instant so the frozen
         frame is exact; resumes seamlessly from it."""
         state = self._state(state)
+        # A new style, color, speed or intensity is a new clock command: the
+        # lamp starts its background again (a slow one, Sunrise and sunset,
+        # showed its end, black, for a lamp that had just started it).
+        key = (
+            state.clock_style, state.clock_color_mode, state.clock_color,
+            state.native_effect_speed, state.native_effect_intensity,
+        )
         with self._preview_lock:
             now = _time.monotonic()
             if self._clock_preview_started_at is None:
                 self._clock_preview_started_at = now
+            elif key != self._clock_preview_key and self._clock_preview_key is not None:
+                self._clock_preview_started_at = now
+                self._frozen_background_seconds = None
+            self._clock_preview_key = key
             if state.display_frozen:
                 if self._frozen_background_seconds is None:
                     frozen_at = state.display_frozen_at

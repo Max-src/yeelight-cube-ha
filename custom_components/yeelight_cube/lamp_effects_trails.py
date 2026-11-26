@@ -652,5 +652,5 @@ SLOTS = (
     {"mode": 46, "init": hacking_init, "step": hacking_step, "warmup": _HACKING_WARMUP},
     {"mode": 47, "init": meteor_init, "step": meteor_step, "warmup": None},
     {"mode": 49, "init": blocks_init, "step": blocks_step, "warmup": None},
-    {"mode": 62, "init": dot_trail_init, "step": dot_trail_step, "warmup": _DOT_TRAIL_WARMUP, "lit": 1},
+    {"mode": 62, "init": dot_trail_init, "step": dot_trail_step, "warmup": _DOT_TRAIL_WARMUP, "lit": 1, "readback": "strip"},
 )

@@ -175,6 +175,15 @@ export const ClockPreviewMixin = (Base) => class extends Base {
     // Freezing holds the background animation on its current frame, but the
     // clock digits/colon keep evolving -- so skip advancing the phase yet keep
     // repainting, exactly like the frozen lamp.
+    // A new clock command (style, color, speed or intensity) starts the
+    // lamp's background again: so do the previews (a slow one, Sunrise and
+    // sunset, showed its end, black, for a lamp that had just started it).
+    const a = this._attrs() || {};
+    const clockKey = [a.clock_style, a.clock_color_mode, a.clock_color, a.native_effect_speed, a.native_effect_intensity].join("|");
+    if (clockKey !== this._clockKey) {
+      if (this._clockKey !== undefined) this._previewTime().reset();
+      this._clockKey = clockKey;
+    }
     this._advanceElapsed(!!this._controls?.frozen);
     const phase = this._phase();
     const moment = `${Math.floor(this._elapsed / RENDER_SECONDS)}:${Math.floor(Date.now() / 1000)}`;

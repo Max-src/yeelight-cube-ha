@@ -918,12 +918,12 @@ def palette_step(state, settings, clock_ms, render) -> bytes:
 
 SLOTS = (
     {"mode": 5, "init": starry_init, "step": starry_step, "warmup": None},
-    {"mode": 6, "init": chase_init, "step": chase_step, "warmup": _CHASE_WARMUP},
-    {"mode": 14, "init": trail_init, "step": trail_step, "warmup": None},
-    {"mode": 16, "init": drop_init, "step": drop_step, "warmup": None, "lit": 1},
+    {"mode": 6, "init": chase_init, "step": chase_step, "warmup": _CHASE_WARMUP, "readback": "strip"},
+    {"mode": 14, "init": trail_init, "step": trail_step, "warmup": None, "readback": "strip"},
+    {"mode": 16, "init": drop_init, "step": drop_step, "warmup": None, "lit": 1, "readback": "strip"},
     {"mode": 22, "init": prism_init, "step": prism_step, "warmup": None},
-    {"mode": 23, "init": trail_init, "step": aqua_lime_step, "warmup": None},
-    {"mode": 24, "init": ember_init, "step": ember_step, "warmup": None},
+    {"mode": 23, "init": trail_init, "step": aqua_lime_step, "warmup": None, "readback": "strip"},
+    {"mode": 24, "init": ember_init, "step": ember_step, "warmup": None, "readback": "strip"},
     {"mode": 33, "init": wisps_init, "step": wisps_step, "warmup": None},
     {"mode": 60, "init": crumble_init, "step": crumble_step, "warmup": None},
     {"mode": 61, "init": drift_init, "step": drift_step, "warmup": None},

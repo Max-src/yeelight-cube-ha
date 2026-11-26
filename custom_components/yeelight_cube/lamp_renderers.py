@@ -103,6 +103,8 @@ try:
         source_word,
         strip_frame,
         trunc_u16 as _trunc_u16,
+        writer_dim,
+        writer_level,
     )
     from .lamp_effects_core import magic_cells
     from .mount_profile import HIGH_PAIR, LOW_PAIR, REFERENCE_PROFILE, one_axis_direction
@@ -162,6 +164,8 @@ except ImportError:  # loaded standalone (tests use runpy.run_path, no package)
         source_word,
         strip_frame,
         trunc_u16 as _trunc_u16,
+        writer_dim,
+        writer_level,
     )
     from lamp_effects_core import magic_cells
 
@@ -220,6 +224,28 @@ _TIMELINE_LIMIT_EFFECTS = 8
 # never lights that many gives its own "lit": it would replay them all otherwise.
 _LIT_PIXELS = 25
 _DARK_LIMIT = 2000
+
+
+def _readback(slot: dict, settings) -> tuple:
+    """(state key, writer level) of a slot that reads its strip back
+    (its "readback": the strip it fades or blurs, every pixel rewritten each
+    frame) when the settings' writer level (at_brightness) is under 255:
+    that strip is dimmed once more before each render, as the lamp's pixel
+    writer stores it. (None, 255) otherwise."""
+    level = settings.get("writer", 255)
+    key = slot.get("readback")
+    return (key, level) if key is not None and level < 255 else (None, 255)
+
+
+def at_brightness(settings: dict, brightness) -> dict:
+    """``settings`` as a Cube Lite runs them at a Home Assistant
+    ``brightness`` (1-255; None: full): the pixel writer's level
+    (lamp_core.writer_level) under "writer" when below 255, which the
+    readback renderers' trails follow (_readback). Only for what the lamp
+    renders itself: frames streamed to it are drawn at full brightness.
+    The Cube Matrix draws its own way: not measured, so not given."""
+    level = writer_level(brightness)
+    return {**settings, "writer": level} if level < 255 else settings
 
 
 class _Cursor:
@@ -320,8 +346,11 @@ class Timeline:
         # A warmup render's panel is turned into a frame only if it is the last.
         state, frames, settled = cursor.state, self.frames, cursor.settled
         render, panel = cursor.render, None
+        readback, level = _readback(self.slot, settings)
         try:
             while render < target:
+                if readback is not None:
+                    writer_dim(state[readback], level)
                 panel = step(state, settings, clock_at(rate, render + 1), render + 1)
                 render += 1
                 if render >= settled:
@@ -363,6 +392,7 @@ def timeline_for(settings) -> Timeline:
         # A simulation's run (Lava Lamp): a new one for each seed.
         settings.get("seed"),
         settings_length(settings),
+        settings.get("writer", 255),
     )
     with _EFFECT_TIMELINES_LOCK:
         timeline = _EFFECT_TIMELINES.pop(key, None)
@@ -395,7 +425,10 @@ def exact_frames(settings, first: int, count: int):
     start = 0 if slot["warmup"] is None else max(0, first - slot["warmup"])
     state = slot["init"](settings)
     rate = settings["rate"]
+    readback, level = _readback(slot, settings)
     for render in range(start, first + count):
+        if readback is not None:
+            writer_dim(state[readback], level)
         panel = step(state, settings, clock_at(rate, render), render)
         if render >= first:
             yield panel_to_frame(panel)

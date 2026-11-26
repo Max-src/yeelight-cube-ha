@@ -25,6 +25,7 @@ import {
   chosenIntensity,
   chosenSpeed,
   effectDisplayFrame,
+  atBrightness,
   lampClockSettings,
   clockPaletteWords,
   clockDigitFlags,
@@ -40,6 +41,7 @@ import {
   clockColumns,
   lampCanvas,
   lampWidth,
+  rendererBrightness,
   shownColumns,
   withSpotColours,
 } from "./matrix-modules.js";
@@ -724,9 +726,13 @@ export function renderClockFrame(attrs, fontMap, metrics, phase = 0, speed = nul
         // column), laid out on its modules (matrix-modules.js).
         fromLampCanvas(
           lampEffectFrame(
-            lampClockSettings(
-              effectName, rate, override, colorMode, chosenIntensity(attrs), attrs.text_colors,
-              clockStyleDirect(attrs), lampCanvas(attrs) ?? columns,
+            atBrightness(
+              lampClockSettings(
+                effectName, rate, override, colorMode, chosenIntensity(attrs), attrs.text_colors,
+                clockStyleDirect(attrs), lampCanvas(attrs) ?? columns,
+              ),
+              // A Cube Lite's trails are shorter when dimmed.
+              rendererBrightness(attrs),
             ),
             phase / previewRate(rate),
           ),

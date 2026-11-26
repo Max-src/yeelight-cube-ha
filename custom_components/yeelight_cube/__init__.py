@@ -548,9 +548,12 @@ async def _async_require_reachable(
         await check_tcp(ip_address, port, PROBE_TIMEOUT)
         _LOGGER.debug("[SETUP] Probe OK — %s:%s is reachable", ip_address, port)
     except OSError as err:
-        _LOGGER.warning(
+        # Home Assistant logs the ConfigEntryNotReady below itself (once, then
+        # quietly at each retry): a lamp switched off at night is not a
+        # warning every retry (26 a night for a Cube Matrix left off).
+        _LOGGER.debug(
             "[SETUP] Device at %s:%s is not reachable: %s. "
-            "Scanning network for CubeLite devices...",
+            "Scanning network for Yeelight Cube lamps...",
             ip_address, port, err,
         )
         # Device unreachable — try to find it at a new IP via Yeelight SSDP
@@ -559,10 +562,10 @@ async def _async_require_reachable(
             # Entry data already updated inside _async_try_rediscover.
             # Raise ConfigEntryNotReady so HA retries immediately with the new IP.
             raise ConfigEntryNotReady(
-                f"Yeelight Cube Lite moved from {ip_address} to {new_ip} — retrying"
+                f"Yeelight Cube moved from {ip_address} to {new_ip} — retrying"
             ) from err
         raise ConfigEntryNotReady(
-            f"Yeelight Cube Lite at {ip_address} is not reachable — will retry automatically"
+            f"Yeelight Cube at {ip_address} is not reachable — will retry automatically"
         ) from err
 
 

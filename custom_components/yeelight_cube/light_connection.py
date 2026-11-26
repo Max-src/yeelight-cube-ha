@@ -17,7 +17,7 @@ from homeassistant.core import callback  # type: ignore
 from yeelight import BulbException  # type: ignore
 
 from .command_errors import note_command_result
-from .const import LAMP_MODES
+from .const import LAMP_MODES, MATRIX_DISPLAY_MODES
 from .lamp_protocol import (
     LAMP_ERRORS,
     CubeConnectionError,
@@ -551,10 +551,23 @@ class ConnectionMixin:
                 # A Cube Matrix showing something itself over Matter (a
                 # drawing too: text, pictures) gets no frame either.
                 matrix_shown = self._matrix_shown
+                # A Cube Lite showing a still drawing (a picture, a text that
+                # fits, a gradient) was sent it once: nothing goes to the lamp
+                # after that either. After a power cut it shows its own
+                # start-up content while Home Assistant still published the
+                # drawing, never redrawn (night 26 Nov: unplugged 20 s on a
+                # pixel art, never unavailable, the cat never back). A scroll
+                # or a stream (streams_running) has its own check.
+                lite_drawing = (
+                    not getattr(self, "is_cube_matrix", False)
+                    and self._mode in MATRIX_DISPLAY_MODES
+                    and not getattr(self._lamp_client, "streams_running", False)
+                )
                 silent_mode = self._is_on and (
                     self._mode in LAMP_MODES
                     or self._music_flow_enabled
                     or matrix_shown is not None
+                    or lite_drawing
                 )
                 stream = getattr(self, "_studio_task", None)
                 streaming = getattr(self, "studio_streaming", None)

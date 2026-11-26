@@ -15,6 +15,7 @@ import {
   COLOR_OVERRIDE_EFFECTS,
   effectSupportsColorMode,
   effectSupportsColorOverride,
+  atBrightness,
   lampEffectFrame,
   lampSettings,
   isLampRendered,
@@ -101,7 +102,9 @@ export function effectSupportsFreeze(name) {
 // the effect's own). `columns`: the columns the lamp shows, which its effects
 // are drawn on (a Cube Matrix's matrix_columns; null: all 20, a Cube Lite);
 // more than 20: the frame is as wide as them (lamp-core.js frameWidthFor), an
-// animation from column 0, the rest black.
+// animation from column 0, the rest black. `brightness`: a Cube Lite's
+// (1-255), whose trails its renderers shorten below full (atBrightness);
+// null: full.
 // The cards read all of these from one preview context
 // (native-effect-card-utils.js nativeEffectLampFrame).
 export function renderNativeEffect(
@@ -118,6 +121,7 @@ export function renderNativeEffect(
   layout = null,
   adjustments = null,
   columns = null,
+  brightness = null,
 ) {
   const rate = speed ?? DEFAULT_PREVIEW_SPEED;
   const seconds = phase / previewRate(rate);
@@ -155,7 +159,10 @@ export function renderNativeEffect(
     );
   if (!isLampRendered(effect)) return renderGradient(phase, direction, columns);
   return lampEffectFrame(
-    lampSettings(effect, direction, rate, colorOverride, colorMode, orientation, intensity, palette, columns),
+    atBrightness(
+      lampSettings(effect, direction, rate, colorOverride, colorMode, orientation, intensity, palette, columns),
+      brightness,
+    ),
     seconds,
   );
 }

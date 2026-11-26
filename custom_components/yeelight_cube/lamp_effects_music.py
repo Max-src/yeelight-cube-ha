@@ -25,6 +25,7 @@ try:
         f32,
         fade_grid,
         fade_towards,
+        writer_dim,
         flagged_targets,
         inoise8_raw,
         lround,
@@ -56,6 +57,7 @@ except ImportError:  # loaded standalone (tests use runpy.run_path, no package)
         f32,
         fade_grid,
         fade_towards,
+        writer_dim,
         flagged_targets,
         inoise8_raw,
         lround,
@@ -236,6 +238,10 @@ def music_step(state, settings, clock_ms, render) -> bytes:
         target = None  # a tie writes nothing
     colour = state["colour"]
     if target is not None:
+        # The colour it last wrote, as the pixel writer stored it (readback
+        # below full brightness: lamp_renderers.at_brightness); a tie
+        # writes, and so reads, nothing.
+        writer_dim(colour, settings.get("writer", 255))
         fade_towards(colour, 255, target, 1)  # the strip is one colour
     return bytes(colour) * state["length"]
 
@@ -630,10 +636,10 @@ def impact_step(state, settings, clock_ms, render) -> bytes:
 
 SLOTS = (
     {"mode": 20, "init": breathing_20_init, "step": breathing_step, "warmup": _BREATHING_20_WARMUP},
-    {"mode": 25, "init": bars_25_init, "step": bars_step, "warmup": _BARS_WARMUP},
-    {"mode": 26, "init": bars_26_init, "step": bars_step, "warmup": _BARS_WARMUP},
+    {"mode": 25, "init": bars_25_init, "step": bars_step, "warmup": _BARS_WARMUP, "readback": "strip"},
+    {"mode": 26, "init": bars_26_init, "step": bars_step, "warmup": _BARS_WARMUP, "readback": "strip"},
     {"mode": 27, "init": music_init, "step": music_step, "warmup": _MUSIC_WARMUP},
-    {"mode": 30, "init": bars_30_init, "step": bars_step, "warmup": _BARS_WARMUP},
+    {"mode": 30, "init": bars_30_init, "step": bars_step, "warmup": _BARS_WARMUP, "readback": "strip"},
     {"mode": 41, "init": spectrum_init, "step": spectrum_step, "warmup": _SPECTRUM_WARMUP},
     {"mode": 43, "init": gather_init, "step": gather_step, "warmup": None},
     {"mode": 44, "init": breathing_44_init, "step": breathing_step, "warmup": _BREATHING_44_WARMUP},

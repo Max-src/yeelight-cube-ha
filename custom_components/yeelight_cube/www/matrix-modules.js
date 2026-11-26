@@ -545,3 +545,12 @@ export function clockColumns(attributes) {
   }
   return out.length === columns && out.every((column, at) => column === at) ? all : out;
 }
+
+/** The brightness (1-255) a lamp's own renderers draw at, whose trails a
+ * dimmed Cube Lite shortens (lamp-renderers.js atBrightness): a Cube Lite's;
+ * null for a Cube Matrix (not measured) or no lamp. */
+export function rendererBrightness(attributes) {
+  if (!attributes || Array.isArray(attributes.matrix_modules)) return null;
+  const brightness = Number(attributes.brightness);
+  return brightness > 0 ? brightness : null;
+}

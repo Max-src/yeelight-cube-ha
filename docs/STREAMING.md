@@ -153,8 +153,12 @@ connection (it carries the lamp's microphone data).
   question in the UDP session holds the lamp's lock (no frame goes with it);
   the TCP question that follows an unanswered one, the Matter check and the
   problem check run without it, so frames go on meanwhile.
-- **The connection's health check** (every 10 s in an effect or clock mode)
-  leaves a streaming lamp alone: the stream's own check covers it.
+- **The connection's health check** (every 10 s in an effect or clock mode,
+  and on a Cube Lite showing a still drawing: a picture, a text that fits, a
+  gradient) leaves a streaming or scrolling lamp alone: the stream's own check
+  covers it. It only asks the lamp's network part (a keep-alive or a
+  connection), so a power cut is seen and the content drawn again when the
+  lamp is back.
 - **A stuck lamp being brought back over the LAN** (`light_link_recovery`):
   the sweep holds the lamp's lock for up to about a minute; meanwhile other
   operations fail at once (as when the lamp is not reached) instead of

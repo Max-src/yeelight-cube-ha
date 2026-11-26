@@ -52,6 +52,27 @@ class HealthCheckTests(unittest.TestCase):
         # A power cut is caught in a mode that sends no frames.
         self.assertTrue(run(health_probes(light_in_effect())))
 
+    def test_a_still_drawing_on_a_cube_lite_is_pinged(self):
+        # Night 26 Nov: a Cube Lite unplugged 20 s on a pixel art was never
+        # published unavailable, and the drawing never came back: nothing
+        # goes to the lamp after a still drawing.
+        def light_drawing():
+            light = make_light(hass=FakeHass(), entry=FakeEntry())
+            light._is_on = True
+            light._enter_mode("Custom Draw")
+            light._lamp_client.streams_running = False
+            return light
+
+        self.assertTrue(run(health_probes(light_drawing())))
+        # A scroll (a stream lease) has its own check: no ping mid-stream.
+        scrolling = light_drawing()
+        scrolling._lamp_client.streams_running = True
+        self.assertEqual([], run(health_probes(scrolling)))
+        # Switched off: nothing to catch.
+        off = light_drawing()
+        off._is_on = False
+        self.assertEqual([], run(health_probes(off)))
+
     def test_a_running_stream_is_not_pinged(self):
         # The stream's own check covers it (light_studio._stream_watchdog).
         async def scenario():
@@ -217,6 +238,31 @@ class UnsolicitedErrorTests(unittest.TestCase):
             session._received(refused)
         levels = [record.levelno for record in logs.records if "Unsolicited" in record.getMessage()]
         self.assertEqual([logging.WARNING, logging.DEBUG, logging.DEBUG, logging.WARNING], levels)
+
+    def test_a_frame_refused_right_after_our_own_command_is_not_a_warning(self):
+        # Night 26 Nov: at every change from a streamed effect to the lamp's
+        # own, the last frame still on its way was refused ("illegal
+        # request") just after set_fx_effect: a WARNING each time.
+        session = UDP_SESSION.UdpSession("192.0.2.1")
+        session._transport = Mock()
+        run(session._send({"id": 1, "method": "update_leds", "params": []}))
+        run(session._send({"id": 2, "method": "set_fx_effect", "params": []}))
+        illegal = json.dumps({"id": 1, "error": {"code": 6, "message": "illegal request"}}).encode()
+        with self.assertLogs(UDP_SESSION._LOGGER, level=logging.DEBUG) as logs:
+            session._received(illegal)
+        levels = [record.levelno for record in logs.records if "Unsolicited" in record.getMessage()]
+        self.assertEqual([logging.DEBUG], levels)
+        # Long after our command (something else changed the lamp): a warning.
+        session._command_sent_at -= UDP_SESSION.COMMAND_REFUSES_FRAMES
+        with self.assertLogs(UDP_SESSION._LOGGER, level=logging.WARNING):
+            session._received(illegal)
+        # Frames and keep-alives are not such a command.
+        fresh = UDP_SESSION.UdpSession("192.0.2.1")
+        fresh._transport = Mock()
+        run(fresh._send({"id": 3, "method": "update_leds", "params": []}))
+        run(fresh._send({"id": 4, "method": "udp_sess_keep_alive", "params": []}))
+        with self.assertLogs(UDP_SESSION._LOGGER, level=logging.WARNING):
+            fresh._received(illegal)
 
     def test_the_warning_lists_the_last_datagrams(self):
         session = UDP_SESSION.UdpSession("192.0.2.1")

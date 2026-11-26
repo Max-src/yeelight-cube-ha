@@ -33,6 +33,23 @@ This project adheres to [Semantic Versioning](https://semver.org/).
   discoveries of your lamps works as before (from your configured lamps).
 
 ### Fixed
+- **Trails look as short as on a dimmed Cube Lite.** Below full brightness the lamp dims the trail of some effects
+  once more on every frame, so Particle path, Palette trails, Aqua-lime trails, Palette sparks, Drop and bounce,
+  Dot with fading trail and the music bars show much shorter trails (at 20 %, Particle path is four lone dots, and
+  clocks on these backgrounds are hard to read). The previews, the cards and the camera now draw them the same way
+  at the lamp's brightness (checked on camera at 20 %).
+- **A Cube Lite showing a drawing comes back after a power cut.** A picture, a text that fits or a gradient is sent
+  once, and nothing asked the lamp afterwards: unplugged, it stayed "on" in Home Assistant, and once powered again
+  it showed its own start-up content while Home Assistant still showed the drawing. It is now checked every 10
+  seconds like the clock and the effects: shown unavailable, then drawn again when it is back.
+- **No more "Unsolicited error ... illegal request" warning when a Cube Lite goes from a streamed effect to one it
+  runs itself.** The last frame still on its way is refused by the lamp once it has its new effect: expected, now
+  logged at debug level. A frame refused with no command of Home Assistant's just before still warns.
+- **A lamp switched off at the wall no longer logs a warning at every setup retry.** Home Assistant already reports
+  that the lamp is not ready and retries quietly; the retry message now says "Yeelight Cube" for both models.
+- **A clock's background preview starts again with each new clock**, as the lamp does: a new style, color, speed or
+  intensity. The camera and the Lamp Preview kept one running clock, so a slow background showed the wrong moment:
+  the Sunrise and sunset clock was black in the preview while the lamp, which had just started it, showed it bright.
 - **The Native Effects card's current preview follows the lamp's brightness,** like the Clock and Lamp Preview
   cards: dimmed from its own slider or from anywhere else (another card, an automation). Before, it stayed at full
   brightness unless "Match Lamp Brightness" was on; that option, now "Gallery Matches Lamp Brightness", still dims
